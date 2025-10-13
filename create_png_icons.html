@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create EZY PNG Icons</title>
+</head>
+<body>
+    <h1>EZY App Icon Creator</h1>
+    <canvas id="canvas" style="border: 1px solid #ccc;"></canvas>
+    <br><br>
+    <button onclick="createIcon(48, 'mdpi')">Create 48x48 (mdpi)</button>
+    <button onclick="createIcon(72, 'hdpi')">Create 72x72 (hdpi)</button>
+    <button onclick="createIcon(96, 'xhdpi')">Create 96x96 (xhdpi)</button>
+    <button onclick="createIcon(144, 'xxhdpi')">Create 144x144 (xxhdpi)</button>
+    <button onclick="createIcon(192, 'xxxhdpi')">Create 192x192 (xxxhdpi)</button>
+    
+    <script>
+        function createIcon(size, density) {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Golden background with rounded corners
+            const cornerRadius = size * 0.125;
+            
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, cornerRadius);
+            ctx.fill();
+            
+            // Black "EZY" text
+            ctx.fillStyle = '#000000';
+            ctx.font = `bold ${size * 0.25}px Arial, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('EZY', size / 2, size / 2);
+            
+            // Download the icon
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ic_launcher_${density}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        // Polyfill for roundRect
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+                this.beginPath();
+                this.moveTo(x + radius, y);
+                this.lineTo(x + width - radius, y);
+                this.quadraticCurveTo(x + width, y, x + width, y + radius);
+                this.lineTo(x + width, y + height - radius);
+                this.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                this.lineTo(x + radius, y + height);
+                this.quadraticCurveTo(x, y + height, x, y + height - radius);
+                this.lineTo(x, y + radius);
+                this.quadraticCurveTo(x, y, x + radius, y);
+                this.closePath();
+            };
+        }
+    </script>
+</body>
+</html>

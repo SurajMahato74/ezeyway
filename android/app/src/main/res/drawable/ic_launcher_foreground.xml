@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <!-- White circular background -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M54,54m-45,0a45,45 0,1 1,90 0a45,45 0,1 1,-90 0"/>
+  
+  <!-- Simple EZY text - much larger and bolder -->
+  <group android:scaleX="0.8"
+         android:scaleY="0.8"
+         android:pivotX="54"
+         android:pivotY="54">
+    <!-- Letter E -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M25,35 L25,73 L50,73 L50,65 L35,65 L35,58 L47,58 L47,50 L35,50 L35,43 L50,43 L50,35 Z"/>
+    
+    <!-- Letter Z -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M55,35 L55,43 L70,43 L55,65 L55,73 L83,73 L83,65 L68,65 L83,43 L83,35 Z"/>
+    
+    <!-- Letter Y -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M25,80 L35,80 L42,92 L49,80 L59,80 L47,100 L47,115 L37,115 L37,100 Z"/>
+  </group>
+</vector>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EZY App Icon Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .icon-preview { margin: 10px; display: inline-block; text-align: center; }
+        .icon-preview canvas { border: 1px solid #ccc; margin: 5px; }
+        .download-section { margin: 20px 0; }
+        button { padding: 10px 20px; margin: 5px; background: #007cba; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #005a87; }
+    </style>
+</head>
+<body>
+    <h1>EZY App Icon Generator</h1>
+    <p>This will generate all required Android app icon sizes with your golden EZY logo.</p>
+    
+    <div class="download-section">
+        <button onclick="generateAllIcons()">Generate All Icons</button>
+        <button onclick="downloadAllIcons()">Download All Icons as ZIP</button>
+    </div>
+    
+    <div id="icons-container"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script>
+        const iconSizes = [
+            { name: 'mdpi', size: 48 },
+            { name: 'hdpi', size: 72 },
+            { name: 'xhdpi', size: 96 },
+            { name: 'xxhdpi', size: 144 },
+            { name: 'xxxhdpi', size: 192 }
+        ];
+        
+        const foregroundSizes = [
+            { name: 'mdpi', size: 108 },
+            { name: 'hdpi', size: 162 },
+            { name: 'xhdpi', size: 216 },
+            { name: 'xxhdpi', size: 324 },
+            { name: 'xxxhdpi', size: 432 }
+        ];
+        
+        let generatedIcons = {};
+        
+        function createEZYIcon(size, isForeground = false) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = size;
+            canvas.height = size;
+            
+            if (isForeground) {
+                // Transparent background for foreground
+                ctx.clearRect(0, 0, size, size);
+                
+                // Draw golden circle in center (adaptive icon safe area)
+                const centerX = size / 2;
+                const centerY = size / 2;
+                const radius = size * 0.3; // 60% of size for safe area
+                
+                // Golden background circle
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = '#FFD700';
+                ctx.fill();
+                
+                // Black text "EZY"
+                ctx.fillStyle = '#000000';
+                ctx.font = `bold ${radius * 0.6}px Arial, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('EZY', centerX, centerY);
+            } else {
+                // Golden background with rounded corners
+                const cornerRadius = size * 0.125; // 12.5% corner radius
+                
+                ctx.beginPath();
+                ctx.roundRect(0, 0, size, size, cornerRadius);
+                ctx.fillStyle = '#FFD700';
+                ctx.fill();
+                
+                // Black text "EZY"
+                ctx.fillStyle = '#000000';
+                ctx.font = `bold ${size * 0.25}px Arial, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('EZY', size / 2, size / 2);
+            }
+            
+            return canvas;
+        }
+        
+        function generateAllIcons() {
+            const container = document.getElementById('icons-container');
+            container.innerHTML = '';
+            generatedIcons = {};
+            
+            // Generate regular launcher icons
+            iconSizes.forEach(({ name, size }) => {
+                const canvas = createEZYIcon(size, false);
+                const preview = document.createElement('div');
+                preview.className = 'icon-preview';
+                preview.innerHTML = `
+                    <div>ic_launcher.png (${name} - ${size}x${size})</div>
+                    <canvas width="${size}" height="${size}"></canvas>
+                    <br><button onclick="downloadIcon('ic_launcher_${name}', ${size})">Download</button>
+                `;
+                
+                const previewCanvas = preview.querySelector('canvas');
+                const previewCtx = previewCanvas.getContext('2d');
+                previewCtx.drawImage(canvas, 0, 0);
+                
+                container.appendChild(preview);
+                generatedIcons[`ic_launcher_${name}`] = canvas;
+                generatedIcons[`ic_launcher_round_${name}`] = canvas; // Same for round
+            });
+            
+            // Generate foreground icons for adaptive icons
+            foregroundSizes.forEach(({ name, size }) => {
+                const canvas = createEZYIcon(size, true);
+                const preview = document.createElement('div');
+                preview.className = 'icon-preview';
+                preview.innerHTML = `
+                    <div>ic_launcher_foreground.png (${name} - ${size}x${size})</div>
+                    <canvas width="${size}" height="${size}"></canvas>
+                    <br><button onclick="downloadIcon('ic_launcher_foreground_${name}', ${size}, true)">Download</button>
+                `;
+                
+                const previewCanvas = preview.querySelector('canvas');
+                const previewCtx = previewCanvas.getContext('2d');
+                previewCtx.drawImage(canvas, 0, 0);
+                
+                container.appendChild(preview);
+                generatedIcons[`ic_launcher_foreground_${name}`] = canvas;
+            });
+        }
+        
+        function downloadIcon(name, size, isForeground = false) {
+            const canvas = generatedIcons[name];
+            if (!canvas) return;
+            
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${name}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        function downloadAllIcons() {
+            if (Object.keys(generatedIcons).length === 0) {
+                alert('Please generate icons first!');
+                return;
+            }
+            
+            const zip = new JSZip();
+            const promises = [];
+            
+            // Add icons to zip with proper folder structure
+            Object.entries(generatedIcons).forEach(([name, canvas]) => {
+                const promise = new Promise(resolve => {
+                    canvas.toBlob(blob => {
+                        let folder = '';
+                        let filename = '';
+                        
+                        if (name.includes('foreground')) {
+                            const density = name.split('_').pop();
+                            folder = `mipmap-${density}/`;
+                            filename = 'ic_launcher_foreground.png';
+                        } else if (name.includes('round')) {
+                            const density = name.split('_').pop();
+                            folder = `mipmap-${density}/`;
+                            filename = 'ic_launcher_round.png';
+                        } else {
+                            const density = name.split('_').pop();
+                            folder = `mipmap-${density}/`;
+                            filename = 'ic_launcher.png';
+                        }
+                        
+                        zip.file(folder + filename, blob);
+                        resolve();
+                    });
+                });
+                promises.push(promise);
+            });
+            
+            Promise.all(promises).then(() => {
+                zip.generateAsync({ type: 'blob' }).then(content => {
+                    const url = URL.createObjectURL(content);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'ezy_app_icons.zip';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
+            });
+        }
+        
+        // Add roundRect polyfill for older browsers
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+                this.beginPath();
+                this.moveTo(x + radius, y);
+                this.lineTo(x + width - radius, y);
+                this.quadraticCurveTo(x + width, y, x + width, y + radius);
+                this.lineTo(x + width, y + height - radius);
+                this.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                this.lineTo(x + radius, y + height);
+                this.quadraticCurveTo(x, y + height, x, y + height - radius);
+                this.lineTo(x, y + radius);
+                this.quadraticCurveTo(x, y, x + radius, y);
+                this.closePath();
+            };
+        }
+        
+        // Auto-generate on page load
+        window.onload = generateAllIcons;
+    </script>
+</body>
+</html>

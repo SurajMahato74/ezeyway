@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate ezeyway Icons</title>
+</head>
+<body>
+    <canvas id="canvas" width="512" height="512"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Create ezeyway icon
+        function createIcon(size) {
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Background
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Text
+            ctx.fillStyle = '#000000';
+            ctx.font = `bold ${size/4}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('EZY', size/2, size/2);
+            
+            return canvas.toDataURL('image/png');
+        }
+        
+        // Generate different sizes
+        const sizes = [48, 72, 96, 144, 192];
+        sizes.forEach(size => {
+            const dataUrl = createIcon(size);
+            const link = document.createElement('a');
+            link.download = `ic_launcher_${size}.png`;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    </script>
+</body>
+</html>
