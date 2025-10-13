@@ -7,8 +7,8 @@ const isMobile = () => {
 
 // Use localhost for debugging CORS issues
 const getBaseUrl = () => {
-  return 'https://ezeyway.com/api';
   //return 'http://localhost:8000';
+  return 'https://ezeyway.com/api';
 };
 
 // Alternative URLs to try if main ngrok fails
@@ -20,7 +20,7 @@ export const FALLBACK_URLS = [
 ];
 
 const getWsBaseUrl = () => {
-  return 'wss://ezeyway.com';
+  return 'ws://localhost:8000';
 };
 
 export const API_CONFIG = {
@@ -44,6 +44,11 @@ export const getApiUrl = (endpoint: string = '') => {
 
 export const getWsUrl = (endpoint: string = '') => {
   return `${API_CONFIG.WS_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+};
+
+// Standardize API endpoints
+export const normalizeEndpoint = (endpoint: string): string => {
+  return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 };
 
 // Legacy support - can be removed after migration

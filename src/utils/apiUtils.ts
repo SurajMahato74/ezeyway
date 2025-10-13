@@ -1,5 +1,9 @@
-import { API_CONFIG, FALLBACK_URLS } from '@/config/api';
+import { API_CONFIG, FALLBACK_URLS, normalizeEndpoint } from '@/config/api';
 import { authService } from '@/services/authService';
+import { isDevelopment, checkBackendHealth, showBackendWarning } from '@/utils/devUtils';
+
+// Track if we've already shown the backend warning
+let backendWarningShown = false;
 
 export const createApiHeaders = async (includeAuth = true, isFormData = false) => {
   const headers: Record<string, string> = {
@@ -23,7 +27,8 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false) =
 };
 
 export const apiRequest = async (endpoint: string, options: RequestInit = {}, includeAuth = true) => {
-  const url = `${API_CONFIG.BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const normalizedEndpoint = normalizeEndpoint(endpoint);
+  const url = `${API_CONFIG.BASE_URL}${normalizedEndpoint}`;
 
   // Check if body is FormData to avoid setting Content-Type
   const isFormData = options.body instanceof FormData;
@@ -93,13 +98,19 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
   } catch (error) {
     console.error('API request failed:', error);
     
+    // Show backend warning in development if not already shown
+    if (isDevelopment() && !backendWarningShown && error.message?.includes('fetch')) {
+      backendWarningShown = true;
+      showBackendWarning();
+    }
+    
     // If ngrok fails, try fallback URLs
     if (url.includes('ngrok-free.app') && (error.message?.includes('Unable to resolve host') || error.message?.includes('UnknownHostException'))) {
       console.log('Ngrok failed, trying fallback URLs...');
       
       for (let i = 1; i < FALLBACK_URLS.length; i++) {
         const fallbackBaseUrl = FALLBACK_URLS[i];
-        const fallbackUrl = `${fallbackBaseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+        const fallbackUrl = `${fallbackBaseUrl}${normalizedEndpoint}`;
         
         try {
           console.log(`Trying fallback URL: ${fallbackUrl}`);

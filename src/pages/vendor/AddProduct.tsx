@@ -97,7 +97,7 @@ const AddProduct: React.FC = () => {
   useEffect(() => {
     const fetchVendorProfile = async () => {
       try {
-        const { response, data } = await apiRequest('/api/vendor-profiles/');
+        const { response, data } = await apiRequest('/vendor-profiles/');
         if (response.ok && data && data.length > 0) {
           const vendorProfile = data[0];
           const categories = vendorProfile.categories || [];

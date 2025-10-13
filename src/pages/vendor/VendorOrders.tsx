@@ -86,7 +86,7 @@ const VendorOrders: React.FC = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), isMobile ? 8000 : 30000);
 
-      const apiUrl = isMobile ? '/api/vendor/orders/?limit=50' : '/api/vendor/orders/';
+      const apiUrl = isMobile ? '/vendor/orders/?limit=50' : '/vendor/orders/';
       const { response, data } = await apiRequest(apiUrl, {
         signal: controller.signal
       });
@@ -414,7 +414,7 @@ const VendorOrders: React.FC = () => {
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {
-                    const { response } = await apiRequest(`/api/vendor/orders/${order.id}/status/`, {
+                    const { response } = await apiRequest(`/vendor/orders/${order.id}/status/`, {
                       method: 'POST',
                       body: JSON.stringify({
                         status: 'delivered',
@@ -1437,7 +1437,7 @@ const VendorOrders: React.FC = () => {
                           disabled={!deliveryBoyPhone || !vehicleNumber || !estimatedDeliveryTime || !deliveryFee}
                           onClick={async () => {
                             try {
-                              const { response } = await apiRequest(`/api/vendor/orders/${selectedOrder.id}/status/`, {
+                              const { response } = await apiRequest(`/vendor/orders/${selectedOrder.id}/status/`, {
                                 method: 'POST',
                                 body: JSON.stringify({
                                   status: 'out_for_delivery',

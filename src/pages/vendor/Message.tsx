@@ -144,7 +144,7 @@ const Message: React.FC = () => {
 
   const loadConversations = async (page = 1, append = false) => {
     try {
-      const { response, data } = await apiRequest(`/api/messaging/conversations/?page=${page}&page_size=20`);
+      const { response, data } = await apiRequest(`messaging/conversations/?page=${page}&page_size=20`);
       
       if (!response.ok) throw new Error('Failed to fetch conversations');
       

@@ -57,7 +57,7 @@ class MessageService {
 
   async getConversations(): Promise<Conversation[]> {
     try {
-      const { response, data } = await apiRequest('/api/messaging/conversations/');
+      const { response, data } = await apiRequest('messaging/conversations/');
       if (!response.ok) {
         return [];
       }
@@ -69,7 +69,7 @@ class MessageService {
 
   async getMessages(conversationId: number): Promise<Message[]> {
     try {
-      const { response, data } = await apiRequest(`/api/messaging/conversations/${conversationId}/messages/`);
+      const { response, data } = await apiRequest(`messaging/conversations/${conversationId}/messages/`);
       if (!response.ok) {
         console.error(`Messages API error: ${response.status}`);
         return [];
@@ -154,7 +154,7 @@ class MessageService {
 
   async getOrCreateConversation(userId: number): Promise<Conversation> {
     try {
-      const { response, data } = await apiRequest(`/api/messaging/conversations/user/${userId}/`);
+      const { response, data } = await apiRequest(`messaging/conversations/user/${userId}/`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

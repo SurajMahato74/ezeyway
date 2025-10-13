@@ -6,7 +6,7 @@ export function TestOrderButton() {
       const token = localStorage.getItem('token');
       console.log('Testing with token:', token);
       
-      const response = await fetch('http://localhost:8000/api/orders/vendor/pending/', {
+      const response = await fetch('${API_BASE}/orders/vendor/pending/', {
         headers: {
           'Authorization': `Token ${token}`
         }

@@ -1,6 +1,6 @@
 import { getApiUrl } from '@/config/api';
 import { authService } from '@/services/authService';
-const API_BASE_URL = getApiUrl('/api');
+const API_BASE_URL = getApiUrl('');
 
 interface CartItem {
   id: number;
@@ -42,7 +42,7 @@ class CartService {
       throw new Error('User not authenticated');
     }
     
-    const response = await fetch(`${API_BASE_URL}/cart/`, {
+    const response = await fetch(`${API_BASE_URL}cart/`, {
       headers: await this.getAuthHeaders(),
     });
     

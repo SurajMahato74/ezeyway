@@ -95,7 +95,7 @@ const AddProductPage: React.FC = () => {
     const fetchVendorProfile = async () => {
       try {
         const { apiRequest } = await import('@/utils/apiUtils');
-        const { response, data } = await apiRequest('/api/vendor-profiles/');
+        const { response, data } = await apiRequest('/vendor-profiles/');
         console.log('Vendor profile response:', { response: response.ok, data });
         
         if (response.ok && data && data.results && data.results.length > 0) {

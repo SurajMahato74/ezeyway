@@ -21,7 +21,7 @@ export const VendorDebugInfo: React.FC = () => {
         
         if (token && user?.user_type === 'vendor') {
           try {
-            const { response, data } = await apiRequest('/api/vendor-profiles/');
+            const { response, data } = await apiRequest('/vendor-profiles/');
             vendorProfileStatus = `${response.status} - ${response.ok ? 'Success' : 'Failed'}`;
             if (!response.ok) {
               vendorProfileError = data?.error || response.statusText;

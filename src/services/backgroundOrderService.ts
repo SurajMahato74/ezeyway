@@ -46,7 +46,7 @@ class BackgroundOrderService {
       if (!isAuth) return;
 
       // Fetch pending orders
-      const { response, data } = await apiRequest('/api/orders/vendor/pending/');
+      const { response, data } = await apiRequest('orders/vendor/pending/');
       
       if (response.ok && data) {
         const orders = Array.isArray(data) ? data : data.results || [];

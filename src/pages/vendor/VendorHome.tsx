@@ -135,13 +135,13 @@ const VendorHome: React.FC = () => {
       }
       
       // Fetch wallet balance
-      const { response: walletResponse, data: walletData } = await apiRequest('/api/accounts/wallet/');
+      const { response: walletResponse, data: walletData } = await apiRequest('accounts/wallet/');
       if (walletResponse.ok && walletData) {
         setWalletBalance(parseFloat(walletData.balance) || 0);
       }
       
       // Fetch orders data
-      const { response: ordersResponse, data: ordersData } = await apiRequest('/api/vendor/orders/');
+      const { response: ordersResponse, data: ordersData } = await apiRequest('/vendor/orders/');
       if (ordersResponse.ok && ordersData) {
         const orders = ordersData.results || ordersData || [];
         const totalOrders = orders.length;
@@ -162,7 +162,7 @@ const VendorHome: React.FC = () => {
       }
       
       // Fetch products
-      const { response: productsResponse, data: productsData } = await apiRequest('/api/products/');
+      const { response: productsResponse, data: productsData } = await apiRequest('products/');
       if (productsResponse.ok && productsData) {
         const products = productsData.results || productsData || [];
         setMyProducts(products.slice(0, 6));
@@ -176,7 +176,7 @@ const VendorHome: React.FC = () => {
   const fetchSliders = async () => {
     try {
       const { apiRequest } = await import('@/utils/apiUtils');
-      const { response, data } = await apiRequest('/api/sliders/?user_type=vendor');
+      const { response, data } = await apiRequest('sliders/?user_type=vendor');
       
       if (response.ok && data && data.sliders) {
         setSliders(data.sliders);

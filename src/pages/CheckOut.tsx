@@ -344,7 +344,7 @@ export default function CheckOut() {
         // Remove selected items from cart
         for (const item of selectedCartItems) {
           try {
-            await fetch(`${API_BASE}api/cart/items/${item.id}/remove/`, {
+            await fetch(`${API_BASE}cart/items/${item.id}/remove/`, {
               method: 'DELETE',
               headers: {
                 'Authorization': `Token ${token}`,

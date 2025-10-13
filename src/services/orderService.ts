@@ -161,7 +161,7 @@ class OrderService {
 
   // Vendor-specific methods
   async getPendingOrders(): Promise<Order[]> {
-    const response = await fetch(`${API_BASE}api/orders/vendor/pending/`, {
+    const response = await fetch(`${API_BASE}orders/vendor/pending/`, {
       headers: await this.getAuthHeaders()
     });
 

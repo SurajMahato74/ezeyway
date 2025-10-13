@@ -65,11 +65,11 @@ export function useOrderNotifications() {
       }
 
       console.log('📱 Mobile: Fetching pending orders with token:', token ? `${token.substring(0, 10)}...` : 'NO TOKEN');
-      console.log('📱 Mobile: API URL:', getApiUrl('/api/orders/vendor/pending/'));
+      console.log('📱 Mobile: API URL:', getApiUrl('orders/vendor/pending/'));
       
       // Use apiRequest utility for better mobile compatibility
       const { apiRequest } = await import('@/utils/apiUtils');
-      const { response, data: orders } = await apiRequest('/api/orders/vendor/pending/');
+      const { response, data: orders } = await apiRequest('orders/vendor/pending/');
 
       console.log('📱 Mobile: Pending orders response:', response.status, response.ok);
       if (response.ok && orders) {
