@@ -1,3 +1,4 @@
+
 import { Capacitor } from '@capacitor/core';
 
 class MobileNotificationService {

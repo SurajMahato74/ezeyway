@@ -5,10 +5,10 @@ const isMobile = () => {
          window.navigator.userAgent.includes('Capacitor');
 };
 
-// Use ezeyway.com for all environments
+// Use localhost for debugging CORS issues
 const getBaseUrl = () => {
-  //return 'https://ezeyway.com';
-  return 'http://localhost:8000';
+  return 'https://ezeyway.com';
+  //return 'http://localhost:8000';
 };
 
 // Alternative URLs to try if main ngrok fails
