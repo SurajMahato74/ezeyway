@@ -7,7 +7,7 @@ const isMobile = () => {
 
 // Use localhost for debugging CORS issues
 const getBaseUrl = () => {
-  return 'https://ezeyway.com';
+  return 'https://ezeyway.com/api';
   //return 'http://localhost:8000';
 };
 
