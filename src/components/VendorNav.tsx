@@ -41,7 +41,7 @@ const VendorBottomNav: React.FC = () => {
           }}
         ></div>
         
-        <div className="relative flex justify-around items-center px-safe-x py-2 pt-4">
+        <div className="relative flex justify-around items-center px-safe-x py-1 pt-3 md:py-1 md:pt-2">
           {vendorNavigationItems.slice(0, 2).map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.url;
@@ -50,14 +50,14 @@ const VendorBottomNav: React.FC = () => {
               <button
                 key={item.title}
                 onClick={() => navigate(item.url)}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 min-w-[60px] ${
+                className={`flex flex-col items-center justify-center p-2 md:p-1 rounded-lg transition-all duration-200 min-w-[60px] ${
                   isActive
                     ? 'text-orange-600 bg-orange-50'
                     : 'text-gray-600 hover:text-orange-500 hover:bg-gray-50'
                 }`}
                 aria-label={item.title}
               >
-                <Icon className="h-5 w-5 mb-1" />
+                <Icon className="h-5 w-5 mb-1 md:mb-0" />
                 <span className="text-xs font-medium">{item.title}</span>
               </button>
             );
@@ -74,14 +74,14 @@ const VendorBottomNav: React.FC = () => {
               <button
                 key={item.title}
                 onClick={() => navigate(item.url)}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 min-w-[60px] ${
+                className={`flex flex-col items-center justify-center p-2 md:p-1 rounded-lg transition-all duration-200 min-w-[60px] ${
                   isActive
                     ? 'text-orange-600 bg-orange-50'
                     : 'text-gray-600 hover:text-orange-500 hover:bg-gray-50'
                 }`}
                 aria-label={item.title}
               >
-                <Icon className="h-5 w-5 mb-1" />
+                <Icon className="h-5 w-5 mb-1 md:mb-0" />
                 <span className="text-xs font-medium">{item.title}</span>
               </button>
             );

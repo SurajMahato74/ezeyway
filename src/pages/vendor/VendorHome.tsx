@@ -416,74 +416,83 @@ const VendorHome: React.FC = () => {
         </div>
 
         {/* Banner Slider */}
-        <div>
+        <div className="mb-6">
           {isLoadingSliders ? (
-            <div className="h-32 bg-gray-100 rounded-lg flex items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              <span className="ml-2 text-gray-500">Loading sliders...</span>
+            <div className="relative overflow-hidden rounded-2xl shadow-lg h-48 bg-gray-100 flex items-center justify-center mx-4">
+              <div className="flex items-center gap-2 text-gray-500">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Loading banners...</span>
+              </div>
             </div>
           ) : sliders.length > 0 ? (
-            <div className="relative h-32">
+            <div className="relative md:overflow-visible overflow-hidden md:px-8">
               <div 
-                className="overflow-visible"
+                className={`flex ${isTransitioning ? 'transition-transform duration-500 ease-in-out' : ''}`}
+                style={{ 
+                  transform: typeof window !== 'undefined' && window.innerWidth < 768 
+                    ? `translateX(-${currentSlide * 100}%)` 
+                    : `translateX(calc(-${currentSlide * 50}% + 25%))` 
+                }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               >
-                <div 
-                  className={`flex ${isTransitioning ? 'transition-transform duration-500 ease-in-out' : ''}`}
-                  style={{ transform: `translateX(calc(-${currentSlide * 95}% + 2.5%))` }}
-                >
-                  {extendedSlides.map((slider, index) => (
+                {extendedSlides.map((slider, index) => {
+                  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+                  const isCenter = !isMobile && index === currentSlide;
+                  return (
                     <div 
                       key={`${slider.id}-${index}`} 
-                      className={`flex-shrink-0 rounded-lg overflow-hidden transition-all duration-300 cursor-pointer ${
-                        index === currentSlide ? 'scale-100 opacity-100 z-10' : 'scale-90 opacity-50 z-0'
+                      className={`flex-shrink-0 relative cursor-pointer transition-all duration-300 ${
+                        isMobile ? 'w-full rounded-2xl shadow-lg overflow-hidden mx-4' : 
+                        `${isCenter ? 'scale-100 opacity-100 z-10' : 'scale-75 opacity-60 z-0'} rounded-lg overflow-hidden`
                       }`}
-                      style={{ width: '95%', marginRight: '1%' }}
+                      style={!isMobile ? { width: '50%' } : {}}
                       onClick={() => {
                         if (slider.link_url) {
                           window.open(slider.link_url, '_blank');
                         }
                       }}
                     >
-                      <div className="relative h-32">
+                      <div className="relative h-48">
                         {slider.image_url ? (
                           <img 
                             src={slider.image_url} 
                             alt={slider.title}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover md:object-contain"
                             onError={(e) => {
                               e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
+                              e.target.parentElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
                             }}
                           />
-                        ) : null}
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/80 to-purple-600/80 flex items-center justify-center" style={{ display: slider.image_url ? 'none' : 'flex' }}>
-                          <h3 className="text-white text-lg font-bold text-center px-4">{slider.title}</h3>
-                        </div>
-
+                        ) : (
+                          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/80 to-purple-600/80 flex items-center justify-center">
+                            <h3 className="text-white text-lg font-bold text-center px-4">{slider.title}</h3>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
               
               {/* Dots Indicator */}
-              <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex gap-1">
-                {sliders.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentSlide(index + 1)}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      index === ((currentSlide - 1 + sliders.length) % sliders.length) ? 'bg-blue-500' : 'bg-gray-300'
-                    }`}
-                  />
-                ))}
-              </div>
+              {sliders.length > 1 && (
+                <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-1">
+                  {sliders.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentSlide(index + 1)}
+                      className={`w-2 h-2 rounded-full transition-colors ${
+                        index === ((currentSlide - 1 + sliders.length) % sliders.length) ? 'bg-blue-500' : 'bg-gray-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="h-32 bg-gray-100 rounded-lg flex items-center justify-center">
+            <div className="h-48 bg-gray-100 rounded-2xl shadow-lg flex items-center justify-center mx-4">
               <div className="text-center">
                 <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-2">
                   <Package className="h-6 w-6 text-gray-400" />
@@ -606,13 +615,13 @@ const VendorHome: React.FC = () => {
               View All
             </Button>
           </div>
-          <div className="overflow-x-auto">
-            <div className="flex gap-3 pb-2">
+          <div className="md:grid md:grid-cols-4 md:gap-3 overflow-x-auto md:overflow-visible">
+            <div className="flex gap-3 pb-2 md:contents">
               {bestSellingProducts.map((product) => (
-                <Card key={product.id} className="w-32 flex-shrink-0">
-                  <CardContent className="p-3">
-                    <div className="space-y-2">
-                      <div className="w-full h-16 bg-gray-100 rounded-lg overflow-hidden">
+                <Card key={product.id} className="w-32 flex-shrink-0 md:w-auto md:flex-shrink">
+                  <CardContent className="md:p-2 p-3">
+                    <div className="md:space-y-1 space-y-2">
+                      <div className="w-full aspect-square bg-gray-100 rounded-lg overflow-hidden">
                         <img 
                           src={product.images?.[0]?.image_url || '/api/placeholder/80/80'} 
                           alt={product.name} 
@@ -620,17 +629,17 @@ const VendorHome: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <h4 className="text-sm font-medium text-gray-900 truncate">{product.name}</h4>
-                        <p className="text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
+                        <h4 className="md:text-xs text-sm font-medium text-gray-900 truncate">{product.name}</h4>
+                        <p className="md:text-[10px] text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
                       </div>
-                      <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center justify-between md:text-[10px] text-xs">
                         <span className="text-green-600 font-medium">{product.sold} sold</span>
                         <div className="flex items-center gap-1">
-                          <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                          <Star className="md:h-2 md:w-2 h-3 w-3 text-yellow-400 fill-current" />
                           <span className="text-gray-600">{product.rating}</span>
                         </div>
                       </div>
-                      <div className="text-xs text-gray-500">Stock: {product.quantity}</div>
+                      <div className="md:text-[10px] text-xs text-gray-500">Stock: {product.quantity}</div>
                     </div>
                   </CardContent>
                 </Card>
@@ -648,29 +657,29 @@ const VendorHome: React.FC = () => {
                 View All
               </Button>
             </div>
-            <div className="overflow-x-auto">
-              <div className="flex gap-3 pb-2">
+            <div className="md:grid md:grid-cols-4 md:gap-3 overflow-x-auto md:overflow-visible">
+              <div className="flex gap-3 pb-2 md:contents">
                 {featuredProducts.map((product) => (
-                  <Card key={product.id} className="w-32 flex-shrink-0 relative">
-                    <CardContent className="p-3">
-                      <div className="space-y-2">
-                        <div className="w-full h-16 bg-gray-100 rounded-lg overflow-hidden relative">
+                  <Card key={product.id} className="w-32 flex-shrink-0 relative md:w-auto md:flex-shrink">
+                    <CardContent className="md:p-2 p-3">
+                      <div className="md:space-y-1 space-y-2">
+                        <div className="w-full aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
                           <img 
                             src={product.images?.[0]?.image_url || '/api/placeholder/80/80'} 
                             alt={product.name} 
                             className="w-full h-full object-cover" 
                           />
-                          <div className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs px-1 py-0.5 rounded-full font-bold shadow-md">
+                          <div className="absolute -top-1 -right-1 bg-yellow-500 text-white md:text-[10px] text-xs px-1 py-0.5 rounded-full font-bold shadow-md">
                             ★
                           </div>
                         </div>
                         <div>
-                          <h4 className="text-sm font-medium text-gray-900 truncate">{product.name}</h4>
-                          <p className="text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
+                          <h4 className="md:text-xs text-sm font-medium text-gray-900 truncate">{product.name}</h4>
+                          <p className="md:text-[10px] text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
                         </div>
-                        <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center justify-between md:text-[10px] text-xs">
                           <span className="text-blue-600 font-medium">{product.total_sold || 0} sold</span>
-                          <span className={`px-1 py-0.5 rounded text-xs ${
+                          <span className={`px-1 py-0.5 rounded md:text-[10px] text-xs ${
                             product.quantity > 10 ? 'bg-green-100 text-green-700' :
                             product.quantity > 0 ? 'bg-yellow-100 text-yellow-700' :
                             'bg-red-100 text-red-700'
@@ -700,12 +709,12 @@ const VendorHome: React.FC = () => {
               Manage
             </Button>
           </div>
-          <div className="grid grid-cols-2 gap-3 max-w-full">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-full">
             {myProducts.map((product) => (
               <Card key={product.id} className="overflow-hidden">
-                <CardContent className="p-3">
-                  <div className="space-y-2">
-                    <div className="w-full h-12 bg-gray-100 rounded overflow-hidden">
+                <CardContent className="md:p-2 p-3">
+                  <div className="md:space-y-1 space-y-2">
+                    <div className="w-full aspect-square bg-gray-100 rounded overflow-hidden">
                       <img 
                         src={product.images?.[0]?.image_url || '/api/placeholder/60/60'} 
                         alt={product.name} 
@@ -713,12 +722,12 @@ const VendorHome: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <h4 className="text-sm font-medium text-gray-900 truncate">{product.name}</h4>
-                      <p className="text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
+                      <h4 className="md:text-xs text-sm font-medium text-gray-900 truncate">{product.name}</h4>
+                      <p className="md:text-[10px] text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">Stock: {product.quantity}</span>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
+                      <span className="md:text-[10px] text-xs text-gray-500">Stock: {product.quantity}</span>
+                      <span className={`md:text-[10px] text-xs px-2 py-1 rounded-full ${
                         product.quantity > 10 ? 'bg-green-100 text-green-700' :
                         product.quantity > 0 ? 'bg-yellow-100 text-yellow-700' :
                         'bg-red-100 text-red-700'

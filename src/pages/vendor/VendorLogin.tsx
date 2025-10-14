@@ -91,7 +91,11 @@ export default function VendorLogin() {
       }
     } catch (e) {
       console.error('Vendor login error:', e);
-      setError(e.message || "Login failed. Please try again.");
+      if (e.message?.includes('fetch')) {
+        setError("Connection failed. Please check if the server is running on localhost:8000");
+      } else {
+        setError(e.message || "Login failed. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
