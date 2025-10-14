@@ -425,12 +425,12 @@ const VendorHome: React.FC = () => {
               </div>
             </div>
           ) : sliders.length > 0 ? (
-            <div className="relative md:overflow-visible overflow-hidden md:px-8">
+            <div className="relative md:overflow-visible overflow-hidden md:px-8 mx-4 md:mx-0">
               <div 
                 className={`flex ${isTransitioning ? 'transition-transform duration-500 ease-in-out' : ''}`}
                 style={{ 
                   transform: typeof window !== 'undefined' && window.innerWidth < 768 
-                    ? `translateX(-${currentSlide * 100}%)` 
+                    ? `translateX(calc(-${currentSlide * 100}% + 100%))` 
                     : `translateX(calc(-${currentSlide * 50}% + 25%))` 
                 }}
                 onTouchStart={handleTouchStart}
@@ -444,7 +444,7 @@ const VendorHome: React.FC = () => {
                     <div 
                       key={`${slider.id}-${index}`} 
                       className={`flex-shrink-0 relative cursor-pointer transition-all duration-300 ${
-                        isMobile ? 'w-full rounded-2xl shadow-lg overflow-hidden mx-4' : 
+                        isMobile ? 'w-full rounded-2xl shadow-lg overflow-hidden' : 
                         `${isCenter ? 'scale-100 opacity-100 z-10' : 'scale-75 opacity-60 z-0'} rounded-lg overflow-hidden`
                       }`}
                       style={!isMobile ? { width: '50%' } : {}}
