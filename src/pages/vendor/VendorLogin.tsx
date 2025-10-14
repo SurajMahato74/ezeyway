@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import logo from "@/assets/ezeywaylogo.png";
@@ -11,6 +11,7 @@ import { LoginSwitcher } from '@/components/LoginSwitcher';
 
 export default function VendorLogin() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useApp();
   const [activeTab, setActiveTab] = useState("password");
   const [email, setEmail] = useState("");
@@ -21,8 +22,16 @@ export default function VendorLogin() {
   const [otpSent, setOtpSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [needsVerification, setNeedsVerification] = useState(false);
   const [userId, setUserId] = useState(null);
+
+  useEffect(() => {
+    if (location.state?.successMessage) {
+      setSuccessMessage(location.state.successMessage);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handlePasswordLogin = async () => {
     setIsLoading(true);
@@ -66,6 +75,14 @@ export default function VendorLogin() {
         } else if (data.profile_exists && data.is_approved) {
           console.log("Profile exists and approved, redirecting to dashboard");
           navigate("/vendor/dashboard");
+        } else if (data.profile_exists && data.is_rejected) {
+          console.log("Profile exists but rejected");
+          navigate("/vendor/rejection", { 
+            state: { 
+              rejectionReason: data.rejection_reason,
+              rejectionDate: data.rejection_date 
+            } 
+          });
         } else if (data.profile_exists && !data.is_approved) {
           console.log("Profile exists but not approved");
           setError("Your vendor application is pending approval. You will be notified once approved.");
@@ -134,6 +151,14 @@ export default function VendorLogin() {
       } else if (data.profile_exists && data.is_approved) {
         console.log("Profile exists and approved, redirecting to dashboard");
         navigate("/vendor/dashboard");
+      } else if (data.profile_exists && data.is_rejected) {
+        console.log("Profile exists but rejected");
+        navigate("/vendor/rejection", { 
+          state: { 
+            rejectionReason: data.rejection_reason,
+            rejectionDate: data.rejection_date 
+          } 
+        });
       } else if (data.profile_exists && !data.is_approved) {
         console.log("Profile exists but not approved");
         setError("Your vendor application is pending approval. You will be notified once approved.");
@@ -256,6 +281,7 @@ export default function VendorLogin() {
                   </button>
                 </div>
               )}
+              {successMessage && <p className="text-green-600 text-center">{successMessage}</p>}
               {error && <p className="text-red-600 text-center">{error}</p>}
               {needsVerification && (
                 <div className="space-y-4">
@@ -337,6 +363,7 @@ export default function VendorLogin() {
                     maxLength={6}
                     className="bg-white border-0 shadow-sm focus:ring-2 focus:ring-blue-500 text-center tracking-widest w-80"
                   />
+                  {successMessage && <p className="text-green-600 text-center">{successMessage}</p>}
                   {error && <p className="text-red-600 text-center">{error}</p>}
                   <Button
                     onClick={handleVerifyOtp}

@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { 
   Search, 
   Filter, 
@@ -13,87 +17,82 @@ import {
   Eye,
   Package,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  Truck,
+  Star,
+  X
 } from 'lucide-react';
 import AddProduct from './AddProduct';
+import { productApi, Product } from '@/lib/productApi';
+import { toast } from 'sonner';
 
 const Products: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
 
-  // Mock product data
-  const products = [
-    {
-      id: 1,
-      name: 'Samsung Galaxy S24',
-      category: 'Electronics',
-      price: 89999,
-      stock: 15,
-      status: 'active',
-      image: '/api/placeholder/60/60',
-      sku: 'SGS24-001',
-      sales: 45,
-      featured: true
-    },
-    {
-      id: 2,
-      name: 'Chicken Momo (8pcs)',
-      category: 'Food',
-      price: 180,
-      stock: 25,
-      status: 'active',
-      image: '/api/placeholder/60/60',
-      sku: 'MOMO-001',
-      sales: 120,
-      featured: false
-    },
-    {
-      id: 3,
-      name: 'Cotton T-Shirt',
-      category: 'Clothing',
-      price: 599,
-      stock: 5,
-      status: 'active',
-      image: '/api/placeholder/60/60',
-      sku: 'TSH-001',
-      sales: 32,
-      featured: false
-    },
-    {
-      id: 4,
-      name: 'Baby Diapers (Pack of 50)',
-      category: 'Baby & Kids',
-      price: 1299,
-      stock: 0,
-      status: 'active',
-      image: '/api/placeholder/60/60',
-      sku: 'DIA-001',
-      sales: 78,
-      featured: true
-    },
-    {
-      id: 5,
-      name: 'Organic Rice (5kg)',
-      category: 'Grocery',
-      price: 450,
-      stock: 100,
-      status: 'draft',
-      image: '/api/placeholder/60/60',
-      sku: 'RICE-001',
-      sales: 0,
-      featured: false
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      const data = await productApi.getProducts();
+      setProducts(data);
+    } catch (error) {
+      console.error('Failed to load products:', error);
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const handleUpdateProduct = async (updatedProduct: Product) => {
+    try {
+      if (!updatedProduct.id) return;
+      await productApi.updateProduct(updatedProduct.id, updatedProduct);
+      await loadProducts();
+      setEditingProduct(null);
+      toast.success('Product updated successfully');
+    } catch (error) {
+      console.error('Failed to update product:', error);
+      toast.error('Failed to update product');
+    }
+  };
+
+  const handleDeleteProduct = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this product?')) return;
+    try {
+      await productApi.deleteProduct(id);
+      await loadProducts();
+      toast.success('Product deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+      toast.error('Failed to delete product');
+    }
+  };
+
+  const stripHtml = (html: string) => {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  };
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+                         (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
     const matchesStatus = statusFilter === 'all' || product.status === statusFilter;
     
     return matchesSearch && matchesCategory && matchesStatus;
   });
+
+  const categories = [...new Set(products.map(p => p.category))].sort();
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -115,6 +114,147 @@ const Products: React.FC = () => {
       return <Badge className="bg-orange-100 text-orange-800">Low Stock</Badge>;
     }
     return <Badge className="bg-green-100 text-green-800">In Stock</Badge>;
+  };
+
+  const EditProductForm: React.FC<{
+    product: Product;
+    onSave: (product: Product) => void;
+    onCancel: () => void;
+  }> = ({ product, onSave, onCancel }) => {
+    const [formData, setFormData] = useState<Product>({
+      ...product,
+      dynamic_fields: product.dynamic_fields || {}
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      onSave(formData);
+    };
+
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="name">Product Name</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="category">Category</Label>
+            <Input
+              id="category"
+              value={formData.category}
+              onChange={(e) => setFormData({...formData, category: e.target.value})}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="subcategory">Subcategory</Label>
+            <Input
+              id="subcategory"
+              value={formData.subcategory || ''}
+              onChange={(e) => setFormData({...formData, subcategory: e.target.value})}
+            />
+          </div>
+          <div>
+            <Label htmlFor="price">Price (₹)</Label>
+            <Input
+              id="price"
+              type="number"
+              value={formData.price}
+              onChange={(e) => setFormData({...formData, price: Number(e.target.value)})}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="cost_price">Cost Price (₹)</Label>
+            <Input
+              id="cost_price"
+              type="number"
+              value={formData.cost_price || ''}
+              onChange={(e) => setFormData({...formData, cost_price: Number(e.target.value) || undefined})}
+            />
+          </div>
+          <div>
+            <Label htmlFor="quantity">Stock Quantity</Label>
+            <Input
+              id="quantity"
+              type="number"
+              value={formData.quantity}
+              onChange={(e) => setFormData({...formData, quantity: Number(e.target.value)})}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="sku">SKU</Label>
+            <Input
+              id="sku"
+              value={formData.sku || ''}
+              onChange={(e) => setFormData({...formData, sku: e.target.value})}
+            />
+          </div>
+          <div>
+            <Label htmlFor="status">Status</Label>
+            <Select value={formData.status} onValueChange={(value: any) => setFormData({...formData, status: value})}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        <div>
+          <Label htmlFor="description">Description</Label>
+          <Textarea
+            id="description"
+            value={stripHtml(formData.description)}
+            onChange={(e) => setFormData({...formData, description: e.target.value})}
+            rows={4}
+          />
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="featured"
+              checked={formData.featured}
+              onCheckedChange={(checked) => setFormData({...formData, featured: checked})}
+            />
+            <Label htmlFor="featured">Featured Product</Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="free_delivery"
+              checked={formData.dynamic_fields?.free_delivery || false}
+              onCheckedChange={(checked) => setFormData({
+                ...formData, 
+                dynamic_fields: {...formData.dynamic_fields, free_delivery: checked}
+              })}
+            />
+            <Label htmlFor="free_delivery">Free Delivery</Label>
+          </div>
+        </div>
+        
+        <div className="flex justify-end space-x-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit">
+            Save Changes
+          </Button>
+        </div>
+      </form>
+    );
   };
 
   return (
@@ -159,7 +299,7 @@ const Products: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center sm:justify-between">
               <div className="text-center sm:text-left">
                 <p className="text-xs sm:text-sm text-gray-600">Low Stock</p>
-                <p className="text-lg sm:text-2xl font-bold">{products.filter(p => p.stock <= 5 && p.stock > 0).length}</p>
+                <p className="text-lg sm:text-2xl font-bold">{products.filter(p => p.quantity <= 5 && p.quantity > 0).length}</p>
               </div>
               <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-orange-500" />
             </div>
@@ -171,7 +311,7 @@ const Products: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center sm:justify-between">
               <div className="text-center sm:text-left">
                 <p className="text-xs sm:text-sm text-gray-600">Out of Stock</p>
-                <p className="text-lg sm:text-2xl font-bold">{products.filter(p => p.stock === 0).length}</p>
+                <p className="text-lg sm:text-2xl font-bold">{products.filter(p => p.quantity === 0).length}</p>
               </div>
               <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-red-500" />
             </div>
@@ -201,11 +341,9 @@ const Products: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="Electronics">Electronics</SelectItem>
-                <SelectItem value="Food">Food</SelectItem>
-                <SelectItem value="Clothing">Clothing</SelectItem>
-                <SelectItem value="Baby & Kids">Baby & Kids</SelectItem>
-                <SelectItem value="Grocery">Grocery</SelectItem>
+                {categories.map(category => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             
@@ -231,72 +369,177 @@ const Products: React.FC = () => {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px]">
+            <table className="w-full min-w-[800px]">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="text-left p-4 font-medium text-gray-600">Product</th>
                   <th className="text-left p-4 font-medium text-gray-600">Category</th>
                   <th className="text-left p-4 font-medium text-gray-600">Price</th>
                   <th className="text-left p-4 font-medium text-gray-600">Stock</th>
-                  <th className="text-left p-4 font-medium text-gray-600">Sales</th>
+                  <th className="text-left p-4 font-medium text-gray-600">Features</th>
                   <th className="text-left p-4 font-medium text-gray-600">Status</th>
                   <th className="text-left p-4 font-medium text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} className="border-t hover:bg-gray-50">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <img 
-                          src={product.image} 
-                          alt={product.name}
-                          className="w-12 h-12 rounded-lg object-cover"
-                        />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900">{product.name}</p>
-                            {product.featured && (
-                              <Badge variant="secondary" className="text-xs">Featured</Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-500">SKU: {product.sku}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <Badge variant="outline">{product.category}</Badge>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-medium">₹{product.price.toLocaleString()}</p>
-                    </td>
-                    <td className="p-4">
-                      <div className="space-y-1">
-                        <p className="font-medium">{product.stock}</p>
-                        {getStockStatus(product.stock)}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-medium">{product.sales}</p>
-                    </td>
-                    <td className="p-4">
-                      {getStatusBadge(product.status)}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-gray-500">
+                      Loading products...
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredProducts.map((product) => (
+                    <tr key={product.id} className="border-t hover:bg-gray-50">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <img 
+                            src={product.images?.[0]?.image_url || '/api/placeholder/60/60'} 
+                            alt={product.name}
+                            className="w-12 h-12 rounded-lg object-cover"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900">{product.name}</p>
+                              {product.featured && (
+                                <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500">SKU: {product.sku || 'N/A'}</p>
+                            {product.subcategory && (
+                              <p className="text-xs text-gray-400">{product.subcategory}</p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <Badge variant="outline">{product.category}</Badge>
+                      </td>
+                      <td className="p-4">
+                        <p className="font-medium">₹{product.price.toLocaleString()}</p>
+                        {product.cost_price && (
+                          <p className="text-xs text-gray-500">Cost: ₹{product.cost_price}</p>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <div className="space-y-1">
+                          <p className="font-medium">{product.quantity}</p>
+                          {getStockStatus(product.quantity)}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-col gap-1">
+                          {product.featured && (
+                            <Badge variant="secondary" className="text-xs w-fit">
+                              <Star className="h-3 w-3 mr-1" />Featured
+                            </Badge>
+                          )}
+                          {product.dynamic_fields?.free_delivery && (
+                            <Badge variant="outline" className="text-xs w-fit">
+                              <Truck className="h-3 w-3 mr-1" />Free Delivery
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        {getStatusBadge(product.status)}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" onClick={() => setViewingProduct(product)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>Product Details</DialogTitle>
+                              </DialogHeader>
+                              {viewingProduct && (
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label>Name</Label>
+                                      <p className="font-medium">{viewingProduct.name}</p>
+                                    </div>
+                                    <div>
+                                      <Label>Category</Label>
+                                      <p>{viewingProduct.category}</p>
+                                    </div>
+                                    {viewingProduct.subcategory && (
+                                      <div>
+                                        <Label>Subcategory</Label>
+                                        <p>{viewingProduct.subcategory}</p>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <Label>Price</Label>
+                                      <p className="font-medium">₹{viewingProduct.price}</p>
+                                    </div>
+                                    <div>
+                                      <Label>Stock</Label>
+                                      <p>{viewingProduct.quantity}</p>
+                                    </div>
+                                    <div>
+                                      <Label>SKU</Label>
+                                      <p>{viewingProduct.sku || 'N/A'}</p>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <Label>Description</Label>
+                                    <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                                      <p>{stripHtml(viewingProduct.description)}</p>
+                                    </div>
+                                  </div>
+                                  {viewingProduct.images && viewingProduct.images.length > 0 && (
+                                    <div>
+                                      <Label>Images</Label>
+                                      <div className="grid grid-cols-3 gap-2 mt-2">
+                                        {viewingProduct.images.map((img, idx) => (
+                                          <img key={idx} src={img.image_url} alt="Product" className="w-full h-24 object-cover rounded" />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                          
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" onClick={() => setEditingProduct(product)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>Edit Product</DialogTitle>
+                              </DialogHeader>
+                              {editingProduct && (
+                                <EditProductForm 
+                                  product={editingProduct} 
+                                  onSave={handleUpdateProduct}
+                                  onCancel={() => setEditingProduct(null)}
+                                />
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                          
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => product.id && handleDeleteProduct(product.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

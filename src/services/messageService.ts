@@ -98,7 +98,7 @@ class MessageService {
       if (data.content) formData.append('content', data.content);
       if (data.file) formData.append('file', data.file);
 
-      const { response, data: responseData } = await apiRequest('/api/messaging/messages/send/', {
+      const { response, data: responseData } = await apiRequest('/messaging/messages/send/', {
         method: 'POST',
         body: formData,
       });

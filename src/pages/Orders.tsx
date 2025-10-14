@@ -182,7 +182,7 @@ export default function Orders() {
 
   const checkVendorStatus = async (vendorName) => {
     try {
-      const { response, data } = await apiRequest(`/api/search/vendors/?search=${encodeURIComponent(vendorName)}`);
+      const { response, data } = await apiRequest(`search/vendors/?search=${encodeURIComponent(vendorName)}`);
       if (!response.ok) return false;
       const vendor = data?.results?.find(v => v.business_name === vendorName);
       return vendor?.is_active || false;

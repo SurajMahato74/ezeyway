@@ -100,7 +100,7 @@ export default function CheckOut() {
   const fetchUserInfo = async () => {
     try {
       const token = await authService.getToken();
-      const response = await fetch(`${API_BASE}api/profile/`, {
+      const response = await fetch(`${API_BASE}/profile/`, {
         headers: {
           'Authorization': `Token ${token}`,
           'ngrok-skip-browser-warning': 'true'

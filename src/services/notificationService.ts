@@ -119,10 +119,10 @@ class NotificationService {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       
-      // Create a triple beep notification sound - longer and louder
-      this.playBeep(audioContext, 800, 0.3, 0.4); // First beep - longer, louder
-      setTimeout(() => this.playBeep(audioContext, 1000, 0.3, 0.4), 400); // Second beep
-      setTimeout(() => this.playBeep(audioContext, 1200, 0.4, 0.5), 800); // Third beep - highest pitch, loudest
+      // Create notification sound with login tone style - pleasant but attention-grabbing
+      this.playBeep(audioContext, 523, 0.2, 0.3); // C5 note
+      setTimeout(() => this.playBeep(audioContext, 659, 0.2, 0.3), 200); // E5 note
+      setTimeout(() => this.playBeep(audioContext, 784, 0.3, 0.4), 400); // G5 note - longer final note
     } catch (error) {
       console.warn('Web Audio API not supported:', error);
     }
@@ -136,9 +136,10 @@ class NotificationService {
     gainNode.connect(audioContext.destination);
     
     oscillator.frequency.value = frequency;
-    oscillator.type = 'square'; // Square wave is more noticeable than sine
+    oscillator.type = 'sine'; // Sine wave for pleasant login-like tone
     
-    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.05); // Smooth fade in
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
     
     oscillator.start(audioContext.currentTime);
@@ -341,36 +342,87 @@ class NotificationService {
     return this.requestPermissions();
   }
 
-  // Mock methods for notifications (replace with actual API calls)
+  // API methods for notifications
   async getNotifications() {
-    // This should be replaced with actual API call
-    return [];
+    try {
+      const response = await fetch('/api/vendor-notifications/', {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.results || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+      return [];
+    }
   }
 
   async getUnreadCount() {
-    // This should be replaced with actual API call
-    return 0;
+    try {
+      const notifications = await this.getNotifications();
+      return notifications.filter(n => !n.read).length;
+    } catch (error) {
+      console.error('Failed to get unread count:', error);
+      return 0;
+    }
   }
 
   async markAsRead(id: number) {
-    // This should be replaced with actual API call
-    console.log('Marking notification as read:', id);
+    try {
+      const response = await fetch(`/api/notifications/${id}/read/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        console.log('Notification marked as read:', id);
+      }
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   }
 
   async markAllAsRead() {
-    // This should be replaced with actual API call
-    console.log('Marking all notifications as read');
+    try {
+      const response = await fetch('/api/notifications/mark-all-read/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        console.log('All notifications marked as read');
+      }
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+    }
   }
 
   // Browser notification method for compatibility (overloaded)
   async showBrowserNotificationCompat(title: string, options: any) {
+    // Play sound first
+    await this.playNotificationSound();
+    
     if (!Capacitor.isNativePlatform() && 'Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(title, {
         body: options.body,
         icon: '/favicon.ico',
+        badge: '/favicon.ico',
         tag: options.tag,
         requireInteraction: options.requireInteraction,
-        data: options.data
+        data: options.data,
+        silent: false // Ensure browser plays its own sound too
       });
 
       notification.onclick = () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, BarChart3, TrendingUp, Package, Users, Calendar, Filter, Download, Eye } from "lucide-react";
+import { ArrowLeft, BarChart3, TrendingUp, Package, Users, Calendar, Filter, Download, Eye, PieChart, FileText, Printer, Share2, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,19 +11,23 @@ import { Badge } from "@/components/ui/badge";
 import { VendorPage } from "@/components/VendorLayout";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from '@/utils/apiUtils';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 export default function VendorAnalytics() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState("30");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("all");
+  const [showExportSheet, setShowExportSheet] = useState(false);
+  const [exportFormat, setExportFormat] = useState("csv");
   
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
+  const [salesTransactions, setSalesTransactions] = useState([]);
   const [analytics, setAnalytics] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -61,6 +65,9 @@ export default function VendorAnalytics() {
           
           // Process analytics
           processAnalytics(allOrders, allProducts);
+          
+          // Process sales transactions for statements
+          processSalesTransactions(allOrders);
         }
       }
     } catch (error) {
@@ -203,11 +210,12 @@ export default function VendorAnalytics() {
     const customerOrders = {};
     
     orders.forEach(order => {
-      customers.add(order.customer);
-      if (!customerOrders[order.customer]) {
-        customerOrders[order.customer] = [];
+      const customerId = order.customer_details?.id || order.delivery_phone;
+      customers.add(customerId);
+      if (!customerOrders[customerId]) {
+        customerOrders[customerId] = [];
       }
-      customerOrders[order.customer].push(order);
+      customerOrders[customerId].push(order);
     });
     
     const returningCustomers = Object.values(customerOrders).filter(orders => orders.length > 1).length;
@@ -219,11 +227,157 @@ export default function VendorAnalytics() {
     };
   };
 
+  const processSalesTransactions = (ordersData) => {
+    const transactions = [];
+    
+    ordersData.forEach(order => {
+      if (order.status === 'delivered') {
+        transactions.push({
+          id: order.id,
+          type: 'sale',
+          order_number: order.order_number,
+          customer_name: order.customer_details?.username || order.delivery_name,
+          amount: parseFloat(order.total_amount),
+          date: order.created_at,
+          items: order.items?.length || 0
+        });
+      }
+      
+      if (order.refunds?.length > 0) {
+        order.refunds.forEach(refund => {
+          if (refund.status === 'completed') {
+            transactions.push({
+              id: `refund-${refund.id}`,
+              type: 'refund',
+              order_number: order.order_number,
+              customer_name: order.customer_details?.username || order.delivery_name,
+              amount: -parseFloat(refund.approved_amount || refund.requested_amount),
+              date: refund.completed_at || refund.created_at,
+              items: order.items?.length || 0
+            });
+          }
+        });
+      }
+    });
+    
+    setSalesTransactions(transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+  };
+
+  const exportData = () => {
+    const data = {
+      summary: {
+        totalRevenue: analytics.totalRevenue,
+        totalOrders: analytics.totalOrders,
+        avgOrderValue: analytics.avgOrderValue,
+        totalCustomers: analytics.customerInsights.totalCustomers,
+        dateRange: dateRange === 'custom' ? `${dateFrom} to ${dateTo}` : `Last ${dateRange} days`
+      },
+      transactions: salesTransactions,
+      products: analytics.productPerformance,
+      revenueChart: analytics.revenueChart
+    };
+
+    if (exportFormat === 'csv') {
+      exportCSV(data);
+    } else if (exportFormat === 'pdf') {
+      exportPDF(data);
+    } else {
+      exportJSON(data);
+    }
+    setShowExportSheet(false);
+  };
+
+  const exportCSV = (data) => {
+    const csvContent = [
+      ['Analytics Report'],
+      ['Generated:', new Date().toLocaleDateString()],
+      ['Period:', data.summary.dateRange],
+      [''],
+      ['SUMMARY'],
+      ['Total Revenue', `Rs${data.summary.totalRevenue.toFixed(2)}`],
+      ['Total Orders', data.summary.totalOrders],
+      ['Average Order Value', `Rs${data.summary.avgOrderValue.toFixed(2)}`],
+      ['Total Customers', data.summary.totalCustomers],
+      [''],
+      ['TOP PRODUCTS'],
+      ['Product Name', 'Units Sold', 'Revenue', 'Orders'],
+      ...data.products.slice(0, 10).map(p => [p.name, p.totalSold, `Rs${p.totalRevenue.toFixed(2)}`, p.orders]),
+      [''],
+      ['DAILY REVENUE'],
+      ['Date', 'Revenue', 'Orders'],
+      ...data.revenueChart.map(d => [d.date, `Rs${d.revenue.toFixed(2)}`, d.orders])
+    ].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportJSON = (data) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics-data-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = (data) => {
+    const report = `
+===========================================
+        BUSINESS ANALYTICS REPORT
+===========================================
+Generated: ${new Date().toLocaleDateString()}
+Period: ${data.summary.dateRange}
+
+SUMMARY
+-------------------------------------------
+Total Revenue: Rs${data.summary.totalRevenue.toFixed(2)}
+Total Orders: ${data.summary.totalOrders}
+Average Order Value: Rs${data.summary.avgOrderValue.toFixed(2)}
+Total Customers: ${data.summary.totalCustomers}
+
+TOP PRODUCTS
+-------------------------------------------
+${data.products.slice(0, 10).map((p, i) => `${i+1}. ${p.name} - ${p.totalSold} units - Rs${p.totalRevenue.toFixed(2)}`).join('\n')}
+
+DAILY REVENUE TREND
+-------------------------------------------
+${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} (${d.orders} orders)`).join('\n')}
+
+===========================================
+    `;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow?.document.write(`<pre style="font-family: monospace; font-size: 12px; line-height: 1.4;">${report}</pre>`);
+    printWindow?.print();
+  };
+
+  const shareReport = () => {
+    const summary = `Business Analytics Report\n\nTotal Revenue: Rs${analytics.totalRevenue.toFixed(2)}\nTotal Orders: ${analytics.totalOrders}\nAverage Order Value: Rs${analytics.avgOrderValue.toFixed(2)}\nTotal Customers: ${analytics.customerInsights.totalCustomers}\n\nTop Product: ${analytics.topProducts[0]?.name || 'N/A'}`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: 'Business Analytics Report',
+        text: summary
+      });
+    } else {
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(summary)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+  };
+
   const tabsConfig = [
-    { id: "overview", label: "Overview", icon: BarChart3 },
+    { id: "dashboard", label: "Dashboard", icon: BarChart3 },
     { id: "sales", label: "Sales Report", icon: TrendingUp },
-    { id: "products", label: "Product Report", icon: Package },
-    { id: "customers", label: "Customer Report", icon: Users },
+    { id: "products", label: "Product Analytics", icon: Package },
+    { id: "customers", label: "Customer Insights", icon: Users },
+    { id: "statements", label: "Statements", icon: FileText },
   ];
 
   if (loading) {
@@ -254,10 +408,19 @@ export default function VendorAnalytics() {
                 <p className="text-sm text-gray-600">Comprehensive business insights</p>
               </div>
             </div>
-            <Button variant="outline" className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowExportSheet(true)}>
+                <Download className="h-4 w-4 mr-1" />
+                Export
+              </Button>
+              <Button variant="outline" size="sm" onClick={shareReport}>
+                <Share2 className="h-4 w-4 mr-1" />
+                Share
+              </Button>
+              <Button variant="outline" size="sm" onClick={fetchData}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -331,7 +494,7 @@ export default function VendorAnalytics() {
         <div className="bg-white">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="overflow-x-auto">
-              <TabsList className="grid grid-cols-4 w-full min-w-max">
+              <TabsList className="grid grid-cols-5 w-full min-w-max">
                 {tabsConfig.map((tab) => (
                   <TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-2 text-xs">
                     <tab.icon className="h-4 w-4" />
@@ -341,8 +504,8 @@ export default function VendorAnalytics() {
               </TabsList>
             </div>
 
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="p-4 space-y-6">
+            {/* Dashboard Tab */}
+            <TabsContent value="dashboard" className="p-4 space-y-6">
               {/* Key Metrics */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
@@ -577,8 +740,169 @@ export default function VendorAnalytics() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* Statements Tab */}
+            <TabsContent value="statements" className="p-4 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Sales Summary */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Sales Summary</span>
+                      <Button variant="outline" size="sm" onClick={() => setShowExportSheet(true)}>
+                        <Download className="h-4 w-4 mr-1" />
+                        Export
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                        <span className="text-sm font-medium">Total Sales</span>
+                        <span className="font-bold text-green-600">₹{analytics.totalRevenue.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                        <span className="text-sm font-medium">Total Orders</span>
+                        <span className="font-bold text-blue-600">{analytics.totalOrders}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                        <span className="text-sm font-medium">Average Order Value</span>
+                        <span className="font-bold text-purple-600">₹{analytics.avgOrderValue.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Order Status Distribution */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <PieChart className="h-5 w-5" />
+                      Order Distribution
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {analytics.orderChart.map((status, index) => {
+                        const colors = ['bg-green-500', 'bg-yellow-500', 'bg-red-500', 'bg-blue-500', 'bg-purple-500'];
+                        return (
+                          <div key={status.status} className="flex items-center justify-between p-2 rounded">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-3 h-3 rounded-full ${colors[index % colors.length]}`} />
+                              <span className="text-sm">{status.status}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-medium text-sm">{status.count}</span>
+                              <span className="text-xs text-gray-600 ml-1">({status.percentage}%)</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recent Transactions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Recent Transactions</span>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => navigate('/vendor/sales')}>
+                        <Eye className="h-4 w-4 mr-1" />
+                        View All
+                      </Button>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {salesTransactions.slice(0, 20).map((transaction) => (
+                      <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            transaction.type === 'sale' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                          }`}>
+                            {transaction.type === 'sale' ? '↓' : '↑'}
+                          </div>
+                          <div>
+                            <div className="font-medium text-sm">
+                              {transaction.type === 'sale' ? 'Sale' : 'Refund'} - {transaction.order_number}
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              {transaction.customer_name} • {new Date(transaction.date).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`font-bold text-sm ${
+                            transaction.type === 'sale' ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {transaction.type === 'sale' ? '+' : ''}₹{Math.abs(transaction.amount).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">{transaction.items} items</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </div>
+
+        {/* Export Sheet */}
+        <Sheet open={showExportSheet} onOpenChange={setShowExportSheet}>
+          <SheetContent side="right" className="w-full sm:w-80">
+            <SheetHeader className="pb-4">
+              <SheetTitle>Export Analytics Report</SheetTitle>
+            </SheetHeader>
+            
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Export Format</Label>
+                <Select value={exportFormat} onValueChange={setExportFormat}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="csv">CSV Spreadsheet</SelectItem>
+                    <SelectItem value="json">JSON Data</SelectItem>
+                    <SelectItem value="pdf">PDF Report</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Report Includes:</Label>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <div>• Sales summary and metrics</div>
+                  <div>• Top performing products</div>
+                  <div>• Daily revenue trends</div>
+                  <div>• Customer insights</div>
+                  <div>• Order distribution</div>
+                </div>
+              </div>
+              
+              <div className="flex gap-2 pt-4">
+                <Button onClick={exportData} className="flex-1">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Report
+                </Button>
+                <Button variant="outline" onClick={() => setShowExportSheet(false)} className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+              
+              <div className="pt-4 border-t">
+                <p className="text-xs text-gray-500">
+                  Report will include data for the selected time period: {dateRange === 'custom' ? `${dateFrom} to ${dateTo}` : `Last ${dateRange} days`}
+                </p>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </VendorPage>
   );

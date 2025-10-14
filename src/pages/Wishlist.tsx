@@ -10,6 +10,7 @@ import { favoritesService, FavoriteProduct } from "@/services/favoritesService";
 import { useCart } from "@/contexts/CartContext";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
+import { getApiUrl } from "@/config/api";
 
 const WishlistPage = () => {
   const navigate = useNavigate();
@@ -83,7 +84,7 @@ const WishlistPage = () => {
         params.append('longitude', userLocation.longitude.toString());
       }
 
-      const response = await fetch(`http://localhost:8000/api/search/products/?${params}`, { headers });
+      const response = await fetch(getApiUrl(`/search/products/?${params}`), { headers });
       const data = await response.json();
       
       const processedProducts = (data.results || [])

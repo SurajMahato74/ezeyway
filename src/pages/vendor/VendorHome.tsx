@@ -31,12 +31,14 @@ const VendorHome: React.FC = () => {
     totalProducts: 0,
     totalCustomers: 0,
     monthlyEarnings: 0,
-    monthlyGrowth: 0
+    monthlyGrowth: 0,
+    todaysEarnings: 0
   });
   const [todayOrders, setTodayOrders] = useState([]);
   const [bestSellingProducts, setBestSellingProducts] = useState([]);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
   const [myProducts, setMyProducts] = useState([]);
-  const [monthlyChart, setMonthlyChart] = useState([]);
+  const [monthlyChart, setMonthlyChart] = useState([0, 0, 0, 0, 0, 0]);
   const [sliders, setSliders] = useState([]);
   const [isLoadingSliders, setIsLoadingSliders] = useState(true);
   
@@ -142,23 +144,102 @@ const VendorHome: React.FC = () => {
       
       // Fetch orders data
       const { response: ordersResponse, data: ordersData } = await apiRequest('/vendor/orders/');
+      console.log('Orders response:', ordersResponse.ok, ordersData);
       if (ordersResponse.ok && ordersData) {
         const orders = ordersData.results || ordersData || [];
+        console.log('Orders found:', orders.length, orders);
         const totalOrders = orders.length;
-        const totalRevenue = orders.filter(o => o.status === 'delivered').reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+        
+        // Calculate total revenue from all delivered orders
+        const deliveredOrders = orders.filter(o => o.status === 'delivered');
+        console.log('Delivered orders:', deliveredOrders.length, deliveredOrders);
+        const totalRevenue = deliveredOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+        
+        const today = new Date().toDateString();
+        const todaysOrders = orders.filter(o => new Date(o.created_at).toDateString() === today);
+        
+        // Calculate today's earnings from delivered orders
+        const todaysDeliveredOrders = orders.filter(o => {
+          const orderDate = new Date(o.created_at).toDateString();
+          return orderDate === today && o.status === 'delivered';
+        });
+        const todaysEarnings = todaysDeliveredOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+        console.log('Today earnings:', todaysEarnings, 'Total revenue:', totalRevenue);
+        
+        // Calculate this month's earnings
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const thisMonthOrders = orders.filter(o => {
+          const orderDate = new Date(o.created_at);
+          return orderDate.getMonth() === currentMonth && 
+                 orderDate.getFullYear() === currentYear && 
+                 o.status === 'delivered';
+        });
+        const monthlyEarnings = thisMonthOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+        
+        // Generate chart data for last 6 months
+        const chartData = [];
+        for (let i = 5; i >= 0; i--) {
+          const monthDate = new Date();
+          monthDate.setMonth(monthDate.getMonth() - i);
+          const monthOrders = orders.filter(o => {
+            const orderDate = new Date(o.created_at);
+            return orderDate.getMonth() === monthDate.getMonth() && 
+                   orderDate.getFullYear() === monthDate.getFullYear() && 
+                   o.status === 'delivered';
+          });
+          const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+          chartData.push(monthRevenue);
+        }
+        
+        // Calculate unique customers
+        const uniqueCustomers = new Set();
+        orders.forEach(order => {
+          if (order.customer_details?.id) {
+            uniqueCustomers.add(order.customer_details.id);
+          } else if (order.delivery_phone) {
+            uniqueCustomers.add(order.delivery_phone);
+          }
+        });
+        const totalCustomers = uniqueCustomers.size;
         
         setDashboardStats({
           totalOrders,
           totalRevenue,
           totalProducts: 0,
-          totalCustomers: 0,
-          monthlyEarnings: totalRevenue * 0.2,
-          monthlyGrowth: 15
+          totalCustomers,
+          monthlyEarnings,
+          monthlyGrowth: 15,
+          todaysEarnings
         });
         
-        const today = new Date().toDateString();
-        const todaysOrders = orders.filter(o => new Date(o.created_at).toDateString() === today);
+        setMonthlyChart(chartData);
+        
         setTodayOrders(todaysOrders.slice(0, 5));
+        
+        // Calculate best selling products from delivered orders
+        const productSales = {};
+        deliveredOrders.forEach(order => {
+          order.items?.forEach(item => {
+            const productId = item.product_details?.id || item.product_name;
+            if (!productSales[productId]) {
+              productSales[productId] = {
+                id: productId,
+                name: item.product_name,
+                price: item.unit_price,
+                sold: 0,
+                rating: 4.5,
+                images: item.product_details?.images || []
+              };
+            }
+            productSales[productId].sold += parseInt(item.quantity) || 0;
+          });
+        });
+        
+        const bestSelling = Object.values(productSales)
+          .sort((a, b) => b.sold - a.sold)
+          .slice(0, 6);
+        setBestSellingProducts(bestSelling);
       }
       
       // Fetch products
@@ -167,6 +248,10 @@ const VendorHome: React.FC = () => {
         const products = productsData.results || productsData || [];
         setMyProducts(products.slice(0, 6));
         setDashboardStats(prev => ({ ...prev, totalProducts: products.length }));
+        
+        // Filter featured products
+        const featured = products.filter(product => product.featured).slice(0, 6);
+        setFeaturedProducts(featured);
       }
     } catch (error) {
       console.warn('Dashboard data fetch error:', error);
@@ -264,7 +349,7 @@ const VendorHome: React.FC = () => {
             <div>
               <h2 className="text-lg font-bold text-gray-900">{vendorProfile?.business_name || 'My Store'}</h2>
               <p className="text-xs text-gray-600 flex items-center gap-1">
-                <Wallet className="h-3 w-3" /> ₹{(walletBalance || 0).toFixed(2)} Available
+                <Wallet className="h-3 w-3" /> Rs{(walletBalance || 0).toFixed(2)} Available
               </p>
             </div>
           </div>
@@ -301,7 +386,7 @@ const VendorHome: React.FC = () => {
                     <TrendingUp className="h-2.5 w-2.5 text-blue-600" />
                   </div>
                   <p className="text-[9px] font-medium text-gray-600">Revenue</p>
-                  <p className="text-xs font-bold text-gray-900">₹{dashboardStats.totalRevenue.toFixed(0)}</p>
+                  <p className="text-xs font-bold text-gray-900">Rs{dashboardStats.totalRevenue.toFixed(0)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -416,23 +501,29 @@ const VendorHome: React.FC = () => {
             <Button 
               variant="outline" 
               className="text-gray-700 text-sm px-3 py-2 h-auto flex items-center gap-2"
-              onClick={() => navigate('/vendor/wallet')}
+              onClick={() => navigate('/vendor/sales')}
             >
               <TrendingUp className="h-4 w-4" />
               View Transactions
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
-          <div>
-            <p className="text-sm text-gray-600">Total Earnings</p>
-            <p className="text-2xl font-bold text-gray-900">₹{(dashboardStats.totalRevenue || 0).toFixed(2)}</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-gray-600">Today's Earnings</p>
+              <p className="text-2xl font-bold text-blue-600">Rs{(dashboardStats.todaysEarnings || 0).toFixed(2)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Total Earnings</p>
+              <p className="text-2xl font-bold text-green-600">Rs{(dashboardStats.totalRevenue || 0).toFixed(2)}</p>
+            </div>
           </div>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Earning in {new Date().toLocaleDateString('en-US', { month: 'long' })}</p>
-                  <p className="text-lg font-bold text-gray-900">₹{dashboardStats.monthlyEarnings.toFixed(2)} <span className="text-green-600">+{dashboardStats.monthlyGrowth}%</span></p>
+                  <p className="text-lg font-bold text-gray-900">Rs{dashboardStats.monthlyEarnings.toFixed(2)} <span className="text-green-600">+{dashboardStats.monthlyGrowth}%</span></p>
                 </div>
                 <div className="flex items-end gap-1 h-8">
                   {monthlyChart.map((value, index) => {
@@ -497,7 +588,7 @@ const VendorHome: React.FC = () => {
                          'Order in progress'}
                       </p>
                       <p className="text-xs text-gray-600">
-                        ₹{parseFloat(order.total_amount || 0).toFixed(2)} • {order.items?.length || 0} items • {timeAgo < 60 ? `${timeAgo} min ago` : `${Math.floor(timeAgo / 60)} hours ago`}
+                        Rs{parseFloat(order.total_amount || 0).toFixed(2)} • {order.items?.length || 0} items • {timeAgo < 60 ? `${timeAgo} min ago` : `${Math.floor(timeAgo / 60)} hours ago`}
                       </p>
                     </CardContent>
                   </Card>
@@ -530,7 +621,7 @@ const VendorHome: React.FC = () => {
                       </div>
                       <div>
                         <h4 className="text-sm font-medium text-gray-900 truncate">{product.name}</h4>
-                        <p className="text-xs text-gray-600">₹{parseFloat(product.price).toFixed(2)}</p>
+                        <p className="text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
                       </div>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-green-600 font-medium">{product.sold} sold</span>
@@ -547,6 +638,54 @@ const VendorHome: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Featured Products */}
+        {featuredProducts.length > 0 && (
+          <div className="p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Featured Products</h3>
+              <Button variant="outline" className="text-gray-700 text-xs px-2 py-1 h-auto">
+                View All
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
+              <div className="flex gap-3 pb-2">
+                {featuredProducts.map((product) => (
+                  <Card key={product.id} className="w-32 flex-shrink-0 relative">
+                    <CardContent className="p-3">
+                      <div className="space-y-2">
+                        <div className="w-full h-16 bg-gray-100 rounded-lg overflow-hidden relative">
+                          <img 
+                            src={product.images?.[0]?.image_url || '/api/placeholder/80/80'} 
+                            alt={product.name} 
+                            className="w-full h-full object-cover" 
+                          />
+                          <div className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs px-1 py-0.5 rounded-full font-bold shadow-md">
+                            ★
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 truncate">{product.name}</h4>
+                          <p className="text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-blue-600 font-medium">{product.total_sold || 0} sold</span>
+                          <span className={`px-1 py-0.5 rounded text-xs ${
+                            product.quantity > 10 ? 'bg-green-100 text-green-700' :
+                            product.quantity > 0 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {product.quantity > 10 ? 'In Stock' : product.quantity > 0 ? 'Low' : 'Out'}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* My Products Grid */}
         <div className="p-3 space-y-3">
@@ -575,7 +714,7 @@ const VendorHome: React.FC = () => {
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-900 truncate">{product.name}</h4>
-                      <p className="text-xs text-gray-600">₹{parseFloat(product.price).toFixed(2)}</p>
+                      <p className="text-xs text-gray-600">Rs{parseFloat(product.price).toFixed(2)}</p>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">Stock: {product.quantity}</span>

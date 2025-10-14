@@ -90,7 +90,7 @@ export default function VendorProfile() {
       }
       
       // Fetch products for this vendor using search API with vendor name
-      const { response: productsResponse, data: productsData } = await apiRequest(`/api/search/products/?search=${encodeURIComponent(vendorData.business_name)}`);
+      const { response: productsResponse, data: productsData } = await apiRequest(`search/products/?search=${encodeURIComponent(vendorData.business_name)}`);
       
       if (productsResponse.ok && productsData) {
         // Filter products to only show ones from this specific vendor

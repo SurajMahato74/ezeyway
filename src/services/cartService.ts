@@ -54,7 +54,7 @@ class CartService {
   }
 
   async addToCart(productId: number, quantity: number = 1): Promise<Cart> {
-    const response = await fetch(`${API_BASE_URL}/cart/add/`, {
+    const response = await fetch(`${API_BASE_URL}cart/add/`, {
       method: 'POST',
       headers: await this.getAuthHeaders(),
       body: JSON.stringify({
@@ -72,7 +72,7 @@ class CartService {
   }
 
   async updateCartItem(itemId: number, quantity: number): Promise<Cart> {
-    const response = await fetch(`${API_BASE_URL}/cart/items/${itemId}/update/`, {
+    const response = await fetch(`${API_BASE_URL}cart/items/${itemId}/update/`, {
       method: 'PUT',
       headers: await this.getAuthHeaders(),
       body: JSON.stringify({ quantity }),
@@ -87,7 +87,7 @@ class CartService {
   }
 
   async removeFromCart(itemId: number): Promise<Cart> {
-    const response = await fetch(`${API_BASE_URL}/cart/items/${itemId}/remove/`, {
+    const response = await fetch(`${API_BASE_URL}cart/items/${itemId}/remove/`, {
       method: 'DELETE',
       headers: await this.getAuthHeaders(),
     });
@@ -101,7 +101,7 @@ class CartService {
   }
 
   async clearCart(): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/cart/clear/`, {
+    const response = await fetch(`${API_BASE_URL}cart/clear/`, {
       method: 'DELETE',
       headers: await this.getAuthHeaders(),
     });

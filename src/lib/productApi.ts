@@ -17,6 +17,7 @@ export interface Product {
   tags: string[];
   status: 'active' | 'draft' | 'archived';
   featured: boolean;
+  free_delivery?: boolean;
   seo_title?: string;
   seo_description?: string;
   dynamic_fields: Record<string, any>;
@@ -27,6 +28,7 @@ export interface Product {
     is_primary: boolean;
   }>;
   image_files?: File[];
+  total_sold?: number;
   created_at?: string;
   updated_at?: string;
 }

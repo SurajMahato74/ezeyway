@@ -24,11 +24,13 @@ import {
   Save,
   Loader2,
   Upload,
-  Camera
+  Camera,
+  Star
 } from 'lucide-react';
 import { VendorPage } from '@/components/VendorLayout';
 import { productApi, Product } from '@/lib/productApi';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const ProductManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,6 +42,16 @@ const ProductManagement: React.FC = () => {
   const [editData, setEditData] = useState<Partial<Product>>({});
   const [newImages, setNewImages] = useState<File[]>([]);
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [subcategories, setSubcategories] = useState<string[]>([]);
+  const [showPackageDialog, setShowPackageDialog] = useState(false);
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  const [selectedProductForFeatured, setSelectedProductForFeatured] = useState<Product | null>(null);
+  const [featuredPackages, setFeaturedPackages] = useState<any[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [purchasing, setPurchasing] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
   const navigate = useNavigate();
 
   const [filters, setFilters] = useState({
@@ -51,7 +63,40 @@ const ProductManagement: React.FC = () => {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { data } = await apiRequest('/categories/');
+      setCategories(data.categories?.map((cat: any) => cat.name) || []);
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
+
+  const fetchSubcategories = async (categoryName: string) => {
+    try {
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { data } = await apiRequest(`/categories/${categoryName}/subcategories/`);
+      setSubcategories(data.subcategories || []);
+    } catch (error) {
+      console.error('Failed to fetch subcategories:', error);
+      setSubcategories([]);
+    }
+  };
+
+  const fetchFeaturedPackages = async () => {
+    try {
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { data } = await apiRequest('/featured-packages/');
+      setFeaturedPackages(data.packages || []);
+    } catch (error) {
+      console.error('Failed to fetch featured packages:', error);
+      setFeaturedPackages([]);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -85,6 +130,125 @@ const ProductManagement: React.FC = () => {
       } catch (error) {
         console.error('Failed to delete product:', error);
       }
+    }
+  };
+
+  const toggleFeatured = async (product: Product) => {
+    if (product.featured) {
+      // Check if featured period can be modified
+      try {
+        const { apiRequest } = await import('@/utils/apiUtils');
+        const { data } = await apiRequest(`/products/${product.id}/featured-info/`);
+        
+        if (!data.can_modify) {
+          // Featured period has started, cannot cancel
+          toast.error('Cannot Cancel Featured', {
+            description: 'Featured period has already started and cannot be cancelled.',
+            duration: 4000,
+          });
+          return;
+        }
+        
+        // Can modify - show reschedule dialog
+        setSelectedProductForFeatured(product);
+        setShowRescheduleDialog(true);
+        
+      } catch (error) {
+        console.error('Failed to check featured info:', error);
+      }
+    } else {
+      // If not featured, show package selection dialog
+      setSelectedProductForFeatured(product);
+      await fetchFeaturedPackages();
+      setShowPackageDialog(true);
+    }
+  };
+
+  const handlePackageSelect = (packageData: any) => {
+    setSelectedPackage(packageData);
+  };
+
+  const handleRescheduleConfirm = async () => {
+    if (!selectedProductForFeatured) return;
+    
+    try {
+      setRescheduling(true);
+      const { apiRequest } = await import('@/utils/apiUtils');
+      
+      const { response, data } = await apiRequest(`/products/${selectedProductForFeatured.id}/reschedule-featured/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          start_date: startDate
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reschedule');
+      }
+      
+      // Success - refresh products and close dialog
+      await fetchProducts();
+      setShowRescheduleDialog(false);
+      setSelectedProductForFeatured(null);
+      setStartDate(new Date().toISOString().split('T')[0]);
+      
+      toast.success('Featured Package Rescheduled!', {
+        description: `Start date updated to ${new Date(startDate).toLocaleDateString()}`,
+        duration: 4000,
+      });
+      
+    } catch (error: any) {
+      console.error('Failed to reschedule featured package:', error);
+      toast.error('Reschedule Failed', {
+        description: error.message || 'Failed to reschedule package',
+        duration: 4000,
+      });
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
+  const handlePurchaseConfirm = async () => {
+    if (!selectedProductForFeatured || !selectedPackage) return;
+    
+    try {
+      setPurchasing(true);
+      const { apiRequest } = await import('@/utils/apiUtils');
+      
+      const { response, data } = await apiRequest('/featured-packages/purchase/', {
+        method: 'POST',
+        body: JSON.stringify({
+          product_id: selectedProductForFeatured.id,
+          package_id: selectedPackage.id,
+          start_date: startDate
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to purchase package');
+      }
+      
+      // Success - refresh products and close dialog
+      await fetchProducts();
+      setShowPackageDialog(false);
+      setSelectedProductForFeatured(null);
+      setSelectedPackage(null);
+      setStartDate(new Date().toISOString().split('T')[0]);
+      
+      // Show success toast
+      toast.success('Featured Package Purchased!', {
+        description: `${selectedProductForFeatured.name} is now featured until ${new Date(data.end_date).toLocaleDateString()}. Wallet balance: ₹${data.new_wallet_balance}`,
+        duration: 5000,
+      });
+      
+    } catch (error: any) {
+      console.error('Failed to purchase featured package:', error);
+      toast.error('Purchase Failed', {
+        description: error.message || 'Failed to purchase package',
+        duration: 4000,
+      });
+    } finally {
+      setPurchasing(false);
     }
   };
 
@@ -197,6 +361,13 @@ const ProductManagement: React.FC = () => {
     return <span className="text-xs font-medium text-green-600">In Stock</span>;
   };
 
+  const stripHtml = (html: string) => {
+    if (!html) return '';
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  };
+
   const getProductImage = (product: Product) => {
     if (product.images && product.images.length > 0) {
       const primaryImage = product.images.find(img => img.is_primary) || product.images[0];
@@ -298,7 +469,7 @@ const ProductManagement: React.FC = () => {
                 <Card key={product.id} className="overflow-hidden">
                   <CardContent className="p-2">
                     <div className="space-y-1">
-                      <div className="text-center">
+                      <div className="text-center relative">
                         {getProductImage(product) ? (
                           <img 
                             src={getProductImage(product)!} 
@@ -308,11 +479,19 @@ const ProductManagement: React.FC = () => {
                         ) : (
                           <div className="text-xl">{getCategoryEmoji(product.category)}</div>
                         )}
+                        {product.featured && (
+                          <div className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs px-1 py-0.5 rounded-full font-bold shadow-md">
+                            FEATURED
+                          </div>
+                        )}
                       </div>
                       <div>
                         <h4 className="text-sm font-medium text-gray-900 truncate">{product.name}</h4>
                         
                         <p className="text-sm font-semibold text-gray-900">₹{product.price}</p>
+                        {product.cost_price && (
+                          <p className="text-xs text-gray-500">Cost: ₹{product.cost_price}</p>
+                        )}
                       </div>
                       <div>
                         <div className="flex justify-between items-center">
@@ -322,6 +501,20 @@ const ProductManagement: React.FC = () => {
                         <div className="flex justify-between items-center">
                           <span className="text-xs text-gray-600">{product.category}</span>
                           {getStatusBadge(product.status)}
+                        </div>
+                        {product.subcategory && (
+                          <div className="text-xs text-gray-500 truncate">{product.subcategory}</div>
+                        )}
+                        <div className="text-xs text-gray-500 mt-1">
+                          Sold: {product.total_sold || 0}
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          {product.featured && (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded">★</span>
+                          )}
+                          {product.free_delivery && (
+                            <span className="text-xs bg-green-100 text-green-800 px-1 rounded">🚚</span>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-1 pt-1">
@@ -345,6 +538,9 @@ const ProductManagement: React.FC = () => {
                             setSelectedProduct(product);
                             setEditMode(true);
                             setEditData(product);
+                            if (product.category) {
+                              fetchSubcategories(product.category);
+                            }
                           }}
                         >
                           <Edit className="h-3 w-3" />
@@ -358,6 +554,15 @@ const ProductManagement: React.FC = () => {
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
+                      <Button 
+                        variant={product.featured ? "default" : "outline"}
+                        size="sm"
+                        className="w-full mt-1 p-1"
+                        onClick={() => toggleFeatured(product)}
+                      >
+                        <Star className={`h-3 w-3 mr-1 ${product.featured ? 'fill-current' : ''}`} />
+                        {product.featured ? 'Reschedule' : 'Mark Featured'}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -442,6 +647,161 @@ const ProductManagement: React.FC = () => {
                     <SelectItem value="stock">Stock</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Featured Package Selection Dialog */}
+        <Sheet open={showPackageDialog} onOpenChange={(open) => {
+          setShowPackageDialog(open);
+          if (!open) {
+            setSelectedPackage(null);
+            setStartDate(new Date().toISOString().split('T')[0]);
+          }
+        }}>
+          <SheetContent side="bottom" className="h-[70vh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Choose Featured Package</SheetTitle>
+            </SheetHeader>
+            <div className="space-y-4 mt-4">
+              <p className="text-sm text-gray-600">
+                Select a package to feature your product: <strong>{selectedProductForFeatured?.name}</strong>
+              </p>
+              
+              {!selectedPackage ? (
+                featuredPackages.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {featuredPackages.map((pkg) => (
+                      <div key={pkg.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-semibold">{pkg.name}</h3>
+                            <p className="text-sm text-gray-600">{pkg.duration_days} days</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-green-600">₹{pkg.amount}</p>
+                            <p className="text-xs text-gray-500 capitalize">{pkg.package_type}</p>
+                          </div>
+                        </div>
+                        {pkg.description && (
+                          <p className="text-sm text-gray-600 mb-3">{pkg.description}</p>
+                        )}
+                        <Button 
+                          className="w-full"
+                          onClick={() => handlePackageSelect(pkg)}
+                        >
+                          Select This Package
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No featured packages available</p>
+                  </div>
+                )
+              ) : (
+                <div className="space-y-4">
+                  <div className="border rounded-lg p-4 bg-blue-50">
+                    <h3 className="font-semibold text-blue-900">{selectedPackage.name}</h3>
+                    <p className="text-sm text-blue-700">{selectedPackage.duration_days} days - ₹{selectedPackage.amount}</p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="start-date">Start Date</Label>
+                    <Input
+                      id="start-date"
+                      type="date"
+                      value={startDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Featured until: {new Date(new Date(startDate).getTime() + selectedPackage.duration_days * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1"
+                      onClick={() => setSelectedPackage(null)}
+                      disabled={purchasing}
+                    >
+                      Back
+                    </Button>
+                    <Button 
+                      className="flex-1"
+                      onClick={handlePurchaseConfirm}
+                      disabled={purchasing}
+                    >
+                      {purchasing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        `Pay ₹${selectedPackage.amount}`
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Reschedule Featured Dialog */}
+        <Sheet open={showRescheduleDialog} onOpenChange={(open) => {
+          setShowRescheduleDialog(open);
+          if (!open) {
+            setStartDate(new Date().toISOString().split('T')[0]);
+          }
+        }}>
+          <SheetContent side="bottom" className="h-[40vh]">
+            <SheetHeader>
+              <SheetTitle>Reschedule Featured Package</SheetTitle>
+            </SheetHeader>
+            <div className="space-y-4 mt-4">
+              <p className="text-sm text-gray-600">
+                Update the start date for: <strong>{selectedProductForFeatured?.name}</strong>
+              </p>
+              
+              <div>
+                <Label htmlFor="reschedule-date">New Start Date</Label>
+                <Input
+                  id="reschedule-date"
+                  type="date"
+                  value={startDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => setShowRescheduleDialog(false)}
+                  disabled={rescheduling}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={handleRescheduleConfirm}
+                  disabled={rescheduling}
+                >
+                  {rescheduling ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Date'
+                  )}
+                </Button>
               </div>
             </div>
           </SheetContent>
@@ -636,7 +996,7 @@ const ProductManagement: React.FC = () => {
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Price</Label>
+                      <Label>Selling Price</Label>
                       {editMode ? (
                         <Input 
                           type="number"
@@ -649,7 +1009,7 @@ const ProductManagement: React.FC = () => {
                     </div>
                     
                     <div>
-                      <Label>Stock</Label>
+                      <Label>Stock Quantity</Label>
                       {editMode ? (
                         <Input 
                           type="number"
@@ -666,12 +1026,60 @@ const ProductManagement: React.FC = () => {
                     <div>
                       <Label>Category</Label>
                       {editMode ? (
-                        <Input 
-                          value={editData.category || ''}
-                          onChange={(e) => setEditData({...editData, category: e.target.value})}
-                        />
+                        <Select 
+                          value={editData.category || selectedProduct.category} 
+                          onValueChange={(value) => {
+                            setEditData({...editData, category: value, subcategory: ''});
+                            fetchSubcategories(value);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map(category => (
+                              <SelectItem key={category} value={category}>{category}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       ) : (
                         <p className="text-sm font-medium">{selectedProduct.category}</p>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <Label>Subcategory</Label>
+                      {editMode ? (
+                        <Select 
+                          value={editData.subcategory || selectedProduct.subcategory || ''} 
+                          onValueChange={(value) => setEditData({...editData, subcategory: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select subcategory" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subcategories.map(subcategory => (
+                              <SelectItem key={subcategory} value={subcategory}>{subcategory}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-sm font-medium">{selectedProduct.subcategory || 'N/A'}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Cost Price</Label>
+                      {editMode ? (
+                        <Input 
+                          type="number"
+                          value={editData.cost_price || ''}
+                          onChange={(e) => setEditData({...editData, cost_price: Number(e.target.value) || undefined})}
+                        />
+                      ) : (
+                        <p className="text-sm font-medium">{selectedProduct.cost_price ? `₹${selectedProduct.cost_price}` : 'N/A'}</p>
                       )}
                     </div>
                     
@@ -713,24 +1121,24 @@ const ProductManagement: React.FC = () => {
                     <Label>Description</Label>
                     {editMode ? (
                       <Textarea 
-                        value={editData.description || ''}
+                        value={stripHtml(editData.description || '')}
                         onChange={(e) => setEditData({...editData, description: e.target.value})}
                         rows={3}
                       />
                     ) : (
-                      <p className="text-sm text-gray-600">{selectedProduct.description}</p>
+                      <p className="text-sm text-gray-600">{stripHtml(selectedProduct.description)}</p>
                     )}
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <Label>Featured Product</Label>
+                    <Label>Free Delivery</Label>
                     {editMode ? (
                       <Switch 
-                        checked={editData.featured ?? selectedProduct.featured}
-                        onCheckedChange={(checked) => setEditData({...editData, featured: checked})}
+                        checked={editData.free_delivery ?? selectedProduct.free_delivery}
+                        onCheckedChange={(checked) => setEditData({...editData, free_delivery: checked})}
                       />
                     ) : (
-                      <Switch checked={selectedProduct.featured} disabled />
+                      <Switch checked={selectedProduct.free_delivery} disabled />
                     )}
                   </div>
                   
@@ -746,6 +1154,22 @@ const ProductManagement: React.FC = () => {
                       </div>
                     </div>
                   )}
+                  
+                  {/* Additional Product Info */}
+                  <div className="grid grid-cols-3 gap-3 pt-2 border-t">
+                    <div>
+                      <Label className="text-xs text-gray-500">Total Sold</Label>
+                      <p className="text-sm font-medium">{selectedProduct.total_sold || 0} units</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Created</Label>
+                      <p className="text-xs">{selectedProduct.created_at ? new Date(selectedProduct.created_at).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Updated</Label>
+                      <p className="text-xs">{selectedProduct.updated_at ? new Date(selectedProduct.updated_at).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

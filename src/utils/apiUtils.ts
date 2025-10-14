@@ -40,6 +40,16 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
 
   // Debug logging for authentication - check all requests for now
   console.log('🌐 API Request:', endpoint, 'Auth:', includeAuth);
+  console.log('📍 Full URL:', url);
+  
+  // Special logging for order accept requests
+  if (endpoint.includes('accept')) {
+    console.log('🎯 ORDER ACCEPT REQUEST DETECTED!');
+    console.log('📍 Original endpoint:', endpoint);
+    console.log('📍 Normalized endpoint:', normalizedEndpoint);
+    console.log('📍 API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
+    console.log('📍 Final URL:', url);
+  }
   if (endpoint.includes('switch-role') || endpoint.includes('switch')) {
     console.log('🎯 SWITCH ROLE REQUEST DETECTED!');
     console.log('📍 Full URL:', url);

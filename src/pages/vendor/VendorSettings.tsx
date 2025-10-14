@@ -28,13 +28,7 @@ const settingsMenu = [
       { id: "analytics", title: "Business Analytics", subtitle: "Sales reports and insights", icon: BarChart3, action: "navigate" },
     ]
   },
-  {
-    category: "Operations",
-    items: [
-      { id: "payment", title: "Payment Settings", subtitle: "Bank details and payout preferences", icon: CreditCard, action: "navigate" },
-      { id: "notifications", title: "Notification Settings", subtitle: "Configure notification preferences", icon: Bell, action: "navigate" },
-    ]
-  }
+
 ];
 
 export default function VendorSettings() {

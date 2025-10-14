@@ -53,10 +53,11 @@ const VendorCompany = () => {
   const [error, setError] = useState("");
   const [profileId, setProfileId] = useState<number | null>(null);
 
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [companyData, setCompanyData] = useState<CompanyData>({
     businessName: "Business Name",
     ownerName: "Owner Name",
-    categories: ["Vegetables", "Fruits", "Dairy", "Organic"],
+    categories: [],
     operatingHours: {
       monday: { open: "06:00", close: "21:00", closed: false },
       tuesday: { open: "06:00", close: "21:00", closed: false },
@@ -86,7 +87,19 @@ const VendorCompany = () => {
 
   useEffect(() => {
     fetchCompanyData();
+    fetchAvailableCategories();
   }, []);
+
+  const fetchAvailableCategories = async () => {
+    try {
+      const { response, data } = await apiRequest('/categories/');
+      if (response.ok && data.categories) {
+        setAvailableCategories(data.categories.map((cat: any) => cat.name));
+      }
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
 
   const fetchCompanyData = async () => {
     try {
@@ -116,7 +129,8 @@ const VendorCompany = () => {
         setCompanyData({
           businessName: profile.business_name || "Business Name",
           ownerName: profile.owner_name || "Owner Name",
-          categories: profile.categories || [],
+          categories: Array.isArray(profile.categories) ? profile.categories : 
+                     (typeof profile.categories === 'string' ? JSON.parse(profile.categories || '[]') : []),
           operatingHours: {
             monday: {
               open: profile.monday_open || "",
@@ -267,11 +281,7 @@ const VendorCompany = () => {
     }
   };
 
-  const categories = [
-    "Vegetables", "Fruits", "Dairy", "Meat", "Bakery", "Beverages",
-    "Snacks", "Organic", "Frozen", "Spices", "Grains", "Oil",
-    "Fashion", "Health & Wellness",
-  ];
+
 
   const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
@@ -399,7 +409,7 @@ const VendorCompany = () => {
               <div className="space-y-4 max-w-3xl">
                 <Label>Business Categories</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {categories.map((category) => (
+                  {availableCategories.map((category) => (
                     <Badge
                       key={category}
                       variant={companyData.categories.includes(category) ? "default" : "outline"}

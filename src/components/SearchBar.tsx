@@ -80,7 +80,7 @@ export function SearchBar() {
         params.append('longitude', currentLocation.longitude.toString());
       }
 
-      const productsResponse = await fetch(`${API_BASE}api/search/products/?${params}`, { headers });
+      const productsResponse = await fetch(`${API_BASE}search/products/?${params}`, { headers });
       const productsData = await productsResponse.json();
 
       const processedProducts = processProducts(productsData.results || []);

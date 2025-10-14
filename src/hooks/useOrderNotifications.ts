@@ -172,7 +172,7 @@ export function useOrderNotifications() {
   const acceptOrder = async (orderId: number) => {
     try {
       const { apiRequest } = await import('@/utils/apiUtils');
-      const { response } = await apiRequest(`/api/orders/${orderId}/accept/`, {
+      const { response } = await apiRequest(`/orders/${orderId}/accept/`, {
         method: 'POST'
       });
 
@@ -199,7 +199,7 @@ export function useOrderNotifications() {
   const rejectOrder = async (orderId: number) => {
     try {
       const { apiRequest } = await import('@/utils/apiUtils');
-      const { response } = await apiRequest(`/api/orders/${orderId}/reject/`, {
+      const { response } = await apiRequest(`/orders/${orderId}/reject/`, {
         method: 'POST',
         body: JSON.stringify({ 
           reason: 'Rejected by vendor'

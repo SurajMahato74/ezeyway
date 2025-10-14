@@ -308,10 +308,36 @@ const VendorOrders: React.FC = () => {
           </div>
         </div>
 
-        {/* Customer Info */}
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <User className="h-4 w-4" />
-          <span className="truncate">{order.customer_details?.username || order.delivery_name}</span>
+        {/* Customer Info with Message Button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-gray-600 flex-1 min-w-0">
+            <User className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{order.customer_details?.username || order.delivery_name}</span>
+          </div>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-8 w-8 p-0 ml-2 flex-shrink-0" 
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                const customerId = order.customer_details?.id;
+                if (customerId) {
+                  // Navigate to messages page and trigger conversation creation
+                  window.location.href = `/vendor/messages?start_conversation=${customerId}&customer_name=${encodeURIComponent(order.customer_details?.username || order.delivery_name)}&order_id=${order.id}`;
+                } else {
+                  // Fallback: navigate to messages with customer info
+                  const customerPhone = order.customer_details?.phone_number || order.delivery_phone;
+                  const customerName = order.customer_details?.username || order.delivery_name;
+                  window.location.href = `/vendor/messages?customer_phone=${encodeURIComponent(customerPhone)}&customer_name=${encodeURIComponent(customerName)}&order_id=${order.id}`;
+                }
+              } catch (error) {
+                console.error('Error opening conversation:', error);
+              }
+            }}
+          >
+            <MessageCircle className="h-5 w-5" />
+          </Button>
         </div>
 
         {/* Delivery Info */}
@@ -374,7 +400,7 @@ const VendorOrders: React.FC = () => {
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {
-                    const { response } = await apiRequest(`/api/orders/${order.id}/accept/`, {
+                    const { response } = await apiRequest(`/orders/${order.id}/accept/`, {
                       method: 'POST'
                     });
                     
@@ -628,7 +654,7 @@ const VendorOrders: React.FC = () => {
                                     if (!reason) return;
                                     
                                     try {
-                                      const { response } = await apiRequest(`/api/admin/refunds/${refund.id}/process/`, {
+                                      const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
                                         method: 'POST',
                                         headers: {
                                           'Content-Type': 'application/json',
@@ -654,7 +680,7 @@ const VendorOrders: React.FC = () => {
                                   className="flex-1 bg-green-600 hover:bg-green-700"
                                   onClick={async () => {
                                     try {
-                                      const { response } = await apiRequest(`/api/admin/refunds/${refund.id}/process/`, {
+                                      const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
                                         method: 'POST',
                                         headers: {
                                           'Content-Type': 'application/json',
@@ -687,7 +713,7 @@ const VendorOrders: React.FC = () => {
                                   className="w-full bg-blue-600 hover:bg-blue-700"
                                   onClick={async () => {
                                     try {
-                                      const { response } = await apiRequest(`/api/admin/refunds/${refund.id}/process/`, {
+                                      const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
                                         method: 'POST',
                                         headers: {
                                           'Content-Type': 'application/json',
@@ -725,7 +751,7 @@ const VendorOrders: React.FC = () => {
                                     formData.append('document', file);
                                     
                                     try {
-                                      const { response } = await apiRequest(`/api/refunds/${refund.id}/upload-document/`, {
+                                      const { response } = await apiRequest(`/refunds/${refund.id}/upload-document/`, {
                                         method: 'POST',
                                         body: formData
                                       });
@@ -744,7 +770,7 @@ const VendorOrders: React.FC = () => {
                                   className="w-full bg-green-600 hover:bg-green-700"
                                   onClick={async () => {
                                     try {
-                                      const { response } = await apiRequest(`/api/admin/refunds/${refund.id}/process/`, {
+                                      const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
                                         method: 'POST',
                                         headers: {
                                           'Content-Type': 'application/json',
@@ -778,7 +804,7 @@ const VendorOrders: React.FC = () => {
                                     className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
                                     onClick={async () => {
                                       try {
-                                        const { response } = await apiRequest(`/api/admin/refunds/${refund.id}/process/`, {
+                                        const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
                                           method: 'POST',
                                           headers: {
                                             'Content-Type': 'application/json',
@@ -804,7 +830,7 @@ const VendorOrders: React.FC = () => {
                                     className="flex-1 bg-green-600 hover:bg-green-700"
                                     onClick={async () => {
                                       try {
-                                        const { response } = await apiRequest(`/api/admin/refunds/${refund.id}/process/`, {
+                                        const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
                                           method: 'POST',
                                           headers: {
                                             'Content-Type': 'application/json',

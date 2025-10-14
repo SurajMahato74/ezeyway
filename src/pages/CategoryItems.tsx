@@ -124,7 +124,7 @@ export default function CategoryItems() {
       }
 
       // Fetch products
-      const productsResponse = await fetch(`${API_BASE}api/search/products/?${params}`, { headers });
+      const productsResponse = await fetch(`${API_BASE}search/products/?${params}`, { headers });
 
       const productsData = await productsResponse.json();
 

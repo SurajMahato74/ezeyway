@@ -47,6 +47,7 @@ const productSchema = z.object({
   image_files: z.array(z.any()).min(1, 'At least one image is required'),
   status: z.enum(['active', 'draft', 'archived']).default('active'),
   featured: z.boolean().default(false),
+  free_delivery: z.boolean().default(false),
   seo_title: z.string().optional(),
   seo_description: z.string().optional(),
   dynamic_fields: z.record(z.any()).default({})
@@ -65,6 +66,8 @@ const AddProductPage: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [vendorCategories, setVendorCategories] = useState<string[]>([]);
+  const [availableSubcategories, setAvailableSubcategories] = useState<string[]>([]);
+  const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -79,6 +82,7 @@ const AddProductPage: React.FC = () => {
       image_files: [],
       status: 'active',
       featured: false,
+      free_delivery: false,
       dynamic_fields: {}
     }
   });
@@ -88,7 +92,41 @@ const AddProductPage: React.FC = () => {
 
   useEffect(() => {
     setSelectedCategory(watchedCategory);
-  }, [watchedCategory]);
+    // Clear subcategory when category changes
+    setValue('subcategory', '');
+    
+    // Fetch subcategories when category changes
+    if (watchedCategory) {
+      fetchSubcategories(watchedCategory, false);
+    } else {
+      setAvailableSubcategories([]);
+    }
+  }, [watchedCategory, setValue]);
+
+  const fetchSubcategories = async (categoryName: string, autoSelect = false) => {
+    try {
+      setLoadingSubcategories(true);
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { response, data } = await apiRequest(`categories/${encodeURIComponent(categoryName)}/subcategories/`);
+      
+      if (response.ok && data) {
+        const subcategories = data.subcategories || [];
+        setAvailableSubcategories(subcategories);
+        
+        // Auto-select first subcategory if requested and available
+        if (autoSelect && subcategories.length > 0) {
+          setValue('subcategory', subcategories[0]);
+        }
+      } else {
+        setAvailableSubcategories([]);
+      }
+    } catch (error) {
+      console.error('Error fetching subcategories:', error);
+      setAvailableSubcategories([]);
+    } finally {
+      setLoadingSubcategories(false);
+    }
+  };
 
   // Fetch vendor profile and set default category
   useEffect(() => {
@@ -104,23 +142,14 @@ const AddProductPage: React.FC = () => {
           console.log('Vendor categories:', categories);
           setVendorCategories(categories);
           
-          // Map vendor category names to config keys
-          const categoryMapping: Record<string, string> = {
-            'Clothing': 'clothing',
-            'Electronics': 'electronics',
-            'Food': 'food',
-            'Baby': 'baby',
-            'Grocery': 'grocery',
-            'Meat': 'meat',
-            'Medicine': 'medicine'
-          };
-          
-          // Auto-select first category if available
+          // Auto-select first category
           if (categories.length > 0) {
-            const mappedCategory = categoryMapping[categories[0]] || categories[0].toLowerCase();
-            console.log('Mapped category:', categories[0], '->', mappedCategory);
-            setValue('category', mappedCategory);
-            setSelectedCategory(mappedCategory);
+            const firstCategory = categories[0];
+            setValue('category', firstCategory);
+            setSelectedCategory(firstCategory);
+            
+            // Fetch and auto-select first subcategory
+            fetchSubcategories(firstCategory, true);
           }
         }
       } catch (error) {
@@ -461,27 +490,54 @@ const AddProductPage: React.FC = () => {
               
               <div className="space-y-1">
                 <Label htmlFor="category" className="text-xs font-medium text-gray-700">Category <span className="text-red-500">*</span></Label>
-                <div className="flex items-center gap-2 p-2 bg-gray-50 border rounded-md h-8">
-                  {selectedCategory ? (
-                    (() => {
-                      const selectedCat = getAllCategories().find(cat => cat.value === selectedCategory);
-                      return selectedCat ? (
-                        <>
-                          <span>{selectedCat.icon}</span>
-                          <span className="text-xs font-medium">{selectedCat.label}</span>
-                        </>
-                      ) : (
-                        <span className="text-xs text-gray-500">Category: {selectedCategory}</span>
-                      );
-                    })()
-                  ) : (
-                    <span className="text-xs text-gray-500">Loading...</span>
+                <Controller
+                  name="category"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vendorCategories.map((categoryName) => (
+                          <SelectItem key={categoryName} value={categoryName} className="text-xs">
+                            <div className="flex items-center gap-2">
+                              <span>📦</span>
+                              <span>{categoryName}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
-                </div>
-                <p className="text-xs text-gray-500">Auto-selected from your vendor profile</p>
-                {/* Hidden input to maintain form data */}
-                <input type="hidden" {...form.register('category')} value={selectedCategory} />
+                />
+                {errors.category && <p className="text-red-500 text-xs">{errors.category.message}</p>}
               </div>
+
+              {/* Subcategory Selection */}
+              {availableSubcategories.length > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-gray-700">Subcategory</Label>
+                  <Controller
+                    name="subcategory"
+                    control={control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value} disabled={loadingSubcategories}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder={loadingSubcategories ? "Loading..." : "Select subcategory"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableSubcategories.map((subcategory) => (
+                            <SelectItem key={subcategory} value={subcategory} className="text-xs">
+                              {subcategory}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+              )}
 
               <div className="space-y-1">
                 <Label className="text-xs font-medium text-gray-700">Unit</Label>
@@ -503,27 +559,7 @@ const AddProductPage: React.FC = () => {
                 <h3 className="text-sm font-semibold text-gray-900">{categoryConfigs[selectedCategory].name} Details</h3>
               </div>
               
-              {categoryConfigs[selectedCategory].subcategories && (
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-gray-700">Subcategory</Label>
-                  <Controller
-                    name="subcategory"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Select subcategory" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categoryConfigs[selectedCategory].subcategories?.map((sub) => (
-                            <SelectItem key={sub} value={sub} className="text-xs">{sub}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-              )}
+
               
               <div className="grid grid-cols-2 gap-3">
                 {categoryConfigs[selectedCategory].fields.map(renderDynamicField)}
@@ -596,6 +632,20 @@ const AddProductPage: React.FC = () => {
                   </div>
                 )}
               />
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="free_delivery"
+                control={control}
+                render={({ field }) => (
+                  <Switch 
+                    checked={field.value} 
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
+              <Label className="text-xs font-medium text-gray-700">Free Delivery</Label>
             </div>
           </div>
 

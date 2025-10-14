@@ -8,8 +8,6 @@ import { MessageSquare, Send, Paperclip, FileText, MoreVertical, ArrowLeft } fro
 import { messageService, type Conversation, type Message } from '@/services/messageService';
 import { apiRequest } from '@/utils/apiUtils';
 import { getImageUrl } from '@/utils/imageUtils';
-import { notificationService } from '@/services/notificationService';
-import { TestNotification } from '@/components/TestNotification';
 
 const Message: React.FC = () => {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -31,55 +29,17 @@ const Message: React.FC = () => {
   useEffect(() => {
     fetchCurrentUser();
     loadConversations();
-    notificationService.initialize();
     
-    // Listen for messages from other tabs
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'newMessage' && e.newValue) {
-        const messageData = JSON.parse(e.newValue);
-        // Only show notification if it's not from current user
-        if (messageData.sender !== currentUser?.username) {
-          notificationService.notifyNewMessage(
-            messageData.sender,
-            messageData.content,
-            messageData.conversationId.toString(),
-            'vendor'
-          );
-        }
-      }
-    };
+    // Check for URL parameters to start a conversation
+    const urlParams = new URLSearchParams(window.location.search);
+    const startConversationId = urlParams.get('start_conversation');
     
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Poll for cross-domain broadcasts
-    let lastBroadcastCheck = Date.now() / 1000;
-    const broadcastInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`http://localhost:8000/api/broadcast/?conversation_id=${selectedConversation?.id || 0}&since=${lastBroadcastCheck}`);
-        const data = await response.json();
-        if (data.messages && data.messages.length > 0) {
-          data.messages.forEach(msg => {
-            if (msg.sender !== currentUser?.username) {
-              notificationService.notifyNewMessage(
-                msg.sender,
-                msg.content,
-                msg.conversation_id.toString(),
-                'vendor'
-              );
-            }
-          });
-          lastBroadcastCheck = Date.now() / 1000;
-        }
-      } catch (e) {
-        console.log('Broadcast check failed:', e);
-      }
-    }, 2000);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(broadcastInterval);
-    };
-  }, [currentUser]);
+    if (startConversationId) {
+      setTimeout(() => {
+        handleVendorMessage(parseInt(startConversationId));
+      }, 500);
+    }
+  }, []);
 
   const fetchCurrentUser = async () => {
     try {
@@ -102,45 +62,22 @@ const Message: React.FC = () => {
     }
   }, [selectedConversation]);
 
-  // Poll for new messages
+  // Poll for new messages only when conversation is active
   useEffect(() => {
     if (selectedConversation) {
       const interval = setInterval(async () => {
         try {
           const newMessages = await messageService.getMessages(selectedConversation.id);
           const messageArray = Array.isArray(newMessages) ? newMessages.reverse() : [];
-          
-          if (messageArray.length > lastMessageCount) {
-            const newMessagesList = messageArray.slice(lastMessageCount);
-            for (const msg of newMessagesList) {
-              if (msg.sender.id !== currentUser?.id) {
-                await notificationService.notifyNewMessage(
-                  msg.sender.username,
-                  msg.content || 'Sent a file',
-                  selectedConversation.id.toString(),
-                  'vendor'
-                );
-              }
-            }
-          }
-          
           setMessages(messageArray);
           setLastMessageCount(messageArray.length);
         } catch (error) {
-          // Backend not available - simulate notification for testing
-          if (messages.length > 0 && Math.random() > 0.8) {
-            await notificationService.notifyNewMessage(
-              'Test User',
-              'This is a test notification',
-              selectedConversation.id.toString(),
-              'vendor'
-            );
-          }
+          console.error('Failed to fetch messages:', error);
         }
-      }, 3000);
+      }, 5000); // Reduced frequency
       return () => clearInterval(interval);
     }
-  }, [selectedConversation, lastMessageCount, currentUser, messages]);
+  }, [selectedConversation]);
 
   const loadConversations = async (page = 1, append = false) => {
     try {
@@ -245,35 +182,6 @@ const Message: React.FC = () => {
       
       setMessages(prev => [...prev, result.message]);
       
-      // Always broadcast message (even if simulated)
-      const messageData = {
-        conversationId: selectedConversation.id,
-        sender: currentUser?.username || 'Unknown',
-        content: messageText,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Use localStorage for same-domain tabs
-      localStorage.setItem('newMessage', JSON.stringify(messageData));
-      setTimeout(() => localStorage.removeItem('newMessage'), 100);
-      
-      // Also broadcast via API for cross-domain
-      try {
-        await fetch('http://localhost:8000/api/broadcast/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            sender: currentUser?.username || 'Unknown',
-            content: messageText,
-            conversation_id: selectedConversation.id
-          })
-        });
-      } catch (e) {
-        console.log('Cross-domain broadcast failed:', e);
-      }
-      
       setMessageText('');
       
     } catch (error) {
@@ -302,6 +210,13 @@ const Message: React.FC = () => {
     try {
       const conversation = await messageService.getOrCreateConversation(userId);
       setSelectedConversation(conversation);
+      
+      // Clear URL parameters after conversation is created
+      const url = new URL(window.location.href);
+      url.searchParams.delete('start_conversation');
+      url.searchParams.delete('customer_name');
+      url.searchParams.delete('order_id');
+      window.history.replaceState({}, '', url.toString());
     } catch (error) {
       console.error('Failed to create conversation:', error);
     }
@@ -341,7 +256,11 @@ const Message: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <Avatar className="h-10 w-10">
-            <AvatarImage src={getImageUrl(selectedConversation.other_participant?.profile_picture)} />
+            {selectedConversation.other_participant?.username === 'EzzeYway Support' ? (
+              <AvatarImage src="/logo.png" />
+            ) : (
+              <AvatarImage src={getImageUrl(selectedConversation.other_participant?.profile_picture)} />
+            )}
             <AvatarFallback>{selectedConversation.other_participant?.username?.charAt(0)}</AvatarFallback>
           </Avatar>
           <div className="flex-1">
@@ -441,7 +360,6 @@ const Message: React.FC = () => {
             className="hidden"
           />
         </div>
-        <TestNotification />
       </div>
     );
   }
@@ -480,7 +398,11 @@ const Message: React.FC = () => {
               >
                 <div className="relative">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={getImageUrl(conversation.other_participant?.profile_picture)} />
+                    {conversation.other_participant?.username === 'EzzeYway Support' ? (
+                      <AvatarImage src="/logo.png" />
+                    ) : (
+                      <AvatarImage src={getImageUrl(conversation.other_participant?.profile_picture)} />
+                    )}
                     <AvatarFallback>{conversation.other_participant?.username?.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
@@ -493,7 +415,9 @@ const Message: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 truncate">
-                    {conversation.last_message?.content || conversation.last_message?.file_name || 'Start conversation'}
+                    {conversation.last_message?.content || 
+                     (conversation.last_message?.file_name ? `📎 ${conversation.last_message.file_name}` : '') ||
+                     (conversation.id === 0 ? 'Start conversation' : 'No messages yet')}
                   </p>
                 </div>
                 {conversation.unread_count > 0 && (
@@ -517,7 +441,6 @@ const Message: React.FC = () => {
             </div>
           )}
         </div>
-        <TestNotification />
       </div>
     </VendorPage>
   );

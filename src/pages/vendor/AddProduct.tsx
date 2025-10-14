@@ -53,6 +53,7 @@ const productSchema = z.object({
   images: z.array(z.string()).min(1, 'At least one image is required'),
   status: z.enum(['active', 'draft', 'archived']).default('active'),
   featured: z.boolean().default(false),
+  freeDelivery: z.boolean().default(false),
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
   dynamicFields: z.record(z.any()).default({})
@@ -68,6 +69,7 @@ const AddProduct: React.FC = () => {
   const [isFullPage, setIsFullPage] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [vendorCategories, setVendorCategories] = useState<string[]>([]);
+  const [availableSubcategories, setAvailableSubcategories] = useState<string[]>([]);
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -81,6 +83,7 @@ const AddProduct: React.FC = () => {
       images: [],
       status: 'active',
       featured: false,
+      freeDelivery: false,
       trackQuantity: true,
       dynamicFields: {}
     }
@@ -91,7 +94,15 @@ const AddProduct: React.FC = () => {
 
   useEffect(() => {
     setSelectedCategory(watchedCategory);
-  }, [watchedCategory]);
+    // Update available subcategories when category changes
+    if (watchedCategory && categoryConfigs[watchedCategory]?.subcategories) {
+      setAvailableSubcategories(categoryConfigs[watchedCategory].subcategories);
+    } else {
+      setAvailableSubcategories([]);
+    }
+    // Clear subcategory when category changes
+    setValue('subcategory', '');
+  }, [watchedCategory, setValue]);
 
   // Fetch vendor profile and set default category
   useEffect(() => {
@@ -103,11 +114,7 @@ const AddProduct: React.FC = () => {
           const categories = vendorProfile.categories || [];
           setVendorCategories(categories);
           
-          // Auto-select first category if available
-          if (categories.length > 0) {
-            setValue('category', categories[0]);
-            setSelectedCategory(categories[0]);
-          }
+          // Don't auto-select category, let user choose
         }
       } catch (error) {
         console.error('Error fetching vendor profile:', error);
@@ -356,25 +363,57 @@ const AddProduct: React.FC = () => {
             
             <div className="space-y-2">
               <Label htmlFor="category">Category <span className="text-red-500">*</span></Label>
-              <div className="flex items-center gap-2 p-3 bg-gray-50 border rounded-md cursor-not-allowed">
-                {(() => {
-                  const selectedCat = getAllCategories().find(cat => cat.value === selectedCategory);
-                  return selectedCat ? (
-                    <>
-                      <span>{selectedCat.icon}</span>
-                      <div>
-                        <div className="font-medium">{selectedCat.label}</div>
-                        <div className="text-xs text-gray-500">Auto-selected from your vendor profile</div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">Loading category...</div>
-                  );
-                })()} 
-              </div>
-              {/* Hidden input to maintain form data */}
-              <input type="hidden" {...form.register('category')} value={selectedCategory} />
+              <Controller
+                name="category"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vendorCategories.map((categoryValue) => {
+                        const category = getAllCategories().find(cat => cat.value === categoryValue);
+                        return category ? (
+                          <SelectItem key={categoryValue} value={categoryValue}>
+                            <div className="flex items-center gap-2">
+                              <span>{category.icon}</span>
+                              <span>{category.label}</span>
+                            </div>
+                          </SelectItem>
+                        ) : null;
+                      })}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.category && <p className="text-red-500 text-sm">{errors.category.message}</p>}
             </div>
+            
+            {/* Subcategory Selection */}
+            {availableSubcategories.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="subcategory">Subcategory</Label>
+                <Controller
+                  name="subcategory"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select subcategory" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableSubcategories.map((subcategory) => (
+                          <SelectItem key={subcategory} value={subcategory}>
+                            {subcategory}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -401,27 +440,6 @@ const AddProduct: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {categoryConfigs[selectedCategory].subcategories && (
-              <div className="space-y-2">
-                <Label>Subcategory</Label>
-                <Controller
-                  name="subcategory"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select subcategory" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categoryConfigs[selectedCategory].subcategories?.map((sub) => (
-                          <SelectItem key={sub} value={sub}>{sub}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {categoryConfigs[selectedCategory].fields.map(renderDynamicField)}
             </div>
@@ -726,6 +744,17 @@ const AddProduct: React.FC = () => {
                 )}
               />
               <Label>Featured Product</Label>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="freeDelivery"
+                control={control}
+                render={({ field }) => (
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                )}
+              />
+              <Label>Free Delivery</Label>
             </div>
             
             <div className="space-y-2">

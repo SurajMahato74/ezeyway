@@ -42,6 +42,7 @@ import TrendingItemsPage from "./pages/TrendingItemsPage"; // New import
 import VendorLogin from "./pages/vendor/VendorLogin";
 import VendorSignup from "./pages/vendor/vendorSignup";
 import VendorOnboarding from "./pages/vendor/VendorOnboarding";
+import VendorRejection from "./pages/vendor/VendorRejection";
 import VendorDashboard from "./pages/vendor/VendorHome";
 import VendorPlaceOrder from "./pages/vendor/ToolPage";
 import VendorSales from "./pages/vendor/VendorSales";
@@ -63,8 +64,8 @@ import VendorAnalytics from "./pages/vendor/VendorAnalytics";
 // Placeholder components for new routes
 const ComposeMessage = () => <div className="p-8"><h1 className="text-2xl font-bold">Compose New Message</h1><p>Coming soon...</p></div>;
 const Customers = () => <div className="p-8"><h1 className="text-2xl font-bold">Customer Management</h1><p>Coming soon...</p></div>;
-const Analytics = () => <div className="p-8"><h1 className="text-2xl font-bold">Message Analytics</h1><p>Coming soon...</p></div>;
-const Notifications = () => <div className="p-8"><h1 className="text-2xl font-bold">Notification Settings</h1><p>Coming soon...</p></div>;
+
+
 const MessageSearch = () => <div className="p-8"><h1 className="text-2xl font-bold">Search Messages</h1><p>Coming soon...</p></div>;
 const MessageSettings = () => <div className="p-8"><h1 className="text-2xl font-bold">Message Settings</h1><p>Coming soon...</p></div>;
 
@@ -281,6 +282,7 @@ const AppContent = () => {
             <Route path="/vendor/login" element={<VendorLogin />} />
             <Route path="/vendor/signup" element={<VendorSignup />} />
             <Route path="/vendor/onboarding" element={<VendorOnboarding />} />
+            <Route path="/vendor/rejection" element={<VendorRejection />} />
             <Route path="/vendor/dashboard" element={<VendorDashboard />} />
             <Route path="/vendor/home" element={<VendorDashboard />} />
             <Route path="/vendor/place-order" element={<VendorPlaceOrder />} />
@@ -291,8 +293,8 @@ const AppContent = () => {
             <Route path="/vendor/messages/search" element={<MessageSearch />} />
             <Route path="/vendor/messages/settings" element={<MessageSettings />} />
             <Route path="/vendor/customers" element={<Customers />} />
-            <Route path="/vendor/analytics" element={<Analytics />} />
-            <Route path="/vendor/notifications" element={<Notifications />} />
+
+
             <Route path="/vendor/add-products" element={<AddProducts />} />
             <Route path="/vendor/products" element={<ProductManagement />} />
             <Route path="/vendor/add-product" element={<AddProductPage />} />

@@ -160,7 +160,7 @@ const VendorWallet: React.FC = () => {
       });
       
       if (response.ok && data && data.success) {
-        toast.success(`Payment verified! ₹${data.amount} added to wallet`);
+        toast.success(`Payment verified! Rs${data.amount} added to wallet`);
         fetchWalletData();
       } else {
         toast.error(data?.error || 'Payment verification failed');
@@ -247,14 +247,14 @@ Period: ${dateFilter === 'custom' ? `${customDateFrom} to ${customDateTo}` : dat
 
 BALANCE OVERVIEW
 -------------------------------------------
-Current Balance: ₹${walletData?.balance || '0.00'}
-Total Credit: ₹${getTotalCredit().toFixed(2)}
-Total Debit: ₹${getTotalDebit().toFixed(2)}
-Net Amount: ₹${(getTotalCredit() - getTotalDebit()).toFixed(2)}
+Current Balance: Rs${walletData?.balance || '0.00'}
+Total Credit: Rs${getTotalCredit().toFixed(2)}
+Total Debit: Rs${getTotalDebit().toFixed(2)}
+Net Amount: Rs${(getTotalCredit() - getTotalDebit()).toFixed(2)}
 
 TRANSACTION DETAILS (${transactions.length} transactions)
 -------------------------------------------
-${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)} | ${t.transaction_type.toUpperCase().padEnd(6)} | ₹${parseFloat(t.amount).toFixed(2).padStart(8)} | ${t.description}`).join('\n')}
+${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)} | ${t.transaction_type.toUpperCase().padEnd(6)} | Rs${parseFloat(t.amount).toFixed(2).padStart(8)} | ${t.description}`).join('\n')}
 
 ===========================================
     `;
@@ -320,6 +320,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
             <Button 
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
               onClick={() => setShowRechargeSheet(true)}
+              disabled
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Money

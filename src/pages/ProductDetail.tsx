@@ -57,7 +57,7 @@ export default function ProductDetail() {
       setLoading(true);
       
       // Use the public search endpoint to get all products and find by ID
-      const response = await fetch(`${API_BASE}api/search/products/?page_size=1000`, {
+      const response = await fetch(`${API_BASE}search/products/?page_size=1000`, {
         headers: {
           'ngrok-skip-browser-warning': 'true'
         }
@@ -158,6 +158,7 @@ export default function ProductDetail() {
       const response = await fetch(`${API_BASE}favorites/toggle/`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Token ${token}`,
           'ngrok-skip-browser-warning': 'true'
         },

@@ -89,8 +89,11 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
       };
       setNotificationsList(prev => [notification, ...prev]);
       
+      // Play sound for new order
+      notificationService.playNotificationSound();
+      
       // Show browser notification
-      notificationService.showBrowserNotification(notification.title, {
+      notificationService.showBrowserNotificationCompat(notification.title, {
         body: notification.message,
         tag: `order-${order.id}`,
         requireInteraction: true,
@@ -104,14 +107,113 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
       });
     };
     
+    const handleRefundRequest = (event: CustomEvent) => {
+      const { refund } = event.detail;
+      const notification: Notification = {
+        id: Date.now(),
+        type: 'refund_request',
+        title: 'Refund Request Received!',
+        message: `Refund request for Order #${refund.order_number} - ₹${refund.amount}`,
+        data: { refundId: refund.id, orderId: refund.order_id },
+        read: false,
+        created_at: new Date().toISOString(),
+        action_url: '/vendor/orders'
+      };
+      setNotificationsList(prev => [notification, ...prev]);
+      
+      // Play sound for refund request
+      notificationService.playNotificationSound();
+      
+      notificationService.showBrowserNotificationCompat(notification.title, {
+        body: notification.message,
+        tag: `refund-${refund.id}`,
+        requireInteraction: true,
+        data: { actionUrl: '/vendor/orders' }
+      });
+      
+      toast({
+        title: notification.title,
+        description: notification.message,
+        duration: 5000,
+      });
+    };
+    
+    const handleStockAlert = (event: CustomEvent) => {
+      const { product } = event.detail;
+      const notification: Notification = {
+        id: Date.now(),
+        type: 'stock_alert',
+        title: 'Low Stock Alert!',
+        message: `${product.name} is running low (${product.stock} left)`,
+        data: { productId: product.id },
+        read: false,
+        created_at: new Date().toISOString(),
+        action_url: '/vendor/products'
+      };
+      setNotificationsList(prev => [notification, ...prev]);
+      
+      // Play sound for stock alert
+      notificationService.playNotificationSound();
+      
+      notificationService.showBrowserNotificationCompat(notification.title, {
+        body: notification.message,
+        tag: `stock-${product.id}`,
+        requireInteraction: true,
+        data: { actionUrl: '/vendor/products' }
+      });
+      
+      toast({
+        title: notification.title,
+        description: notification.message,
+        duration: 5000,
+      });
+    };
+    
+    const handleOrderStatusChange = (event: CustomEvent) => {
+      const { order, oldStatus, newStatus } = event.detail;
+      const notification: Notification = {
+        id: Date.now(),
+        type: 'order_status',
+        title: 'Order Status Updated!',
+        message: `Order #${order.order_number} changed from ${oldStatus} to ${newStatus}`,
+        data: { orderId: order.id },
+        read: false,
+        created_at: new Date().toISOString(),
+        action_url: '/vendor/orders'
+      };
+      setNotificationsList(prev => [notification, ...prev]);
+      
+      // Play sound for status change
+      notificationService.playNotificationSound();
+      
+      notificationService.showBrowserNotificationCompat(notification.title, {
+        body: notification.message,
+        tag: `status-${order.id}`,
+        requireInteraction: false,
+        data: { actionUrl: '/vendor/orders' }
+      });
+      
+      toast({
+        title: notification.title,
+        description: notification.message,
+        duration: 4000,
+      });
+    };
+    
     window.addEventListener('newNotification', handleNewNotification as EventListener);
     window.addEventListener('orderCreated', handleOrderCreated as EventListener);
+    window.addEventListener('refundRequest', handleRefundRequest as EventListener);
+    window.addEventListener('stockAlert', handleStockAlert as EventListener);
+    window.addEventListener('orderStatusChange', handleOrderStatusChange as EventListener);
     
     return () => {
       clearInterval(conversationInterval);
       clearInterval(notificationInterval);
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
       window.removeEventListener('orderCreated', handleOrderCreated as EventListener);
+      window.removeEventListener('refundRequest', handleRefundRequest as EventListener);
+      window.removeEventListener('stockAlert', handleStockAlert as EventListener);
+      window.removeEventListener('orderStatusChange', handleOrderStatusChange as EventListener);
     };
   }, []);
 
@@ -168,34 +270,75 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
 
   const loadNotifications = async () => {
     try {
-      const notifications = await notificationService.getNotifications();
+      // Fetch real notifications from API
+      const { response, data } = await apiRequest('/vendor-notifications/');
       
-      // Check for new notifications and show browser notifications
-      if (notificationsList.length > 0) {
-        notifications.forEach(newNotif => {
-          const exists = notificationsList.find(n => n.id === newNotif.id);
-          if (!exists && newNotif.type === 'order') {
-            // Show browser notification for new orders
-            notificationService.showBrowserNotification(newNotif.title, {
-              body: newNotif.message,
-              tag: `notification-${newNotif.id}`,
-              requireInteraction: true,
-              data: { actionUrl: '/vendor/orders' }
-            });
-            
-            toast({
-              title: newNotif.title,
-              description: newNotif.message,
-              duration: 5000,
-            });
-          }
-        });
+      if (response.ok && data) {
+        const notifications = Array.isArray(data) ? data : data.results || [];
+        
+        // Check for new notifications and show browser notifications with sound
+        if (notificationsList.length > 0) {
+          notifications.forEach(newNotif => {
+            const exists = notificationsList.find(n => n.id === newNotif.id);
+            if (!exists) {
+              // Play sound for all new notifications
+              notificationService.playNotificationSound();
+              
+              // Show browser notification based on type
+              let actionUrl = '/vendor/orders';
+              let requireInteraction = true;
+              
+              switch (newNotif.type) {
+                case 'order':
+                  actionUrl = '/vendor/orders';
+                  break;
+                case 'refund':
+                case 'refund_request':
+                  actionUrl = '/vendor/orders';
+                  break;
+                case 'stock_alert':
+                case 'low_stock':
+                  actionUrl = '/vendor/products';
+                  break;
+                case 'order_status':
+                case 'status_change':
+                  actionUrl = '/vendor/orders';
+                  break;
+                case 'payment':
+                  actionUrl = '/vendor/wallet';
+                  break;
+                case 'message':
+                  actionUrl = '/vendor/messages';
+                  requireInteraction = false;
+                  break;
+                default:
+                  actionUrl = '/vendor/orders';
+              }
+              
+              notificationService.showBrowserNotificationCompat(newNotif.title, {
+                body: newNotif.message,
+                tag: `notification-${newNotif.id}`,
+                requireInteraction,
+                data: { actionUrl }
+              });
+              
+              toast({
+                title: newNotif.title,
+                description: newNotif.message,
+                duration: 5000,
+              });
+            }
+          });
+        }
+        
+        setNotificationsList(notifications);
       }
-      
-      setNotificationsList(notifications);
     } catch (error) {
       console.error('Failed to load notifications:', error);
-      // Don't clear auth for notification loading errors
+      // Fallback to empty array if API fails
+      if (notificationsList.length === 0) {
+        setNotificationsList([]);
+      }
     }
   };
 
@@ -534,15 +677,27 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
                         }`}
                         onClick={() => {
                           markAsRead(notification.id);
-                          // Always route to vendor pages for vendor header
-                          if (notification.type === 'order') {
-                            navigate('/vendor/orders');
-                          } else if (notification.type === 'payment') {
-                            navigate('/vendor/wallet');
-                          } else if (notification.type === 'message') {
-                            navigate('/vendor/messages');
-                          } else {
-                            navigate('/vendor/orders'); // Default to orders page for all notifications
+                          // Route based on notification type
+                          switch (notification.type) {
+                            case 'order':
+                            case 'refund':
+                            case 'refund_request':
+                            case 'order_status':
+                            case 'status_change':
+                              navigate('/vendor/orders');
+                              break;
+                            case 'stock_alert':
+                            case 'low_stock':
+                              navigate('/vendor/products');
+                              break;
+                            case 'payment':
+                              navigate('/vendor/wallet');
+                              break;
+                            case 'message':
+                              navigate('/vendor/messages');
+                              break;
+                            default:
+                              navigate('/vendor/orders');
                           }
                         }}
                       >
@@ -566,12 +721,18 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
                               variant="outline"
                               className={`text-xs ${
                                 notification.type === 'order' ? 'border-green-200 text-green-700' :
+                                notification.type === 'refund' || notification.type === 'refund_request' ? 'border-red-200 text-red-700' :
+                                notification.type === 'stock_alert' || notification.type === 'low_stock' ? 'border-orange-200 text-orange-700' :
+                                notification.type === 'order_status' || notification.type === 'status_change' ? 'border-blue-200 text-blue-700' :
                                 notification.type === 'payment' ? 'border-blue-200 text-blue-700' :
                                 notification.type === 'message' ? 'border-purple-200 text-purple-700' :
                                 'border-gray-200 text-gray-700'
                               }`}
                             >
-                              {notification.type}
+                              {notification.type === 'refund_request' ? 'refund' : 
+                               notification.type === 'stock_alert' ? 'stock' :
+                               notification.type === 'order_status' ? 'status' :
+                               notification.type}
                             </Badge>
                           </div>
                         </div>

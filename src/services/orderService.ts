@@ -49,7 +49,7 @@ class OrderService {
   }
 
   async createOrder(orderData: CreateOrderData): Promise<{ order: Order; message: string }> {
-    const response = await fetch(`${API_BASE}api/orders/create/`, {
+    const response = await fetch(`${API_BASE}orders/create/`, {
       method: 'POST',
       headers: await this.getAuthHeaders(),
       body: JSON.stringify(orderData)
@@ -79,7 +79,7 @@ class OrderService {
   }
 
   async getOrders(): Promise<Order[]> {
-    const response = await fetch(`${API_BASE}api/orders/`, {
+    const response = await fetch(`${API_BASE}orders/`, {
       headers: await this.getAuthHeaders()
     });
 
@@ -92,7 +92,7 @@ class OrderService {
   }
 
   async getOrder(orderId: number): Promise<Order> {
-    const response = await fetch(`${API_BASE}api/orders/${orderId}/`, {
+    const response = await fetch(`${API_BASE}orders/${orderId}/`, {
       headers: await this.getAuthHeaders()
     });
 
@@ -104,7 +104,7 @@ class OrderService {
   }
 
   async cancelOrder(orderId: number, reason: string = 'Cancelled by customer'): Promise<{ order: Order; message: string }> {
-    const response = await fetch(`${API_BASE}api/orders/${orderId}/cancel/`, {
+    const response = await fetch(`${API_BASE}orders/${orderId}/cancel/`, {
       method: 'POST',
       headers: await this.getAuthHeaders(),
       body: JSON.stringify({ reason })
@@ -125,7 +125,7 @@ class OrderService {
     vendor_rating?: number;
     review_text?: string;
   }): Promise<any> {
-    const response = await fetch(`${API_BASE}api/orders/${orderId}/review/`, {
+    const response = await fetch(`${API_BASE}orders/${orderId}/review/`, {
       method: 'POST',
       headers: await this.getAuthHeaders(),
       body: JSON.stringify(reviewData)
@@ -145,7 +145,7 @@ class OrderService {
     reason: string;
     customer_notes?: string;
   }): Promise<any> {
-    const response = await fetch(`${API_BASE}api/orders/${orderId}/refund/`, {
+    const response = await fetch(`${API_BASE}orders/${orderId}/refund/`, {
       method: 'POST',
       headers: await this.getAuthHeaders(),
       body: JSON.stringify(refundData)
@@ -173,7 +173,7 @@ class OrderService {
   }
 
   async acceptOrder(orderId: number): Promise<{ order: Order; message: string }> {
-    const response = await fetch(`${API_BASE}api/orders/${orderId}/accept/`, {
+    const response = await fetch(`${API_BASE}orders/${orderId}/accept/`, {
       method: 'POST',
       headers: await this.getAuthHeaders()
     });
@@ -200,7 +200,7 @@ class OrderService {
   }
 
   async rejectOrder(orderId: number, reason: string = 'Rejected by vendor'): Promise<{ order: Order; message: string }> {
-    const response = await fetch(`${API_BASE}api/orders/${orderId}/reject/`, {
+    const response = await fetch(`${API_BASE}orders/${orderId}/reject/`, {
       method: 'POST',
       headers: await this.getAuthHeaders(),
       body: JSON.stringify({ reason })

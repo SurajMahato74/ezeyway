@@ -3,8 +3,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '@/config/api';
 
-// Icon mapping for categories
-const categoryIcons = {
+// Fallback icon mapping for categories without images
+const fallbackCategoryIcons = {
   "Electronics": "📱",
   "Fashion": "👕",
   "Food": "🍕",
@@ -36,8 +36,15 @@ const categoryIcons = {
   "Organic": "🌱"
 };
 
+interface Category {
+  id: number;
+  name: string;
+  icon: string;
+  hasImage: boolean;
+}
+
 export function CategoryScroll() {
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -51,7 +58,8 @@ export function CategoryScroll() {
           const formattedCategories = data.categories.map((cat, index) => ({
             id: cat.id || index + 1,
             name: cat.name,
-            icon: categoryIcons[cat.name] || "📦" // Default icon if not found
+            icon: cat.icon_url || fallbackCategoryIcons[cat.name] || "📦", // Use API icon or fallback
+            hasImage: !!cat.icon_url // Track if category has an image
           }));
           setCategories(formattedCategories);
         }
@@ -109,7 +117,27 @@ export function CategoryScroll() {
             className="flex-none px-3 py-1 rounded-xl font-medium text-center transition-all duration-200 bg-white text-gray-800 hover:bg-gray-100 active:scale-95 focus:outline-none min-w-16 touch-manipulation"
             onClick={() => navigate(`/category/${encodeURIComponent(category.name)}`)}
           >
-            <div className="text-2xl mb-1">{category.icon}</div>
+            <div className="mb-1 flex items-center justify-center h-8">
+              {category.hasImage ? (
+                <img 
+                  src={category.icon} 
+                  alt={category.name}
+                  className="w-8 h-8 object-contain"
+                  onError={(e) => {
+                    // Fallback to emoji if image fails to load
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'block';
+                  }}
+                />
+              ) : (
+                <div className="text-2xl">{category.icon}</div>
+              )}
+              {category.hasImage && (
+                <div className="text-2xl" style={{ display: 'none' }}>
+                  {fallbackCategoryIcons[category.name] || "📦"}
+                </div>
+              )}
+            </div>
             <div className="text-xs font-semibold whitespace-nowrap">{category.name}</div>
           </button>
         ))}
