@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { messageService } from "@/services/messageService";
 import { useUserNotifications } from "@/hooks/useUserNotifications";
+import { useAuthAction } from "@/hooks/useAuthAction";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authService } from "@/services/authService";
@@ -12,6 +13,7 @@ import logo from "@/assets/ezeywaylogo.png";
 
 export function Header() {
   const navigate = useNavigate();
+  const { navigateWithAuth } = useAuthAction();
   const [location, setLocation] = useState({
     city: "Getting location...",
     area: "Please wait"
@@ -153,7 +155,7 @@ export function Header() {
           <DropdownMenuContent align="end" className="w-80">
             <div className="flex items-center justify-between p-4 border-b">
               <h4 className="font-semibold">Messages</h4>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/messages')} className="text-xs">
+              <Button variant="ghost" size="sm" onClick={() => navigateWithAuth('/messages')} className="text-xs">
                 View all
               </Button>
             </div>
@@ -167,7 +169,7 @@ export function Header() {
                     className={`p-3 border-b hover:bg-muted/50 cursor-pointer ${
                       conversation.unread_count > 0 ? 'bg-blue-50/50' : ''
                     }`}
-                    onClick={() => navigate('/messages')}
+                    onClick={() => navigateWithAuth('/messages')}
                   >
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
@@ -213,7 +215,7 @@ export function Header() {
                     Mark all read
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => navigate('/notifications')} className="text-xs">
+                <Button variant="ghost" size="sm" onClick={() => navigateWithAuth('/notifications')} className="text-xs">
                   View all
                 </Button>
               </div>
@@ -231,7 +233,7 @@ export function Header() {
                     onClick={() => {
                       markAsRead(notification.id);
                       if (notification.action_url) {
-                        navigate(notification.action_url);
+                        navigateWithAuth(notification.action_url);
                       }
                     }}
                   >

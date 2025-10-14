@@ -6,6 +6,7 @@ import logo from "@/assets/ezeywaylogo.png";
 import { apiRequest } from '@/utils/apiUtils';
 import { useApp } from '@/contexts/AppContext';
 import { authService } from '@/services/authService';
+import { redirectService } from '@/services/redirectService';
 import { LoginSwitcher } from '@/components/LoginSwitcher';
 
 export default function Login() {
@@ -68,9 +69,16 @@ export default function Login() {
 
         await login(userData, data.token);
 
-        // Navigate to intended page or home
-        const from = location.state?.from?.pathname || '/home';
-        navigate(from, { replace: true });
+        // Small delay to ensure context is updated
+        setTimeout(async () => {
+          const executed = await redirectService.executePendingAction();
+          if (!executed) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const returnTo = urlParams.get('returnTo');
+            const from = returnTo || location.state?.from?.pathname || '/home';
+            navigate(from, { replace: true });
+          }
+        }, 100);
       } else {
         throw new Error("Invalid login response");
       }
@@ -125,9 +133,16 @@ export default function Login() {
         await login(userData, data.token);
       }
 
-      // Navigate to intended page or home
-      const from = location.state?.from?.pathname || '/home';
-      navigate(from, { replace: true });
+      // Small delay to ensure context is updated
+      setTimeout(async () => {
+        const executed = await redirectService.executePendingAction();
+        if (!executed) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const returnTo = urlParams.get('returnTo');
+          const from = returnTo || location.state?.from?.pathname || '/home';
+          navigate(from, { replace: true });
+        }
+      }, 100);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -143,6 +158,14 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100 p-4 relative">
+      <button 
+        onClick={() => navigate('/')}
+        className="absolute top-4 left-4 w-8 h-8 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:bg-white transition-colors z-10"
+      >
+        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      </button>
       <LoginSwitcher currentType="customer" />
       
       <div className="flex-1 flex items-center justify-center">

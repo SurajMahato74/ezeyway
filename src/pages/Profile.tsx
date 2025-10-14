@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
+import { useAuthAction } from "@/hooks/useAuthAction";
 import { API_BASE } from '@/config/api';
 import { authService } from '@/services/authService';
 import { useApp } from '@/contexts/AppContext';
@@ -20,6 +21,7 @@ const MENU_ITEMS = [
 const ProfilePage = () => {
   const navigate = useNavigate();
   const { logout, state, login } = useApp();
+  const { navigateWithAuth } = useAuthAction();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,7 +34,7 @@ const ProfilePage = () => {
     try {
       const token = await authService.getToken();
       if (!token) {
-        navigate("/login");
+        navigateWithAuth('/profile');
         return;
       }
 
@@ -213,7 +215,7 @@ const ProfilePage = () => {
                 <div
                   key={index}
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => navigate(item.path)}
+                  onClick={() => navigateWithAuth(item.path)}
                 >
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-primary/10 rounded-full">

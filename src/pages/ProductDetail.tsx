@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
 import { authService } from "@/services/authService";
+import { useAuthAction } from "@/hooks/useAuthAction";
 import { API_BASE } from '@/config/api';
 import { getImageUrl } from '@/utils/imageUtils';
 
@@ -38,6 +39,7 @@ export default function ProductDetail() {
   const { id } = useParams();
   const { addToCart } = useCart();
   const { toast } = useToast();
+  const { addToCartWithAuth, buyNowWithAuth } = useAuthAction();
   const [quantity, setQuantity] = useState(1);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -113,9 +115,9 @@ export default function ProductDetail() {
     
     setIsLoading(true);
     try {
-      await addToCart(product.id, quantity);
+      await addToCartWithAuth(product.id.toString(), quantity);
     } catch (error) {
-      // Error handling is done in the cart context
+      console.error('Error adding to cart:', error);
     } finally {
       setIsLoading(false);
     }
@@ -124,21 +126,17 @@ export default function ProductDetail() {
   const handleBuyNow = async () => {
     if (!product) return;
     
-    // Navigate directly to checkout with the product (don't add to cart)
-    navigate("/checkout", {
-      state: {
-        directBuy: true,
-        product: {
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          quantity: quantity,
-          vendor_name: product.vendor_name,
-          vendor_id: product.vendor_id,
-          images: product.images
-        }
-      }
-    });
+    const productData = {
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      quantity: quantity,
+      vendor_name: product.vendor_name,
+      vendor_id: product.vendor_id,
+      images: product.images
+    };
+    
+    await buyNowWithAuth(productData);
   };
 
   const handleToggleFavorite = async () => {

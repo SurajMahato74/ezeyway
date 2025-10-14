@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
+import { useAuthAction } from '@/hooks/useAuthAction';
 import { useNavigate } from 'react-router-dom';
 
 interface NotificationHeaderProps {
@@ -13,6 +14,7 @@ interface NotificationHeaderProps {
 
 export function NotificationHeader({ className = '' }: NotificationHeaderProps) {
   const navigate = useNavigate();
+  const { navigateWithAuth } = useAuthAction();
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications, isConnected } = useNotificationWebSocket();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -50,7 +52,7 @@ export function NotificationHeader({ className = '' }: NotificationHeaderProps) 
 
     // Navigate to action URL if available
     if (notification.action_url) {
-      navigate(notification.action_url);
+      navigateWithAuth(notification.action_url);
       setIsOpen(false);
     }
   };

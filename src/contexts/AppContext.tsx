@@ -48,6 +48,7 @@ interface AppState {
   searchQuery: string;
   isLoading: boolean;
   error: string | null;
+  isAuthenticated: boolean;
 }
 
 type AppAction =
@@ -70,12 +71,13 @@ const initialState: AppState = {
   searchQuery: '',
   isLoading: false,
   error: null,
+  isAuthenticated: false,
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_USER':
-      return { ...state, user: action.payload };
+      return { ...state, user: action.payload, isAuthenticated: !!action.payload };
 
     case 'ADD_TO_CART': {
       const existingItem = state.cart.find(item => item.id === action.payload.id);
@@ -160,6 +162,7 @@ interface AppContextType {
   setSearchQuery: (query: string) => void;
   login: (user: User, token: string) => Promise<void>;
   logout: () => Promise<void>;
+  user: User | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -253,9 +256,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const login = async (user: User, token: string) => {
     try {
+      // Update context state immediately
+      dispatch({ type: 'SET_USER', payload: { ...user, isLoggedIn: true } });
+      
+      // Then save to storage (async)
       await authService.setAuth(token, user);
-      dispatch({ type: 'SET_USER', payload: user });
       locationService.startTracking();
+      
+      console.log('Login completed, user authenticated:', !!user);
     } catch (error) {
       console.error('Failed to save login data:', error);
     }
@@ -283,6 +291,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSearchQuery,
     login,
     logout,
+    user: state.user,
   };
 
   return (

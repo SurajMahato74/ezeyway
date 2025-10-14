@@ -442,6 +442,18 @@ const AddProductPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <style>{`
+        input, textarea, select {
+          font-size: 16px !important;
+          transform: translateZ(0);
+        }
+        @media screen and (max-width: 768px) {
+          input:focus, textarea:focus, select:focus {
+            font-size: 16px !important;
+            zoom: 1 !important;
+          }
+        }
+      `}</style>
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between p-3">

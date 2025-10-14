@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
 
@@ -38,6 +39,7 @@ export function FeaturedProducts() {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { toast } = useToast();
+  const { addToCartWithAuth } = useAuthAction();
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
@@ -137,14 +139,17 @@ export function FeaturedProducts() {
     navigate(`/product/${productId}`);
   };
 
-  const handleBuyNow = (product: any) => {
-    // Add to cart and navigate to cart
-    addToCart(product.id, 1);
-    toast({
-      title: "Added to Cart",
-      description: `${product.name} added to your cart`,
-    });
-    navigate("/cart");
+  const handleBuyNow = async (product: any) => {
+    try {
+      await addToCartWithAuth(product.id.toString(), 1);
+      toast({
+        title: "Added to Cart",
+        description: `${product.name} added to your cart`,
+      });
+      navigate("/cart");
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
   };
 
   if (loading) {

@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthAction } from "@/hooks/useAuthAction";
 import { orderService } from "@/services/orderService";
 import { authService } from "@/services/authService";
 import { NotificationHeader } from "@/components/NotificationHeader";
@@ -24,6 +25,7 @@ import { getImageUrl } from '@/utils/imageUtils';
 export default function Orders() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { navigateWithAuth } = useAuthAction();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
@@ -93,7 +95,7 @@ export default function Orders() {
     try {
       const token = await authService.getToken();
       if (!token) {
-        navigate('/login');
+        navigateWithAuth('/orders');
         return;
       }
 
