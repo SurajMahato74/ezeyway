@@ -139,7 +139,7 @@ export default function CheckOut() {
 
   const fetchVendorInfo = async (vendorId) => {
     try {
-      const response = await fetch(`${API_BASE}api/vendors/${vendorId}/`, {
+      const response = await fetch(`${API_BASE}vendors/${vendorId}/`, {
         headers: {
           'ngrok-skip-browser-warning': 'true'
         }
