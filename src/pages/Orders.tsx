@@ -21,6 +21,7 @@ import { useNotificationWebSocket } from "@/hooks/useNotificationWebSocket";
 import { API_CONFIG } from '@/config/api';
 import { apiRequest } from '@/utils/apiUtils';
 import { getImageUrl } from '@/utils/imageUtils';
+import { CustomerAuthGuard } from '@/components/CustomerAuthGuard';
 
 export default function Orders() {
   const navigate = useNavigate();
@@ -501,7 +502,8 @@ export default function Orders() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
+    <CustomerAuthGuard>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white shadow-lg border-b py-4 px-6">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
@@ -1613,6 +1615,7 @@ export default function Orders() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </CustomerAuthGuard>
   );
 }

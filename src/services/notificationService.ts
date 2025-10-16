@@ -345,20 +345,30 @@ class NotificationService {
   // API methods for notifications
   async getNotifications() {
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return [];
+      }
+
       const response = await fetch('/api/vendor-notifications/', {
         headers: {
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'x-ngrok-skip-browser-warning': 'true'
         }
       });
       
       if (response.ok) {
-        const data = await response.json();
-        return data.results || [];
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          return data.results || [];
+        }
       }
       return [];
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      console.warn('Notifications API not available:', error.message);
       return [];
     }
   }
@@ -368,7 +378,7 @@ class NotificationService {
       const notifications = await this.getNotifications();
       return notifications.filter(n => !n.read).length;
     } catch (error) {
-      console.error('Failed to get unread count:', error);
+      console.warn('Failed to get unread count:', error.message);
       return 0;
     }
   }

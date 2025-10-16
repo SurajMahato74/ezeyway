@@ -14,6 +14,9 @@ import { apiRequest } from '@/utils/apiUtils';
 import { authService } from '@/services/authService';
 import { useApp } from '@/contexts/AppContext';
 import { RoleSwitcher } from '@/components/RoleSwitcher';
+import { RoleAccessHelper } from '@/components/RoleAccessHelper';
+import { checkVendorAccess, switchToVendorRole } from '@/utils/roleUtils';
+import { VendorAuthGuard } from '@/components/VendorAuthGuard';
 
 interface VendorData {
   businessName: string;
@@ -91,23 +94,36 @@ const VendorMyProfile = () => {
 
   const fetchProfileData = async () => {
     try {
-      // Check persistent authentication
-      const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
-      const isVendorLoggedIn = await simplePersistentAuth.isVendorLoggedIn();
+      // Check vendor access first
+      const accessCheck = await checkVendorAccess();
       
-      if (!isVendorLoggedIn) {
+      if (accessCheck.needsLogin) {
         navigate("/vendor/login");
         return;
       }
       
-      // Restore auth for API calls
-      const vendorAuth = await simplePersistentAuth.getVendorAuth();
-      if (vendorAuth) {
-        await authService.setAuth(vendorAuth.token, vendorAuth.user);
+      if (accessCheck.needsOnboarding) {
+        setError("You don't have access to vendor features. Please complete vendor onboarding first.");
+        return;
+      }
+      
+      if (accessCheck.needsRoleSwitch) {
+        // Auto-switch to vendor role
+        const switchResult = await switchToVendorRole();
+        if (!switchResult.success) {
+          setError("Failed to switch to vendor role. Please try logging in again.");
+          return;
+        }
+        // Continue with profile fetch after successful role switch
       }
 
       // Fetch vendor profile
       const { response, data } = await apiRequest('/vendor-profiles/');
+
+      if (response.status === 401 || response.status === 403) {
+        setError("You don't have access to vendor features. Please complete vendor onboarding first.");
+        return;
+      }
 
       if (!response.ok) {
         throw new Error("Failed to fetch profile data");
@@ -161,19 +177,9 @@ const VendorMyProfile = () => {
 
   const fetchUserProfileData = async () => {
     try {
-      // Check persistent authentication
-      const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
-      const isVendorLoggedIn = await simplePersistentAuth.isVendorLoggedIn();
-      
-      if (!isVendorLoggedIn) {
-        navigate("/vendor/login");
+      const isAuth = await authService.isAuthenticated();
+      if (!isAuth) {
         return;
-      }
-      
-      // Restore auth for API calls
-      const vendorAuth = await simplePersistentAuth.getVendorAuth();
-      if (vendorAuth) {
-        await authService.setAuth(vendorAuth.token, vendorAuth.user);
       }
 
       // Fetch user profile data to get available_roles
@@ -581,13 +587,20 @@ const VendorMyProfile = () => {
     );
   }
 
+  if (error && error.includes("vendor features")) {
+    return <RoleAccessHelper requiredRole="vendor" currentPage="vendor-profile" />;
+  }
+
   if (error) {
     return (
       <VendorPage title="My Profile">
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
+          <div className="text-center max-w-md mx-auto p-6">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <p className="text-red-600 mb-4">{error}</p>
-            <Button onClick={fetchProfileData}>Retry</Button>
+            <div className="space-y-2">
+              <Button onClick={fetchProfileData} variant="outline">Retry</Button>
+            </div>
           </div>
         </div>
       </VendorPage>
@@ -595,7 +608,8 @@ const VendorMyProfile = () => {
   }
 
   return (
-    <VendorPage title="My Profile">
+    <VendorAuthGuard>
+      <VendorPage title="My Profile">
       <div className="min-h-screen bg-gray-50">
         {/* Profile Header */}
         <div className="bg-white border-b border-gray-100 fixed top-14 sm:top-16 left-0 right-0 z-30">
@@ -1050,6 +1064,10 @@ const VendorMyProfile = () => {
 
         {/* Role Switcher */}
         <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+          <div className="mb-2">
+            <Label className="text-sm font-medium text-gray-700">Switch Role</Label>
+            <p className="text-xs text-gray-500">You can switch between customer and vendor roles</p>
+          </div>
           <RoleSwitcher />
         </div>
 
@@ -1066,6 +1084,7 @@ const VendorMyProfile = () => {
         </div>
       </div>
     </VendorPage>
+    </VendorAuthGuard>
   );
 };
 

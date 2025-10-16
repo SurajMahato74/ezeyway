@@ -24,7 +24,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = await authService.getToken();
       if (!token) {
-        // User not authenticated, don't fetch cart
+        setCart(null);
         return;
       }
       
@@ -32,8 +32,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const cartData = await cartService.getCart();
       setCart(cartData);
     } catch (error) {
-      // Only log error if it's not an authentication issue
-      if (!error.message.includes('not authenticated')) {
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        setCart(null);
+      } else {
         console.error('Failed to fetch cart:', error);
       }
     } finally {

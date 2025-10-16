@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { VendorPage } from "@/components/VendorLayout";
+import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from '@/utils/apiUtils';
 import { authService } from '@/services/authService';
@@ -531,6 +532,21 @@ export default function VendorSettings() {
         </div>
 
         <div className="p-4 space-y-6">
+          {/* Role Switcher - Prominent Position */}
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Account Type
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">Switch between your Customer and Vendor accounts</p>
+              </div>
+            </div>
+            <RoleSwitcher />
+          </div>
           {settingsMenu.map((section) => (
             <div key={section.category} className="bg-white rounded-lg overflow-hidden">
               <div className="p-4 border-b bg-gray-50">

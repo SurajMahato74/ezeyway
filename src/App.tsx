@@ -3,15 +3,18 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { PermissionService } from "./services/permissions";
 import { useSessionManager } from "./hooks/useSessionManager";
 import { AppProvider } from "./contexts/AppContext";
 import { CartProvider } from "./contexts/CartContext";
+import { AppLoadingProvider } from "./contexts/AppLoadingContext";
 import { AuthGuard } from "./components/AuthGuard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { setupAppLifecycle } from "./utils/capacitorUtils";
 import { authService } from "./services/authService";
+import { AppSplashScreen } from "./components/AppSplashScreen";
+import { useAnalytics } from "./hooks/useAnalytics";
 import SplashScreen from "./pages/SplashScreen";
 import Login from "./pages/Login";
 import Index from "./pages/Index";
@@ -60,6 +63,7 @@ import ProductManagement from "./pages/vendor/ProductManagement";
 import VendorNotifications from "./pages/vendor/VendorNotifications";
 import VendorSummary from "./pages/vendor/VendorSummary";
 import VendorAnalytics from "./pages/vendor/VendorAnalytics";
+
 
 // Placeholder components for new routes
 const ComposeMessage = () => <div className="p-8"><h1 className="text-2xl font-bold">Compose New Message</h1><p>Coming soon...</p></div>;
@@ -230,6 +234,76 @@ const MyIncomePage = () => (
 
 const queryClient = new QueryClient();
 
+const RoutesWithAnalytics = () => {
+  useAnalytics(); // Now inside Router context
+  
+  return (
+    <Routes>
+      <Route path="/" element={<Index />} />
+      <Route path="/splash" element={<SplashScreen />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/home" element={<Index />} />
+      <Route path="/search" element={<SearchPage />} />
+      <Route path="/cart" element={<CartPage />} />
+      <Route path="/wishlist" element={<ProtectedRoute><WishlistPage /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+      <Route path="/profile-edit" element={<ProtectedRoute><ProfileEdit /></ProtectedRoute>} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/product/:id" element={<ProductDetail />} />
+      <Route path="/vendor/:vendorId" element={<VendorProfile />} />
+      <Route path="/checkout" element={<ProtectedRoute><CheckOut /></ProtectedRoute>} />
+      <Route path="/order-confirmation/:orderId" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
+      <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+      <Route path="/addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
+      <Route path="/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
+
+      <Route path="/help" element={<Help />} />
+      <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+      <Route path="/order/:orderId/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/category/:categoryName" element={<CategoryItems />} />
+      <Route path="/featured-items" element={<FeaturedItems />} />
+       <Route path="/trending-items" element={<TrendingItemsPage />} /> 
+      {/* Vendor Dashboard Routes */}
+      <Route path="/vendor/login" element={<VendorLogin />} />
+      <Route path="/vendor/signup" element={<VendorSignup />} />
+      <Route path="/vendor/onboarding" element={<VendorOnboarding />} />
+      <Route path="/vendor/rejection" element={<VendorRejection />} />
+      <Route path="/vendor/dashboard" element={<VendorDashboard />} />
+      <Route path="/vendor/home" element={<VendorDashboard />} />
+      <Route path="/vendor/place-order" element={<VendorPlaceOrder />} />
+      <Route path="/vendor/sales" element={<VendorSales />} />
+      <Route path="/vendor/messages" element={<Message />} />
+      <Route path="/vendor/order/:orderId/messages" element={<Message />} />
+      <Route path="/vendor/messages/compose" element={<ComposeMessage />} />
+      <Route path="/vendor/messages/search" element={<MessageSearch />} />
+      <Route path="/vendor/messages/settings" element={<MessageSettings />} />
+      <Route path="/vendor/customers" element={<Customers />} />
+
+
+      <Route path="/vendor/add-products" element={<AddProducts />} />
+      <Route path="/vendor/products" element={<ProductManagement />} />
+      <Route path="/vendor/add-product" element={<AddProductPage />} />
+      <Route path="/vendor/orders" element={<VendorOrders />} />
+      <Route path="/vendor/return-orders" element={<ReturnOrders />} />
+      <Route path="/vendor/reviews" element={<ManageReviews />} />
+      <Route path="/vendor/income" element={<MyIncomePage />} />
+      <Route path="/vendor/wallet" element={<VendorWallet />} />
+      <Route path="/vendor/profile" element={<VendorMyProfile />} />
+      <Route path="/vendor/profile-management" element={<VendorProfileManagement />} />
+      <Route path="/vendor/company" element={<VendorCompany />} />
+      <Route path="/vendor/security" element={<VendorSecurity />} />
+      <Route path="/vendor/notifications" element={<VendorNotifications />} />
+      <Route path="/vendor/settings" element={<VendorSettings />} />
+      <Route path="/vendor/summary" element={<VendorSummary />} />
+      <Route path="/vendor/analytics" element={<VendorAnalytics />} />
+      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
 const AppContent = () => {
   // Initialize session management
   useSessionManager();
@@ -250,88 +324,44 @@ const AppContent = () => {
   }, []);
 
   return (
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/splash" element={<SplashScreen />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/home" element={<Index />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/wishlist" element={<ProtectedRoute><WishlistPage /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/profile-edit" element={<ProtectedRoute><ProfileEdit /></ProtectedRoute>} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/product/:id" element={<ProductDetail />} />
-            <Route path="/vendor/:vendorId" element={<VendorProfile />} />
-            <Route path="/checkout" element={<ProtectedRoute><CheckOut /></ProtectedRoute>} />
-            <Route path="/order-confirmation/:orderId" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
-            <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-            <Route path="/addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
-            <Route path="/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <RoutesWithAnalytics />
+    </BrowserRouter>
+  );
+};
 
-            <Route path="/help" element={<Help />} />
-            <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-            <Route path="/order/:orderId/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/category/:categoryName" element={<CategoryItems />} />
-            <Route path="/featured-items" element={<FeaturedItems />} />
-             <Route path="/trending-items" element={<TrendingItemsPage />} /> 
-            {/* Vendor Dashboard Routes */}
-            <Route path="/vendor/login" element={<VendorLogin />} />
-            <Route path="/vendor/signup" element={<VendorSignup />} />
-            <Route path="/vendor/onboarding" element={<VendorOnboarding />} />
-            <Route path="/vendor/rejection" element={<VendorRejection />} />
-            <Route path="/vendor/dashboard" element={<VendorDashboard />} />
-            <Route path="/vendor/home" element={<VendorDashboard />} />
-            <Route path="/vendor/place-order" element={<VendorPlaceOrder />} />
-            <Route path="/vendor/sales" element={<VendorSales />} />
-            <Route path="/vendor/messages" element={<Message />} />
-            <Route path="/vendor/order/:orderId/messages" element={<Message />} />
-            <Route path="/vendor/messages/compose" element={<ComposeMessage />} />
-            <Route path="/vendor/messages/search" element={<MessageSearch />} />
-            <Route path="/vendor/messages/settings" element={<MessageSettings />} />
-            <Route path="/vendor/customers" element={<Customers />} />
+const AppWithSplash = () => {
+  const [showSplash, setShowSplash] = useState(true);
 
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+  };
 
-            <Route path="/vendor/add-products" element={<AddProducts />} />
-            <Route path="/vendor/products" element={<ProductManagement />} />
-            <Route path="/vendor/add-product" element={<AddProductPage />} />
-            <Route path="/vendor/orders" element={<VendorOrders />} />
-            <Route path="/vendor/return-orders" element={<ReturnOrders />} />
-            <Route path="/vendor/reviews" element={<ManageReviews />} />
-            <Route path="/vendor/income" element={<MyIncomePage />} />
-            <Route path="/vendor/wallet" element={<VendorWallet />} />
-            <Route path="/vendor/profile" element={<VendorMyProfile />} />
-            <Route path="/vendor/profile-management" element={<VendorProfileManagement />} />
-            <Route path="/vendor/company" element={<VendorCompany />} />
-            <Route path="/vendor/security" element={<VendorSecurity />} />
-            <Route path="/vendor/notifications" element={<VendorNotifications />} />
-            <Route path="/vendor/settings" element={<VendorSettings />} />
-            <Route path="/vendor/summary" element={<VendorSummary />} />
-            <Route path="/vendor/analytics" element={<VendorAnalytics />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+  if (showSplash) {
+    return <AppSplashScreen onComplete={handleSplashComplete} />;
+  }
+
+  return (
+    <AppProvider>
+      <CartProvider>
+        <TooltipProvider>
+          <AuthGuard>
+            <Toaster />
+            <Sonner />
+            <AppContent />
+          </AuthGuard>
+        </TooltipProvider>
+      </CartProvider>
+    </AppProvider>
   );
 };
 
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppProvider>
-        <CartProvider>
-          <TooltipProvider>
-            <AuthGuard>
-              <Toaster />
-              <Sonner />
-              <AppContent />
-            </AuthGuard>
-          </TooltipProvider>
-        </CartProvider>
-      </AppProvider>
+      <AppLoadingProvider>
+        <AppWithSplash />
+      </AppLoadingProvider>
     </QueryClientProvider>
   );
 };

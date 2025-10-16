@@ -35,10 +35,16 @@ export interface User {
   name: string;
   email: string;
   phone: string;
+  phone_number?: string;
+  address?: string;
   avatar?: string;
   user_type: string;
   available_roles: string[];
   isLoggedIn: boolean;
+  first_name?: string;
+  last_name?: string;
+  google_id?: string;
+  profile_picture_url?: string;
 }
 
 interface AppState {
@@ -53,6 +59,7 @@ interface AppState {
 
 type AppAction =
   | { type: 'SET_USER'; payload: User | null }
+  | { type: 'UPDATE_USER'; payload: Partial<User> }
   | { type: 'ADD_TO_CART'; payload: Product }
   | { type: 'REMOVE_FROM_CART'; payload: number }
   | { type: 'UPDATE_CART_QUANTITY'; payload: { id: number; quantity: number } }
@@ -78,6 +85,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_USER':
       return { ...state, user: action.payload, isAuthenticated: !!action.payload };
+
+    case 'UPDATE_USER':
+      return {
+        ...state,
+        user: state.user ? { ...state.user, ...action.payload } : null
+      };
 
     case 'ADD_TO_CART': {
       const existingItem = state.cart.find(item => item.id === action.payload.id);
@@ -162,6 +175,7 @@ interface AppContextType {
   setSearchQuery: (query: string) => void;
   login: (user: User, token: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => Promise<void>;
   user: User | null;
 }
 
@@ -184,11 +198,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (isAuthenticated && user) {
           // Check if session is still valid
           const isValid = await authService.isSessionValid();
-          if (!isValid) {
+          if (isValid) {
+            // Restore user to context
+            dispatch({ type: 'SET_USER', payload: { ...user, isLoggedIn: true } });
+          } else {
             // Session expired, clear auth data
             await authService.clearAuth();
           }
-          // Don't auto-set user - let SplashScreen handle authentication flow
         }
         
         // Load cart and wishlist regardless of auth status
@@ -279,6 +295,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUser = async (updates: Partial<User>) => {
+    try {
+      dispatch({ type: 'UPDATE_USER', payload: updates });
+      
+      // Update stored user data
+      if (state.user) {
+        const updatedUser = { ...state.user, ...updates };
+        await authService.updateUser(updatedUser);
+      }
+    } catch (error) {
+      console.error('Failed to update user:', error);
+    }
+  };
+
   const value: AppContextType = {
     state,
     dispatch,
@@ -291,6 +321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSearchQuery,
     login,
     logout,
+    updateUser,
     user: state.user,
   };
 

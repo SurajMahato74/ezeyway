@@ -25,6 +25,8 @@ class SimplePersistentAuth {
       let userStr: string | null = null;
       let timeStr: string | null = null;
 
+      console.log('🔍 Getting vendor auth, isNative:', Capacitor.isNativePlatform());
+
       if (Capacitor.isNativePlatform()) {
         const { Preferences } = await import('@capacitor/preferences');
         const tokenResult = await Preferences.get({ key: 'vendor_token' });
@@ -40,24 +42,44 @@ class SimplePersistentAuth {
         timeStr = localStorage.getItem('vendor_time');
       }
 
+      console.log('📊 Storage check:', {
+        token: token ? 'exists' : 'missing',
+        user: userStr ? 'exists' : 'missing',
+        time: timeStr ? 'exists' : 'missing'
+      });
+
       if (!token || !userStr || !timeStr) {
+        console.log('❌ Missing auth data in storage');
         return null;
       }
 
       // Check if still valid (30 days)
       const loginTime = parseInt(timeStr);
       const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+      const age = Date.now() - loginTime;
       
-      if (Date.now() - loginTime > maxAge) {
+      console.log('⏰ Auth age check:', {
+        loginTime: new Date(loginTime).toISOString(),
+        ageHours: Math.round(age / (1000 * 60 * 60)),
+        maxAgeHours: Math.round(maxAge / (1000 * 60 * 60)),
+        isValid: age <= maxAge
+      });
+      
+      if (age > maxAge) {
+        console.log('❌ Auth expired, clearing');
         await this.clearVendorAuth();
         return null;
       }
 
       const user = JSON.parse(userStr);
-      console.log('✅ Vendor auth found:', user.username);
+      console.log('✅ Vendor auth found:', {
+        username: user.username,
+        user_type: user.user_type,
+        available_roles: user.available_roles
+      });
       return { token, user };
     } catch (error) {
-      console.error('Get vendor auth failed:', error);
+      console.error('❌ Get vendor auth failed:', error);
       return null;
     }
   }

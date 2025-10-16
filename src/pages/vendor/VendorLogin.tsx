@@ -8,6 +8,9 @@ import { authService } from '@/services/authService';
 import { useApp } from '@/contexts/AppContext';
 import { VendorDebugInfo } from '@/components/VendorDebugInfo';
 import { LoginSwitcher } from '@/components/LoginSwitcher';
+import { googleAuthService } from '@/services/googleAuth';
+import { facebookAuthService } from '@/services/facebookAuth';
+import { ProfileCompletion } from '@/components/ProfileCompletion';
 
 export default function VendorLogin() {
   const navigate = useNavigate();
@@ -25,13 +28,73 @@ export default function VendorLogin() {
   const [successMessage, setSuccessMessage] = useState("");
   const [needsVerification, setNeedsVerification] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isFacebookLoading, setIsFacebookLoading] = useState(false);
+  const [showProfileCompletion, setShowProfileCompletion] = useState(false);
+  const [googleUserData, setGoogleUserData] = useState(null);
 
   useEffect(() => {
     if (location.state?.successMessage) {
       setSuccessMessage(location.state.successMessage);
       window.history.replaceState({}, document.title);
     }
+    
+    // Check if user is already logged in and can switch to vendor role
+    checkExistingAuth();
+    
+    // Initialize Google Auth
+    googleAuthService.initialize().catch(console.error);
+    
+    // Initialize Facebook Auth
+    facebookAuthService.initialize().catch(console.error);
   }, [location.state]);
+
+  const checkExistingAuth = async () => {
+    try {
+      const isAuth = await authService.isAuthenticated();
+      if (isAuth) {
+        const user = await authService.getUser();
+        console.log('Existing user:', user);
+        
+        // If user has vendor role available, offer to switch
+        if (user?.available_roles?.includes('vendor')) {
+          if (user.user_type === 'customer') {
+            // Auto-switch to vendor role
+            await switchToVendorRole();
+          } else {
+            // Already vendor, redirect to dashboard
+            navigate('/vendor/dashboard');
+          }
+        }
+      }
+    } catch (error) {
+      console.log('No existing auth or error:', error);
+    }
+  };
+
+  const switchToVendorRole = async () => {
+    try {
+      const { response, data } = await apiRequest('/switch-role/', {
+        method: 'POST',
+        body: JSON.stringify({ role: 'vendor' })
+      }); // apiRequest automatically includes auth token
+
+      if (response.ok) {
+        // Update user data with new role
+        const user = await authService.getUser();
+        const updatedUser = { ...user, user_type: 'vendor' };
+        await login(updatedUser, await authService.getToken());
+        
+        // Save to vendor-specific storage
+        const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+        await simplePersistentAuth.saveVendorLogin(await authService.getToken(), updatedUser);
+        
+        navigate('/vendor/dashboard');
+      }
+    } catch (error) {
+      console.error('Role switch failed:', error);
+    }
+  };
 
   const handlePasswordLogin = async () => {
     setIsLoading(true);
@@ -53,18 +116,24 @@ export default function VendorLogin() {
         setOtpSent(true);
         setError("Email not verified. Please verify your email with the OTP sent.");
       } else {
-        // Ensure user_type is set to vendor for proper routing
+        // Use actual user data from API response
         const userData = {
-          ...data.user || { id: data.user_id, email, user_type: 'vendor' },
-          available_roles: data.available_roles || ['vendor'],
-          user_type: data.user.user_type || 'vendor'
+          ...data.user,
+          available_roles: data.available_roles || ['customer'],
+          current_role: data.user.user_type || 'customer'
         };
+        
+        // If user has vendor role available but is currently customer, switch to vendor
+        if (userData.user_type === 'customer' && userData.available_roles.includes('vendor')) {
+          userData.user_type = 'vendor';
+        }
   
         await login(userData, data.token);
         
-        // Save persistent login for mobile
-        const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
-        await simplePersistentAuth.saveVendorLogin(data.token, userData);
+        // Save to both regular auth and vendor-specific storage
+        await authService.setAuth(data.token, userData);
+        const simplePersistentAuthModule = await import('@/services/simplePersistentAuth');
+        await simplePersistentAuthModule.simplePersistentAuth.saveVendorLogin(data.token, userData);
         console.log("Login response:", data);
         console.log("profile_exists:", data.profile_exists, "is_approved:", data.is_approved);
         
@@ -137,14 +206,16 @@ export default function VendorLogin() {
       const userData = {
         ...data.user || { id: data.user_id, email, user_type: 'vendor' },
         available_roles: data.available_roles || ['vendor'],
-        user_type: data.user.user_type || 'vendor'
+        user_type: data.user.user_type || 'vendor',
+        current_role: data.user.user_type || 'vendor'
       };
 
       await login(userData, data.token);
       
-      // Save persistent login for mobile
-      const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
-      await simplePersistentAuth.saveVendorLogin(data.token, userData);
+      // Save to both regular auth and vendor-specific storage
+      await authService.setAuth(data.token, userData);
+      const simplePersistentAuthModule2 = await import('@/services/simplePersistentAuth');
+      await simplePersistentAuthModule2.simplePersistentAuth.saveVendorLogin(data.token, userData);
       console.log("OTP verification response:", data);
       console.log("profile_exists:", data.profile_exists, "is_approved:", data.is_approved);
       
@@ -173,6 +244,135 @@ export default function VendorLogin() {
       setError(e.message || "OTP verification failed. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    setIsFacebookLoading(true);
+    setError("");
+    try {
+      const result = await facebookAuthService.signIn();
+      
+      if (result.success && result.user && result.token) {
+        let userData = {
+          ...result.user,
+          available_roles: result.user.available_roles || ['customer'],
+          current_role: result.user.current_role || result.user.user_type || 'customer'
+        };
+        
+        // If user has vendor role available but is currently customer, switch to vendor
+        if (userData.user_type === 'customer' && userData.available_roles.includes('vendor')) {
+          userData.user_type = 'vendor';
+        }
+
+        await login(userData, result.token);
+        
+        // Save authentication properly - order matters
+        await authService.setAuth(result.token, userData);
+        await login(userData, result.token);
+        
+        // Only save to vendor storage if user has vendor role
+        if (userData.available_roles?.includes('vendor')) {
+          const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+          await simplePersistentAuth.saveVendorLogin(result.token, userData);
+        }
+        
+        // Check if user needs profile completion (for new Facebook users or missing phone)
+        if (result.user.user_created || !result.user.phone_number) {
+          setGoogleUserData({ userData, token: result.token, profileData: result.user });
+          setShowProfileCompletion(true);
+        } else {
+          // Proceed with normal vendor login flow
+          proceedWithVendorFlow(result.user);
+        }
+      } else {
+        setError(result.error || 'Facebook login failed');
+      }
+    } catch (error) {
+      setError('Facebook login failed. Please try again.');
+    } finally {
+      setIsFacebookLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    setError("");
+    try {
+      const result = await googleAuthService.signIn();
+      
+      if (result.success && result.user && result.token) {
+        let userData = {
+          ...result.user,
+          available_roles: result.user.available_roles || ['customer'],
+          current_role: result.user.current_role || result.user.user_type || 'customer'
+        };
+        
+        // If user has vendor role available but is currently customer, switch to vendor
+        if (userData.user_type === 'customer' && userData.available_roles.includes('vendor')) {
+          userData.user_type = 'vendor';
+        }
+
+        await login(userData, result.token);
+        
+        // Save authentication properly - order matters
+        await authService.setAuth(result.token, userData);
+        await login(userData, result.token);
+        
+        // Only save to vendor storage if user has vendor role
+        if (userData.available_roles?.includes('vendor')) {
+          const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+          await simplePersistentAuth.saveVendorLogin(result.token, userData);
+        }
+        
+        // Check if user needs profile completion (for new Google users or missing phone)
+        if (result.user.user_created || !result.user.phone_number) {
+          setGoogleUserData({ userData, token: result.token, profileData: result.user });
+          setShowProfileCompletion(true);
+        } else {
+          // Proceed with normal vendor login flow
+          proceedWithVendorFlow(result.user);
+        }
+      } else {
+        setError(result.error || 'Google login failed');
+      }
+    } catch (error) {
+      setError('Google login failed. Please try again.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const proceedWithVendorFlow = (userProfile) => {
+    // Check profile and approval status (same logic as password login)
+    if (!userProfile.profile_exists) {
+      navigate("/vendor/onboarding");
+    } else if (userProfile.profile_exists && userProfile.is_approved) {
+      navigate("/vendor/dashboard");
+    } else if (userProfile.profile_exists && userProfile.is_rejected) {
+      navigate("/vendor/rejection", { 
+        state: { 
+          rejectionReason: userProfile.rejection_reason,
+          rejectionDate: userProfile.rejection_date 
+        } 
+      });
+    } else if (userProfile.profile_exists && !userProfile.is_approved) {
+      setError("Your vendor application is pending approval. You will be notified once approved.");
+      authService.clearAuth();
+    }
+  };
+
+  const handleProfileCompletionComplete = () => {
+    setShowProfileCompletion(false);
+    if (googleUserData?.profileData) {
+      proceedWithVendorFlow(googleUserData.profileData);
+    }
+  };
+
+  const handleProfileCompletionSkip = () => {
+    setShowProfileCompletion(false);
+    if (googleUserData?.profileData) {
+      proceedWithVendorFlow(googleUserData.profileData);
     }
   };
 
@@ -396,6 +596,51 @@ export default function VendorLogin() {
             </div>
           )}
 
+          {/* Google Login */}
+          <div className="space-y-4">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gradient-to-br from-blue-50 to-indigo-100 text-gray-500">or</span>
+              </div>
+            </div>
+            
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={handleGoogleLogin}
+                disabled={isGoogleLoading}
+                className="w-12 h-12 bg-white hover:bg-gray-50 border border-gray-300 rounded-full flex items-center justify-center transition-colors shadow-sm"
+              >
+                {isGoogleLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+                ) : (
+                  <svg className="w-6 h-6" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                )}
+              </button>
+              
+              <button
+                onClick={handleFacebookLogin}
+                disabled={isFacebookLoading}
+                className="w-12 h-12 bg-white hover:bg-gray-50 border border-gray-300 rounded-full flex items-center justify-center transition-colors shadow-sm"
+              >
+                {isFacebookLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+                ) : (
+                  <svg className="w-6 h-6" viewBox="0 0 24 24">
+                    <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+
           <div className="text-center">
             <button
               onClick={handleSignup}
@@ -407,6 +652,15 @@ export default function VendorLogin() {
         </div>
         </div>
       </div>
+      
+      {/* Profile Completion Modal */}
+      {showProfileCompletion && googleUserData && (
+        <ProfileCompletion
+          user={googleUserData.userData}
+          onComplete={handleProfileCompletionComplete}
+          onSkip={handleProfileCompletionSkip}
+        />
+      )}
     </div>
   );
 }

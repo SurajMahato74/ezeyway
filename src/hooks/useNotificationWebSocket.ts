@@ -29,7 +29,13 @@ export function useNotificationWebSocket() {
 
   // WebSocket connection (disabled for ngrok compatibility)
   const connectWebSocket = async () => {
-    const token = await authService.getToken();
+    let token = await authService.getToken();
+    
+    // If no token from authService, try localStorage directly
+    if (!token) {
+      token = localStorage.getItem('token');
+    }
+    
     if (!token) {
       console.warn('No authentication token found for WebSocket connection');
       return;
@@ -159,10 +165,13 @@ export function useNotificationWebSocket() {
     // No polling interval to prevent excessive API calls
   };
 
-  // Connect on mount
+  // Connect on mount with delay to ensure token is available
   useEffect(() => {
     const initConnection = async () => {
-      await connectWebSocket();
+      // Wait a bit for authentication to complete
+      setTimeout(async () => {
+        await connectWebSocket();
+      }, 1000);
     };
     initConnection();
 

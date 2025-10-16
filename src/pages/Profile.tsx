@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
+import { ProfilePasswordSetup } from "@/components/ProfilePasswordSetup";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { API_BASE } from '@/config/api';
 import { authService } from '@/services/authService';
@@ -58,7 +59,8 @@ const ProfilePage = () => {
           available_roles: userData.available_roles || state.user.available_roles,
           user_type: userData.user_type || state.user.user_type
         };
-        await login(updatedUser, ''); // Update context without changing token
+        const currentToken = await authService.getToken();
+        await login(updatedUser, currentToken); // Update context with current token
       }
 
       setUser({
@@ -204,6 +206,9 @@ const ProfilePage = () => {
 
       {/* Menu Section */}
       <div className="p-4 space-y-6 pb-20">
+        {/* Password Setup for Google OAuth users */}
+        <ProfilePasswordSetup />
+        
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Account</CardTitle>

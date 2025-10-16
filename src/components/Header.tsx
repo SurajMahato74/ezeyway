@@ -63,8 +63,10 @@ export function Header() {
       const unreadCount = conversationList.reduce((total, conv) => total + (conv.unread_count || 0), 0);
       setTotalUnreadCount(unreadCount);
     } catch (error) {
-      // Only log error if it's not an authentication issue
-      if (!error.message?.includes('401') && !error.message?.includes('Unauthorized')) {
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        setConversations([]);
+        setTotalUnreadCount(0);
+      } else {
         console.error('Failed to load conversations:', error);
       }
     }

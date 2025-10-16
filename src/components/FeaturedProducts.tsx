@@ -35,7 +35,11 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return (R * c) / 1000; // Convert back to km
 };
 
-export function FeaturedProducts() {
+interface FeaturedProductsProps {
+  onDataLoaded?: () => void;
+}
+
+export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { toast } = useToast();
@@ -88,6 +92,7 @@ export function FeaturedProducts() {
       console.error('Error fetching featured products:', error);
     } finally {
       setLoading(false);
+      onDataLoaded?.();
     }
   };
 

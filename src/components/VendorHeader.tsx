@@ -372,9 +372,10 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
       });
 
       if (response.status === 401 || response.status === 403) {
-        console.log('🚫 Authentication error in fetch, clearing auth');
-        await authService.clearAuth();
-        navigate("/vendor/login");
+        console.log('🚫 Authentication error in fetch - user may not have vendor profile');
+        // Don't clear auth immediately - user might be a customer trying to access vendor area
+        // Let them stay on the page but show appropriate message
+        console.log('User authenticated but no vendor profile found');
         return;
       }
 
@@ -391,6 +392,7 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
         setIsActive(userProfile.is_active || false);
       } else {
         console.log('❌ No profile found in response');
+        console.log('💡 User may need to switch to vendor role or complete onboarding');
       }
     } catch (err) {
       console.error("❌ Error fetching vendor status:", err);

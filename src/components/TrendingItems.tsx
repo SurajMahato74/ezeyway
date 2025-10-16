@@ -51,7 +51,11 @@ function renderStars(rating: number) {
   );
 }
 
-export function TrendingItems() {
+interface TrendingItemsProps {
+  onDataLoaded?: () => void;
+}
+
+export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
   const navigate = useNavigate();
   const [trendingItems, setTrendingItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -93,14 +97,21 @@ export function TrendingItems() {
 
       // Fetch products
       const productsResponse = await fetch(`${API_BASE}search/products/?${params}`, { headers });
+      
+      if (!productsResponse.ok) {
+        throw new Error(`HTTP ${productsResponse.status}`);
+      }
+      
       const productsData = await productsResponse.json();
-
       const processedProducts = processProducts(productsData.results || []);
       setTrendingItems(processedProducts);
     } catch (error) {
       console.error('Error fetching trending items:', error);
+      // Set empty array on error to prevent UI issues
+      setTrendingItems([]);
     } finally {
       setLoading(false);
+      onDataLoaded?.();
     }
   };
 

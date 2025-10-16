@@ -18,7 +18,7 @@ export function LoginSwitcher({ currentType }: LoginSwitcherProps) {
     <div className="absolute top-4 right-4">
       <button
         onClick={handleSwitch}
-        className="flex items-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-sm rounded-xl text-sm font-medium text-gray-600 hover:bg-white hover:text-blue-600 transition-all shadow-lg border border-white/20"
+        className="flex items-center gap-2 px-3 py-1 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors underline"
       >
         {currentType === 'customer' ? (
           <>

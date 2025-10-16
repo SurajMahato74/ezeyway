@@ -53,8 +53,13 @@ export function CategoryScroll() {
     const fetchCategories = async () => {
       try {
         const response = await fetch(API_BASE + "categories/");
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
-        if (response.ok && data.categories) {
+        if (data.categories) {
           const formattedCategories = data.categories.map((cat, index) => ({
             id: cat.id || index + 1,
             name: cat.name,
@@ -62,6 +67,8 @@ export function CategoryScroll() {
             hasImage: !!cat.icon_url // Track if category has an image
           }));
           setCategories(formattedCategories);
+        } else {
+          setCategories([]);
         }
       } catch (error) {
         console.error("Error fetching categories:", error);

@@ -209,6 +209,18 @@ class AuthService {
       await this.updateActivity();
     }
   }
+
+  // Update user data
+  async updateUser(user: any): Promise<void> {
+    if (this.isNative) {
+      await Preferences.set({
+        key: 'auth_user',
+        value: JSON.stringify(user)
+      });
+    } else {
+      localStorage.setItem('user', JSON.stringify(user));
+    }
+  }
 }
 
 export const authService = new AuthService();

@@ -7,8 +7,8 @@ const isMobile = () => {
 
 // Use localhost for debugging CORS issues
 const getBaseUrl = () => {
-  //return 'http://localhost:8000';
-  return 'https://ezeyway.com/api';
+  return 'http://localhost:8000/api';
+  //return 'https://ezeyway.com/api';
 };
 
 // Alternative URLs to try if main ngrok fails

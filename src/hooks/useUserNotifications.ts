@@ -9,6 +9,14 @@ export function useUserNotifications() {
   // Load notifications from API
   const loadNotifications = async () => {
     try {
+      // Check if user is authenticated first
+      const { authService } = await import('@/services/authService');
+      const token = await authService.getToken();
+      if (!token) {
+        // User not authenticated, don't load notifications
+        return;
+      }
+      
       setIsLoading(true);
       const [notificationData, count] = await Promise.all([
         notificationService.getNotifications(),
@@ -18,7 +26,12 @@ export function useUserNotifications() {
       setNotifications(notificationData);
       setUnreadCount(count);
     } catch (error) {
-      console.error('Failed to load notifications:', error);
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        setNotifications([]);
+        setUnreadCount(0);
+      } else {
+        console.error('Failed to load notifications:', error);
+      }
     } finally {
       setIsLoading(false);
     }
