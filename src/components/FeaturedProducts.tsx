@@ -10,6 +10,7 @@ import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
 
 import { API_BASE } from '@/config/api';
+import { filterOwnProducts } from '@/utils/productFilter';
 
 // Google Maps precision Haversine formula with higher precision
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -86,7 +87,8 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
       const productsResponse = await fetch(`${API_BASE}search/products/?${params}`, { headers });
       const productsData = await productsResponse.json();
 
-      const processedProducts = processProducts(productsData.results || []);
+      const filteredProducts = await filterOwnProducts(productsData.results || []);
+      const processedProducts = processProducts(filteredProducts);
       setFeaturedProducts(processedProducts);
     } catch (error) {
       console.error('Error fetching featured products:', error);

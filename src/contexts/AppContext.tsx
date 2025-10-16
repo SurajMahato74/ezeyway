@@ -289,6 +289,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await authService.clearAuth();
       dispatch({ type: 'SET_USER', payload: null });
+      dispatch({ type: 'CLEAR_CART' });
       locationService.stopTracking();
     } catch (error) {
       console.error('Failed to clear auth data:', error);

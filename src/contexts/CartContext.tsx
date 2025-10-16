@@ -121,6 +121,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const token = await authService.getToken();
       if (token) {
         fetchCart();
+      } else {
+        setCart(null);
       }
     };
     checkAuthAndFetchCart();

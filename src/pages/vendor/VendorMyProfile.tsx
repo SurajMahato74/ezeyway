@@ -92,6 +92,13 @@ const VendorMyProfile = () => {
     fetchAdminDeliveryRadius();
   }, []);
 
+  // Refresh profile data when user context changes (after role switch)
+  useEffect(() => {
+    if (state.user?.user_type === 'vendor') {
+      fetchProfileData();
+    }
+  }, [state.user?.user_type]);
+
   const fetchProfileData = async () => {
     try {
       // Check vendor access first
@@ -114,15 +121,33 @@ const VendorMyProfile = () => {
           setError("Failed to switch to vendor role. Please try logging in again.");
           return;
         }
+        // Update the user context after successful role switch
+        const updatedUser = await authService.getUser();
+        if (updatedUser) {
+          const token = await authService.getToken();
+          await login(updatedUser, token);
+        }
         // Continue with profile fetch after successful role switch
       }
 
-      // Fetch vendor profile
-      const { response, data } = await apiRequest('/vendor-profiles/');
+      // Fetch vendor profile with retry logic
+      let { response, data } = await apiRequest('/vendor-profiles/');
 
+      // If we get auth error, try refreshing the token and retry once
       if (response.status === 401 || response.status === 403) {
-        setError("You don't have access to vendor features. Please complete vendor onboarding first.");
-        return;
+        console.log('Auth error, attempting to refresh and retry...');
+        const user = await authService.getUser();
+        if (user && user.user_type === 'vendor') {
+          // Retry the request
+          const retryResult = await apiRequest('/vendor-profiles/');
+          response = retryResult.response;
+          data = retryResult.data;
+        }
+        
+        if (response.status === 401 || response.status === 403) {
+          setError("You don't have access to vendor features. Please complete vendor onboarding first.");
+          return;
+        }
       }
 
       if (!response.ok) {
