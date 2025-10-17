@@ -46,6 +46,22 @@ const ProfilePage = () => {
         }
       });
 
+      if (response.status === 401) {
+        // Token might be invalid or user doesn't have access to this endpoint
+        console.log('Profile endpoint returned 401, using stored user data');
+        const storedUser = await authService.getUser();
+        if (storedUser) {
+          setUser({
+            email: storedUser.email || storedUser.username || 'User',
+            avatar: "/placeholder-avatar.jpg"
+          });
+          return;
+        } else {
+          navigateWithAuth('/profile');
+          return;
+        }
+      }
+
       if (!response.ok) {
         throw new Error("Failed to fetch profile");
       }

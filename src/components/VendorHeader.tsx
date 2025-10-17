@@ -51,6 +51,7 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
   const [conversations, setConversations] = useState([]);
   const [isActive, setIsActive] = useState(true);
   const [profileId, setProfileId] = useState<number | null>(null);
+  const [lastFetch, setLastFetch] = useState<number>(0);
 
   const unreadCount = notificationsList.filter(n => !n.read).length;
   const unreadMessagesCount = conversations.reduce((total, conv) => total + (conv.unread_count || 0), 0);
@@ -66,8 +67,8 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
     loadConversations();
     loadNotifications();
     
-    const conversationInterval = setInterval(loadConversations, 5000);
-    const notificationInterval = setInterval(loadNotifications, 5000); // Check every 5 seconds for real-time feel
+    const conversationInterval = setInterval(loadConversations, 30000); // Reduced to 30 seconds
+    const notificationInterval = setInterval(loadNotifications, 30000); // Reduced to 30 seconds
     
     // Listen for custom events
     const handleNewNotification = (event: CustomEvent) => {
@@ -351,7 +352,15 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
   const fetchVendorStatus = async () => {
     console.log('🔍 Fetching vendor status...');
     
+    // Cache for 30 seconds to prevent excessive calls
+    const now = Date.now();
+    if (now - lastFetch < 30000 && profileId !== null) {
+      console.log('⚡ Using cached vendor status');
+      return;
+    }
+    
     try {
+      setLastFetch(now);
       const isAuthenticated = await authService.isAuthenticated();
       console.log('🔐 Authentication check for fetch:', isAuthenticated);
       

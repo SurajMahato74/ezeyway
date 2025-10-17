@@ -56,6 +56,20 @@ export const switchToVendorRole = async () => {
       const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
       await simplePersistentAuth.saveVendorLogin(token, updatedUser);
       
+      // Check if vendor profile exists, create if not
+      try {
+        const { response: profileResponse } = await apiRequest('/vendor-profiles/');
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          if (!profileData.results || profileData.results.length === 0) {
+            // Create vendor profile
+            await createVendorProfile(user);
+          }
+        }
+      } catch (profileError) {
+        console.log('Profile check failed, will create on first access:', profileError);
+      }
+      
       return { success: true, message: 'Switched to vendor role' };
     } else {
       throw new Error(data?.error || 'Role switch failed');
@@ -126,6 +140,36 @@ export const checkVendorAccess = async () => {
   } catch (error) {
     console.error('Vendor access check error:', error);
     return { hasAccess: false, needsLogin: true };
+  }
+};
+
+const createVendorProfile = async (user: any) => {
+  try {
+    const profileData = {
+      business_name: user.username || 'My Business',
+      owner_name: user.username || 'Owner',
+      business_email: user.email || '',
+      business_phone: user.phone_number || '',
+      business_address: '',
+      city: '',
+      state: '',
+      pincode: '',
+      business_type: 'retailer',
+      categories: [],
+      description: '',
+      is_active: true
+    };
+    
+    const { response } = await apiRequest('/vendor-profiles/', {
+      method: 'POST',
+      body: JSON.stringify(profileData)
+    });
+    
+    if (response.ok) {
+      console.log('Vendor profile created successfully');
+    }
+  } catch (error) {
+    console.error('Failed to create vendor profile:', error);
   }
 };
 

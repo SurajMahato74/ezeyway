@@ -156,6 +156,36 @@ const VendorMyProfile = () => {
 
       if (data && data.results && data.results.length > 0) {
         const profile = data.results[0];
+      } else {
+        // No vendor profile found, create one
+        console.log('No vendor profile found, creating one...');
+        const user = await authService.getUser();
+        if (user) {
+          await createVendorProfile(user);
+          // Retry fetching after creation
+          const retryResult = await apiRequest('/vendor-profiles/');
+          if (retryResult.response.ok && retryResult.data?.results?.length > 0) {
+            const profile = retryResult.data.results[0];
+          } else {
+            // Set default values if creation failed
+            setVendorData({
+              ...vendorData,
+              businessName: user.username || 'My Business',
+              ownerName: user.username || 'Owner',
+              email: user.email || ''
+            });
+            setLoading(false);
+            return;
+          }
+        } else {
+          setError('User not found');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      if (data && data.results && data.results.length > 0) {
+        const profile = data.results[0];
 
         // Fetch documents for this vendor
         const { response: docsResponse, data: docsData } = await apiRequest('/vendor-documents/');
@@ -226,6 +256,39 @@ const VendorMyProfile = () => {
       }
     } catch (err) {
       console.error("Error fetching user profile:", err);
+    }
+  };
+
+  const createVendorProfile = async (user: any) => {
+    try {
+      const profileData = {
+        business_name: user.username || 'My Business',
+        owner_name: user.username || 'Owner',
+        business_email: user.email || '',
+        business_phone: user.phone_number || '',
+        business_address: '',
+        city: '',
+        state: '',
+        pincode: '',
+        business_type: 'retailer',
+        categories: [],
+        description: '',
+        is_active: true
+      };
+      
+      const { response } = await apiRequest('/vendor-profiles/', {
+        method: 'POST',
+        body: JSON.stringify(profileData)
+      });
+      
+      if (response.ok) {
+        console.log('Vendor profile created successfully');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to create vendor profile:', error);
+      return false;
     }
   };
 

@@ -26,10 +26,11 @@ export function RoleSwitcher() {
           // User has vendor role, just switch
           const switchResult = await switchToVendorRole();
           if (switchResult.success) {
-            const updatedUser = { ...state.user!, user_type: 'vendor' };
+            const updatedUser = { ...state.user!, user_type: 'vendor', current_role: 'vendor' };
             const token = await authService.getToken();
             await login(updatedUser, token);
-            navigate('/vendor/dashboard');
+            // Add a small delay to ensure state is updated
+            setTimeout(() => navigate('/vendor/dashboard'), 100);
           }
         } else {
           // User doesn't have vendor role, start onboarding
@@ -40,10 +41,11 @@ export function RoleSwitcher() {
         // Switch to customer
         const switchResult = await switchToCustomerRole();
         if (switchResult.success) {
-          const updatedUser = { ...state.user!, user_type: 'customer' };
+          const updatedUser = { ...state.user!, user_type: 'customer', current_role: 'customer' };
           const token = await authService.getToken();
           await login(updatedUser, token);
-          navigate('/home');
+          // Add a small delay to ensure state is updated
+          setTimeout(() => navigate('/home'), 100);
         }
       }
     } catch (error) {
