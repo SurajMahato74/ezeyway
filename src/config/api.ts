@@ -39,7 +39,10 @@ console.log('API Config Debug:', {
 
 // Helper functions
 export const getApiUrl = (endpoint: string = '') => {
-  return `${API_CONFIG.BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const url = `${API_CONFIG.BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  // Add cache busting parameter
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_cb=${Date.now()}`;
 };
 
 export const getWsUrl = (endpoint: string = '') => {
@@ -48,7 +51,16 @@ export const getWsUrl = (endpoint: string = '') => {
 
 // Standardize API endpoints
 export const normalizeEndpoint = (endpoint: string): string => {
-  return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  // Remove any leading /api/ to prevent double /api/api/
+  let cleanEndpoint = endpoint;
+  
+  // Remove /api/ from the beginning if present
+  if (cleanEndpoint.startsWith('/api/')) {
+    cleanEndpoint = cleanEndpoint.substring(4); // Remove '/api'
+  }
+  
+  // Ensure it starts with /
+  return cleanEndpoint.startsWith('/') ? cleanEndpoint : `/${cleanEndpoint}`;
 };
 
 // Legacy support - can be removed after migration

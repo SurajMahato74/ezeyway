@@ -52,8 +52,16 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false, e
 };
 
 export const apiRequest = async (endpoint: string, options: RequestInit = {}, includeAuth = true) => {
-  const normalizedEndpoint = normalizeEndpoint(endpoint);
-  const url = `${API_CONFIG.BASE_URL}${normalizedEndpoint}`;
+  // Fix double /api/ issue directly
+  let cleanEndpoint = endpoint;
+  if (cleanEndpoint.startsWith('/api/')) {
+    cleanEndpoint = cleanEndpoint.substring(4); // Remove '/api'
+  }
+  if (!cleanEndpoint.startsWith('/')) {
+    cleanEndpoint = '/' + cleanEndpoint;
+  }
+  
+  const url = `${API_CONFIG.BASE_URL}${cleanEndpoint}`;
 
   // Check if body is FormData to avoid setting Content-Type
   const isFormData = options.body instanceof FormData;
