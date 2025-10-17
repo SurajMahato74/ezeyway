@@ -65,7 +65,7 @@ export default function VendorProfile() {
       setError(null);
       
       // Fetch vendor profile first
-      const { response: vendorResponse, data: vendorData } = await apiRequest(`/api/vendors/${vendorId}/`);
+      const { response: vendorResponse, data: vendorData } = await apiRequest(`/api/vendor-profiles/${vendorId}/`);
       
       if (!vendorResponse.ok) {
         if (vendorResponse.status === 404) {

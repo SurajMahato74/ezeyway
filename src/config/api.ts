@@ -20,7 +20,7 @@ export const FALLBACK_URLS = [
 ];
 
 const getWsBaseUrl = () => {
-  return 'ws://localhost:8000';
+  return 'wss://ezeyway.com';
 };
 
 export const API_CONFIG = {

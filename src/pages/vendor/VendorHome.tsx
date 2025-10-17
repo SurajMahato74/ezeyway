@@ -143,7 +143,7 @@ const VendorHome: React.FC = () => {
       }
       
       // Fetch orders data
-      const { response: ordersResponse, data: ordersData } = await apiRequest('/vendor/orders/');
+      const { response: ordersResponse, data: ordersData } = await apiRequest('/orders/');
       console.log('Orders response:', ordersResponse.ok, ordersData);
       if (ordersResponse.ok && ordersData) {
         const orders = ordersData.results || ordersData || [];
