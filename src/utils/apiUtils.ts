@@ -5,7 +5,7 @@ import { isDevelopment, checkBackendHealth, showBackendWarning } from '@/utils/d
 // Track if we've already shown the backend warning
 let backendWarningShown = false;
 
-export const createApiHeaders = async (includeAuth = true, isFormData = false) => {
+export const createApiHeaders = async (includeAuth = true, isFormData = false, endpoint = '') => {
   const headers: Record<string, string> = {
     'ngrok-skip-browser-warning': 'true',
     'x-ngrok-skip-browser-warning': 'true',
@@ -17,7 +17,22 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false) =
   }
 
   if (includeAuth) {
-    const token = await authService.getToken();
+    let token = await authService.getToken();
+    
+    // If no main token and this is a vendor endpoint, try vendor token
+    if (!token && (endpoint.includes('vendor') || endpoint.includes('profile'))) {
+      try {
+        const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+        const vendorAuth = await simplePersistentAuth.getVendorAuth();
+        if (vendorAuth?.token) {
+          token = vendorAuth.token;
+          console.log('🔄 Using vendor token as fallback');
+        }
+      } catch (error) {
+        console.error('Failed to get vendor token:', error);
+      }
+    }
+    
     if (token) {
       headers['Authorization'] = `Token ${token}`;
     }
@@ -34,7 +49,7 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
   const isFormData = options.body instanceof FormData;
 
   const defaultOptions: RequestInit = {
-    headers: await createApiHeaders(includeAuth, isFormData),
+    headers: await createApiHeaders(includeAuth, isFormData, endpoint),
     ...options,
   };
 

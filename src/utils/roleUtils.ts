@@ -52,9 +52,13 @@ export const switchToVendorRole = async () => {
       const updatedUser = { ...user, user_type: 'vendor' };
       const token = await authService.getToken();
       
+      // Update both auth services with the same token
       await authService.setAuth(token, updatedUser);
       const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
       await simplePersistentAuth.saveVendorLogin(token, updatedUser);
+      
+      // Ensure the main authService token is updated for API calls
+      await authService.updateUser(updatedUser);
       
       // Check if vendor profile exists, create if not
       try {
