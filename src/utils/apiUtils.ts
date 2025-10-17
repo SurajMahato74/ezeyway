@@ -18,6 +18,7 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false, e
 
   if (includeAuth) {
     let token = await authService.getToken();
+    console.log('🔑 Main token for', endpoint, ':', token ? `${token.substring(0, 10)}...` : 'NO TOKEN');
     
     // If no main token, try vendor token as fallback
     if (!token) {
@@ -26,11 +27,14 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false, e
         const vendorAuth = await simplePersistentAuth.getVendorAuth();
         if (vendorAuth?.token) {
           token = vendorAuth.token;
-          console.log('🔄 Using vendor token as fallback for:', endpoint);
+          console.log('🔄 Using vendor token as fallback for:', endpoint, `${token.substring(0, 10)}...`);
           
           // Sync vendor token back to main auth to prevent future issues
           const { authService } = await import('@/services/authService');
           await authService.setAuth(vendorAuth.token, vendorAuth.user);
+          console.log('⚙️ Synced vendor token to main auth');
+        } else {
+          console.log('❌ No vendor token available');
         }
       } catch (error) {
         console.error('Failed to get vendor token:', error);
@@ -39,6 +43,8 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false, e
     
     if (token) {
       headers['Authorization'] = `Token ${token}`;
+    } else {
+      console.log('⚠️ No token available for:', endpoint);
     }
   }
 

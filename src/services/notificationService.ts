@@ -345,26 +345,11 @@ class NotificationService {
   // API methods for notifications
   async getNotifications() {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return [];
-      }
-
-      const response = await fetch('/api/vendor-notifications/', {
-        headers: {
-          'Authorization': `Token ${token}`,
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-          'x-ngrok-skip-browser-warning': 'true'
-        }
-      });
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { response, data } = await apiRequest('/vendor-notifications/');
       
-      if (response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          return data.results || [];
-        }
+      if (response.ok && data) {
+        return data.results || data || [];
       }
       return [];
     } catch (error) {
@@ -385,12 +370,9 @@ class NotificationService {
 
   async markAsRead(id: number) {
     try {
-      const response = await fetch(`/api/notifications/${id}/read/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { response } = await apiRequest(`/notifications/${id}/read/`, {
+        method: 'POST'
       });
       
       if (response.ok) {
@@ -403,12 +385,9 @@ class NotificationService {
 
   async markAllAsRead() {
     try {
-      const response = await fetch('/api/notifications/mark-all-read/', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { response } = await apiRequest('/notifications/mark-all-read/', {
+        method: 'POST'
       });
       
       if (response.ok) {

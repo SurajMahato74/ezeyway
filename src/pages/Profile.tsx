@@ -9,6 +9,7 @@ import { ProfilePasswordSetup } from "@/components/ProfilePasswordSetup";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { API_BASE } from '@/config/api';
 import { authService } from '@/services/authService';
+import { apiRequest } from '@/utils/apiUtils';
 import { useApp } from '@/contexts/AppContext';
 
 // Menu items constant for cleaner code
@@ -39,12 +40,12 @@ const ProfilePage = () => {
         return;
       }
 
-      const response = await fetch(API_BASE + "profile/", {
-        headers: {
-          "Authorization": `Token ${token}`,
-          "ngrok-skip-browser-warning": "true"
-        }
-      });
+      const { response, data: userData } = await apiRequest('/profile/');
+      
+      if (!response.ok && userData) {
+        // Handle API response data if available
+        console.log('Profile API response:', userData);
+      }
 
       if (response.status === 401) {
         // Token might be invalid or user doesn't have access to this endpoint
@@ -66,7 +67,7 @@ const ProfilePage = () => {
         throw new Error("Failed to fetch profile");
       }
 
-      const userData = await response.json();
+      // userData is already parsed from apiRequest
 
       // Update the context with the latest user data including available_roles
       if (state.user) {
@@ -97,16 +98,7 @@ const ProfilePage = () => {
 
   const handleLogout = async () => {
     try {
-      const token = await authService.getToken();
-      if (token) {
-        await fetch(API_BASE + "logout/", {
-          method: "POST",
-          headers: {
-            "Authorization": `Token ${token}`,
-            "ngrok-skip-browser-warning": "true"
-          }
-        });
-      }
+      await apiRequest('/logout/', { method: 'POST' });
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
@@ -119,23 +111,15 @@ const ProfilePage = () => {
     if (!file) return;
     
     try {
-      const token = await authService.getToken();
-      if (!token) return;
-      
       const formData = new FormData();
       formData.append('profile_picture', file);
       
-      const response = await fetch(API_BASE + "profile/upload-picture/", {
-        method: "POST",
-        headers: {
-          Authorization: `Token ${token}`,
-          "ngrok-skip-browser-warning": "true"
-        },
+      const { response, data: result } = await apiRequest('/profile/upload-picture/', {
+        method: 'POST',
         body: formData,
       });
       
-      if (response.ok) {
-        const result = await response.json();
+      if (response.ok && result) {
         setUser(prev => ({ ...prev, avatar: result.profile_picture }));
       }
     } catch (error) {
