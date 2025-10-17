@@ -53,7 +53,14 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false, e
 
 export const apiRequest = async (endpoint: string, options: RequestInit = {}, includeAuth = true) => {
   // Fix double /api/ issue using the normalizeEndpoint function
-  const cleanEndpoint = normalizeEndpoint(endpoint);
+  let cleanEndpoint = normalizeEndpoint(endpoint);
+  
+  // Temporary fix: Map incorrect vendors/settings to vendor-profiles
+  if (cleanEndpoint === '/vendors/settings/' || cleanEndpoint === '/vendors/settings') {
+    cleanEndpoint = '/vendor-profiles/';
+    console.log('🔧 Mapped vendors/settings to vendor-profiles');
+  }
+  
   const url = `${API_CONFIG.BASE_URL}${cleanEndpoint}`;
 
   // Check if body is FormData to avoid setting Content-Type
