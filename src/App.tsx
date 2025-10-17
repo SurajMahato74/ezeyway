@@ -56,6 +56,7 @@ import Products from "./pages/vendor/Products";
 import AddProductPage from "./pages/vendor/AddProductPage";
 import VendorWallet from "./pages/vendor/VendorWallet";
 import VendorMyProfile from "./pages/vendor/VendorMyProfile";
+
 import VendorProfileManagement from "./pages/vendor/VendorProfileManagement";
 import VendorSecurity from "./pages/vendor/VendorSecurity";
 import VendorCompany from "./pages/vendor/VendorCompany";
