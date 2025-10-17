@@ -55,13 +55,18 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
   // Fix double /api/ issue using the normalizeEndpoint function
   let cleanEndpoint = normalizeEndpoint(endpoint);
   
-  // Block calls to non-existent vendor settings endpoints
+  // Completely block calls to non-existent vendor settings endpoints
   if (cleanEndpoint.includes('/vendors/settings') || cleanEndpoint.includes('/vendor-profiles/settings')) {
-    console.log('🚫 Blocked call to non-existent endpoint:', endpoint);
-    // Return successful response with empty data to prevent component errors
+    console.log('🚫 BLOCKED: Removing call to non-existent endpoint:', endpoint);
+    // Return empty successful response to prevent errors
     return Promise.resolve({
-      response: { ok: true, status: 200, json: () => Promise.resolve({}) } as Response,
-      data: { results: [], message: 'Settings endpoint not implemented' }
+      response: { 
+        ok: true, 
+        status: 200, 
+        json: () => Promise.resolve({}),
+        headers: new Headers({ 'content-type': 'application/json' })
+      } as Response,
+      data: { results: [] }
     });
   }
   
