@@ -194,6 +194,19 @@ class AuthService {
         console.log('🚀 Auto-login successful for vendor:', user.username);
         return true;
       } else {
+        // Check if vendor token is still valid before clearing
+        try {
+          const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+          const vendorAuth = await simplePersistentAuth.getVendorAuth();
+          if (vendorAuth?.token && vendorAuth?.user) {
+            console.log('🔄 Main auth expired but vendor auth valid, syncing...');
+            await this.setAuth(vendorAuth.token, vendorAuth.user);
+            return true;
+          }
+        } catch (error) {
+          console.error('Failed to check vendor auth:', error);
+        }
+        
         console.log('❌ Session expired, clearing auth');
         await this.clearAuth();
       }
