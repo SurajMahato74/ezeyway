@@ -52,7 +52,7 @@ export default function VendorAnalytics() {
       setLoading(true);
       
       // Fetch orders
-      const { response: ordersResponse, data: ordersData } = await apiRequest('/vendor/orders/');
+      const { response: ordersResponse, data: ordersData } = await apiRequest('/orders/');
       if (ordersResponse.ok) {
         const allOrders = ordersData.results || ordersData || [];
         setOrders(allOrders);

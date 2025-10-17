@@ -55,10 +55,21 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
   // Fix double /api/ issue using the normalizeEndpoint function
   let cleanEndpoint = normalizeEndpoint(endpoint);
   
-  // Temporary fix: Map incorrect vendors/settings to vendor-profiles
-  if (cleanEndpoint === '/vendors/settings/' || cleanEndpoint === '/vendors/settings') {
-    cleanEndpoint = '/vendor-profiles/';
-    console.log('🔧 Mapped vendors/settings to vendor-profiles');
+  // Log any calls to non-existent vendor settings endpoints
+  if (cleanEndpoint.includes('/vendors/settings') || cleanEndpoint.includes('/vendor-profiles/settings')) {
+    console.error('🚀 FOUND THE PROBLEMATIC CALL:', endpoint);
+    console.error('🚀 Stack trace:', new Error().stack);
+    // Return early with a rejected promise to prevent the 404
+    return Promise.resolve({
+      response: { ok: false, status: 404 } as Response,
+      data: { error: 'Endpoint does not exist on server' }
+    });
+  }
+  
+  // Map vendor/orders to orders
+  if (cleanEndpoint.includes('/vendor/orders')) {
+    cleanEndpoint = '/orders/';
+    console.log('🔧 Mapped vendor/orders to orders:', endpoint, '->', cleanEndpoint);
   }
   
   const url = `${API_CONFIG.BASE_URL}${cleanEndpoint}`;
