@@ -513,7 +513,10 @@ const ProductManagement: React.FC = () => {
                             <span className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded">★</span>
                           )}
                           {product.free_delivery && (
-                            <span className="text-xs bg-green-100 text-green-800 px-1 rounded">🚚</span>
+                            <span className="text-xs bg-green-100 text-green-800 px-1 rounded">🚚 Free</span>
+                          )}
+                          {product.custom_delivery_fee_enabled && product.custom_delivery_fee && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-1 rounded">🚚 ₹{product.custom_delivery_fee}</span>
                           )}
                         </div>
                       </div>
@@ -1130,15 +1133,70 @@ const ProductManagement: React.FC = () => {
                     )}
                   </div>
                   
-                  <div className="flex items-center space-x-2">
-                    <Label>Free Delivery</Label>
-                    {editMode ? (
-                      <Switch 
-                        checked={editData.free_delivery ?? selectedProduct.free_delivery}
-                        onCheckedChange={(checked) => setEditData({...editData, free_delivery: checked})}
-                      />
-                    ) : (
-                      <Switch checked={selectedProduct.free_delivery} disabled />
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <Label>Free Delivery</Label>
+                      {editMode ? (
+                        <Switch 
+                          checked={editData.free_delivery ?? selectedProduct.free_delivery}
+                          onCheckedChange={(checked) => {
+                            setEditData({
+                              ...editData, 
+                              free_delivery: checked,
+                              // If free delivery is enabled, disable custom delivery fee
+                              custom_delivery_fee_enabled: checked ? false : editData.custom_delivery_fee_enabled,
+                              custom_delivery_fee: checked ? null : editData.custom_delivery_fee
+                            });
+                          }}
+                        />
+                      ) : (
+                        <Switch checked={selectedProduct.free_delivery} disabled />
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Label>Custom Delivery Fee</Label>
+                      {editMode ? (
+                        <Switch 
+                          checked={(editData.custom_delivery_fee_enabled ?? selectedProduct.custom_delivery_fee_enabled) && !(editData.free_delivery ?? selectedProduct.free_delivery)}
+                          disabled={editData.free_delivery ?? selectedProduct.free_delivery}
+                          onCheckedChange={(checked) => {
+                            setEditData({
+                              ...editData, 
+                              custom_delivery_fee_enabled: checked,
+                              custom_delivery_fee: checked ? editData.custom_delivery_fee : null
+                            });
+                          }}
+                        />
+                      ) : (
+                        <Switch checked={selectedProduct.custom_delivery_fee_enabled && !selectedProduct.free_delivery} disabled />
+                      )}
+                    </div>
+                    
+                    {editMode && (editData.custom_delivery_fee_enabled ?? selectedProduct.custom_delivery_fee_enabled) && !(editData.free_delivery ?? selectedProduct.free_delivery) && (
+                      <div>
+                        <Label>Delivery Fee Amount</Label>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          placeholder="Enter delivery fee"
+                          value={editData.custom_delivery_fee ?? selectedProduct.custom_delivery_fee ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setEditData({
+                              ...editData, 
+                              custom_delivery_fee: value ? Number(value) : null
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
+                    
+                    {!editMode && selectedProduct.custom_delivery_fee_enabled && selectedProduct.custom_delivery_fee && !selectedProduct.free_delivery && (
+                      <div>
+                        <Label>Delivery Fee Amount</Label>
+                        <p className="text-sm font-medium">₹{selectedProduct.custom_delivery_fee}</p>
+                      </div>
                     )}
                   </div>
                   

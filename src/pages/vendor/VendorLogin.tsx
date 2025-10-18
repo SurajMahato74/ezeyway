@@ -56,15 +56,9 @@ export default function VendorLogin() {
         const user = await authService.getUser();
         console.log('Existing user:', user);
         
-        // If user has vendor role available, offer to switch
-        if (user?.available_roles?.includes('vendor')) {
-          if (user.user_type === 'customer') {
-            // Auto-switch to vendor role
-            await switchToVendorRole();
-          } else {
-            // Already vendor, redirect to dashboard
-            navigate('/vendor/dashboard');
-          }
+        // Only redirect if already a vendor with approved profile
+        if (user?.user_type === 'vendor' && user?.available_roles?.includes('vendor')) {
+          navigate('/vendor/dashboard');
         }
       }
     } catch (error) {

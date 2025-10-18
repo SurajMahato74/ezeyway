@@ -18,6 +18,8 @@ export interface Product {
   status: 'active' | 'draft' | 'archived';
   featured: boolean;
   free_delivery?: boolean;
+  custom_delivery_fee_enabled?: boolean;
+  custom_delivery_fee?: number;
   seo_title?: string;
   seo_description?: string;
   dynamic_fields: Record<string, any>;

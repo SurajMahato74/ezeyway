@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { VendorPage } from "@/components/VendorLayout";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
+
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from '@/utils/apiUtils';
 import { authService } from '@/services/authService';

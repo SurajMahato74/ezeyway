@@ -52,6 +52,8 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
   const [isActive, setIsActive] = useState(true);
   const [profileId, setProfileId] = useState<number | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [canToggle, setCanToggle] = useState<boolean>(true);
 
   const unreadCount = notificationsList.filter(n => !n.read).length;
   const unreadMessagesCount = conversations.reduce((total, conv) => total + (conv.unread_count || 0), 0);
@@ -63,12 +65,14 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
     console.log('🚀 VendorHeader initializing...');
     
     fetchVendorStatus();
+    fetchWalletBalance();
     requestNotificationPermission();
     loadConversations();
     loadNotifications();
     
     const conversationInterval = setInterval(loadConversations, 30000); // Reduced to 30 seconds
     const notificationInterval = setInterval(loadNotifications, 30000); // Reduced to 30 seconds
+    const walletInterval = setInterval(fetchWalletBalance, 60000); // Check wallet every minute
     
     // Listen for custom events
     const handleNewNotification = (event: CustomEvent) => {
@@ -210,6 +214,7 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
     return () => {
       clearInterval(conversationInterval);
       clearInterval(notificationInterval);
+      clearInterval(walletInterval);
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
       window.removeEventListener('orderCreated', handleOrderCreated as EventListener);
       window.removeEventListener('refundRequest', handleRefundRequest as EventListener);
@@ -365,8 +370,7 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
       console.log('🔐 Authentication check for fetch:', isAuthenticated);
       
       if (!isAuthenticated) {
-        console.log('❌ Not authenticated, redirecting to login');
-        navigate("/vendor/login");
+        console.log('❌ Not authenticated');
         return;
       }
 
@@ -413,8 +417,59 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
     }
   };
 
+  const fetchWalletBalance = async () => {
+    try {
+      const { response, data } = await apiRequest('/vendor-wallet/');
+      if (response.ok && data) {
+        const balance = data.balance || 0;
+        const previousBalance = walletBalance;
+        setWalletBalance(balance);
+        setCanToggle(balance >= 100);
+        
+        // Auto-disable if balance is low and currently active
+        if (balance < 100 && isActive) {
+          setIsActive(false);
+          
+          // Only show toast once when balance first drops below 100
+          const hasShownLowBalanceWarning = localStorage.getItem('lowBalanceWarningShown');
+          if (!hasShownLowBalanceWarning) {
+            localStorage.setItem('lowBalanceWarningShown', 'true');
+            toast({
+              title: "Status Changed",
+              description: "Automatically set to offline due to low wallet balance (< 100 points)",
+              variant: "destructive",
+            });
+          }
+        }
+        
+        // Auto-enable when balance is restored and clear warning flag
+        if (balance >= 100 && previousBalance < 100 && !isActive) {
+          setIsActive(true);
+          localStorage.removeItem('lowBalanceWarningShown');
+          toast({
+            title: "Status Changed",
+            description: "Automatically set to online - wallet balance restored",
+            variant: "default",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch wallet balance:', error);
+    }
+  };
+
   const toggleStatus = async () => {
     console.log('🔄 Toggle status started');
+    
+    // Check wallet balance before allowing toggle to online
+    if (!isActive && walletBalance < 100) {
+      toast({
+        title: "Insufficient Balance",
+        description: `Minimum 100 points required to go online. Current balance: ${walletBalance}`,
+        variant: "destructive",
+      });
+      return;
+    }
     
     // Debug authentication
     await debugAuth();
@@ -424,8 +479,7 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
       console.log('🔐 Authentication check:', isAuthenticated);
       
       if (!isAuthenticated) {
-        console.log('❌ Not authenticated, redirecting to login');
-        navigate("/vendor/login");
+        console.log('❌ Not authenticated');
         return;
       }
 
@@ -462,6 +516,19 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
         dataError: data?.error,
         dataMessage: data?.message
       });
+
+      // Handle wallet balance error
+      if (response.status === 400 && data?.error?.includes('wallet balance')) {
+        setIsActive(false);
+        setCanToggle(false);
+        setWalletBalance(data.wallet_balance || 0);
+        toast({
+          title: "Insufficient Balance",
+          description: data.error,
+          variant: "destructive",
+        });
+        return;
+      }
 
       // Handle different response scenarios
       if (response.status === 401 || response.status === 403) {
@@ -551,13 +618,19 @@ export function VendorHeader({ title, subtitle, headerActions }: VendorHeaderPro
             }`}>
               {isActive ? 'Online' : 'Offline'}
             </span>
+            {!canToggle && (
+              <span className="text-xs text-red-600 font-medium">Low Balance</span>
+            )}
             {isConnected && (
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Real-time notifications active" />
             )}
           </div>
           <button
             onClick={toggleStatus}
+            disabled={!canToggle && !isActive}
+            title={!canToggle ? `Minimum 100 points required. Current: ${walletBalance}` : ''}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 ${
+              !canToggle && !isActive ? 'bg-red-400 cursor-not-allowed opacity-50' :
               isActive ? 'bg-green-500' : 'bg-gray-400'
             }`}
           >

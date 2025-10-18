@@ -137,7 +137,7 @@ const VendorHome: React.FC = () => {
       }
       
       // Fetch wallet balance
-      const { response: walletResponse, data: walletData } = await apiRequest('accounts/wallet/');
+      const { response: walletResponse, data: walletData } = await apiRequest('vendor-wallet/');
       if (walletResponse.ok && walletData) {
         setWalletBalance(parseFloat(walletData.balance) || 0);
       }

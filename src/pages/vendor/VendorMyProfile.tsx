@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from '@/utils/apiUtils';
 import { authService } from '@/services/authService';
 import { useApp } from '@/contexts/AppContext';
-import { RoleSwitcher } from '@/components/RoleSwitcher';
+
 import { RoleAccessHelper } from '@/components/RoleAccessHelper';
 import { checkVendorAccess, switchToVendorRole } from '@/utils/roleUtils';
 import { VendorAuthGuard } from '@/components/VendorAuthGuard';
@@ -156,44 +156,6 @@ const VendorMyProfile = () => {
 
       if (data && data.results && data.results.length > 0) {
         const profile = data.results[0];
-      } else {
-        // No vendor profile found, create one
-        console.log('No vendor profile found, creating one...');
-        const user = await authService.getUser();
-        if (user) {
-          await createVendorProfile(user);
-          // Retry fetching after creation
-          const retryResult = await apiRequest('/vendor-profiles/');
-          if (retryResult.response.ok && retryResult.data?.results?.length > 0) {
-            const profile = retryResult.data.results[0];
-          } else {
-            // Set default values if creation failed
-            setVendorData({
-              ...vendorData,
-              businessName: user.username || 'My Business',
-              ownerName: user.username || 'Owner',
-              email: user.email || ''
-            });
-            setLoading(false);
-            return;
-          }
-        } else {
-          setError('User not found');
-          setLoading(false);
-          return;
-        }
-      }
-      
-      if (data && data.results && data.results.length > 0) {
-        const profile = data.results[0];
-
-        // Fetch documents for this vendor
-        const { response: docsResponse, data: docsData } = await apiRequest('/vendor-documents/');
-
-        let documents = [];
-        if (docsResponse.ok && docsData) {
-          documents = docsData.results || [];
-        }
 
         setVendorData({
           businessName: profile.business_name || "",
@@ -205,7 +167,7 @@ const VendorMyProfile = () => {
           state: profile.state || "",
           pincode: profile.pincode || "",
           businessType: profile.business_type || "",
-          categories: profile.categories || [],
+          categories: Array.isArray(profile.categories) ? profile.categories : [],
           description: profile.description || "",
           bankName: profile.bank_name || "",
           accountNumber: profile.account_number || "",
@@ -213,14 +175,66 @@ const VendorMyProfile = () => {
           accountHolderName: profile.account_holder_name || "",
           gstNumber: profile.gst_number || "",
           panNumber: profile.pan_number || "",
-          businessLicense: profile.business_license_file ? { name: "Business License", url: profile.business_license_file } : null,
-          gstCertificate: profile.gst_certificate ? { name: "GST Certificate", url: profile.gst_certificate } : null,
-          fssaiLicense: profile.fssai_license ? { name: "FSSAI License", url: profile.fssai_license } : null,
-          additionalDocs: documents.map(doc => ({ name: `Document ${doc.id}`, url: doc.document })),
+          businessLicense: profile.business_license_file_url ? { name: "Business License", url: profile.business_license_file_url } : null,
+          gstCertificate: profile.gst_certificate_url ? { name: "GST Certificate", url: profile.gst_certificate_url } : null,
+          fssaiLicense: profile.fssai_license_url ? { name: "FSSAI License", url: profile.fssai_license_url } : null,
+          additionalDocs: (profile.documents || []).map(doc => ({ name: `Document ${doc.id}`, url: doc.document_url })),
           deliveryRadius: profile.delivery_radius?.toString() || "",
           minOrderAmount: profile.min_order_amount || "",
-          profileImage: profile.user_info?.profile_picture || null // Use the URL directly
+          profileImage: profile.user_info?.profile_picture || null
         });
+      } else {
+        // No vendor profile found, create one
+        console.log('No vendor profile found, creating one...');
+        const user = await authService.getUser();
+        if (user) {
+          const created = await createVendorProfile(user);
+          if (created) {
+            // Retry fetching after creation
+            const retryResult = await apiRequest('/vendor-profiles/');
+            if (retryResult.response.ok && retryResult.data?.results?.length > 0) {
+              const profile = retryResult.data.results[0];
+              setVendorData({
+                businessName: profile.business_name || "",
+                ownerName: profile.owner_name || "",
+                email: profile.business_email || "",
+                phone: profile.business_phone || "",
+                address: profile.business_address || "",
+                city: profile.city || "",
+                state: profile.state || "",
+                pincode: profile.pincode || "",
+                businessType: profile.business_type || "",
+                categories: Array.isArray(profile.categories) ? profile.categories : [],
+                description: profile.description || "",
+                bankName: profile.bank_name || "",
+                accountNumber: profile.account_number || "",
+                ifscCode: profile.ifsc_code || "",
+                accountHolderName: profile.account_holder_name || "",
+                gstNumber: profile.gst_number || "",
+                panNumber: profile.pan_number || "",
+                businessLicense: profile.business_license_file_url ? { name: "Business License", url: profile.business_license_file_url } : null,
+                gstCertificate: profile.gst_certificate_url ? { name: "GST Certificate", url: profile.gst_certificate_url } : null,
+                fssaiLicense: profile.fssai_license_url ? { name: "FSSAI License", url: profile.fssai_license_url } : null,
+                additionalDocs: (profile.documents || []).map(doc => ({ name: `Document ${doc.id}`, url: doc.document_url })),
+                deliveryRadius: profile.delivery_radius?.toString() || "",
+                minOrderAmount: profile.min_order_amount || "",
+                profileImage: profile.user_info?.profile_picture || null
+              });
+            } else {
+              // Set default values if creation failed
+              setVendorData({
+                ...vendorData,
+                businessName: user.username || 'My Business',
+                ownerName: user.username || 'Owner',
+                email: user.email || ''
+              });
+            }
+          } else {
+            setError('Failed to create vendor profile');
+          }
+        } else {
+          setError('User not found');
+        }
       }
     } catch (err) {
       console.error("Error fetching profile:", err);
@@ -294,9 +308,8 @@ const VendorMyProfile = () => {
 
   const fetchAdminDeliveryRadius = async () => {
     try {
-      const response = await fetch('/api/delivery-radius/');
-      const data = await response.json();
-      if (response.ok) {
+      const { response, data } = await apiRequest('/delivery-radius/');
+      if (response.ok && data) {
         setAdminDeliveryRadius(data.delivery_radius);
       }
     } catch (error) {
@@ -365,7 +378,7 @@ const VendorMyProfile = () => {
     formData.append('profile_picture', file);
     
     // Update user profile picture using new endpoint
-    const { response, data: result } = await apiRequest('/api/profile/upload-picture/', {
+    const { response, data: result } = await apiRequest('/profile/upload-picture/', {
       method: "POST",
       body: formData,
     });
@@ -1150,14 +1163,7 @@ const VendorMyProfile = () => {
           </Tabs>
         </div>
 
-        {/* Role Switcher */}
-        <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-          <div className="mb-2">
-            <Label className="text-sm font-medium text-gray-700">Switch Role</Label>
-            <p className="text-xs text-gray-500">You can switch between customer and vendor roles</p>
-          </div>
-          <RoleSwitcher />
-        </div>
+
 
         {/* Logout Button */}
         <div className="p-4 pb-20">

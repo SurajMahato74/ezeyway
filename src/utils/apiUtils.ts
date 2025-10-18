@@ -165,14 +165,12 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
           }
         }
         
-        // If refresh fails, redirect to login
-        console.log('❌ Token refresh failed, redirecting to login');
-        window.location.href = '/vendor/login';
+        // If refresh fails, return error
+        console.log('❌ Token refresh failed');
         return { response, data: { error: 'Authentication required' } };
         
       } catch (refreshError) {
         console.error('Token refresh error:', refreshError);
-        window.location.href = '/vendor/login';
         return { response, data: { error: 'Authentication required' } };
       }
     }

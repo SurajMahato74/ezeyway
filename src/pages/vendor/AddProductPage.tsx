@@ -48,6 +48,8 @@ const productSchema = z.object({
   status: z.enum(['active', 'draft', 'archived']).default('active'),
   featured: z.boolean().default(false),
   free_delivery: z.boolean().default(false),
+  custom_delivery_fee_enabled: z.boolean().default(false),
+  custom_delivery_fee: z.number().min(0).optional(),
   seo_title: z.string().optional(),
   seo_description: z.string().optional(),
   dynamic_fields: z.record(z.any()).default({})
@@ -83,6 +85,8 @@ const AddProductPage: React.FC = () => {
       status: 'active',
       featured: false,
       free_delivery: false,
+      custom_delivery_fee_enabled: false,
+      custom_delivery_fee: undefined,
       dynamic_fields: {}
     }
   });
@@ -646,18 +650,70 @@ const AddProductPage: React.FC = () => {
               />
             </div>
             
-            <div className="flex items-center space-x-2">
-              <Controller
-                name="free_delivery"
-                control={control}
-                render={({ field }) => (
-                  <Switch 
-                    checked={field.value} 
-                    onCheckedChange={field.onChange}
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Controller
+                  name="free_delivery"
+                  control={control}
+                  render={({ field }) => (
+                    <Switch 
+                      checked={field.value} 
+                      onCheckedChange={(checked) => {
+                        field.onChange(checked);
+                        if (checked) {
+                          // If free delivery is enabled, disable custom delivery fee
+                          setValue('custom_delivery_fee_enabled', false);
+                          setValue('custom_delivery_fee', undefined);
+                        }
+                      }}
+                    />
+                  )}
+                />
+                <Label className="text-xs font-medium text-gray-700">Free Delivery</Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Controller
+                  name="custom_delivery_fee_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <Switch 
+                      checked={field.value && !watch('free_delivery')} 
+                      disabled={watch('free_delivery')}
+                      onCheckedChange={(checked) => {
+                        field.onChange(checked);
+                        if (!checked) {
+                          setValue('custom_delivery_fee', undefined);
+                        }
+                      }}
+                    />
+                  )}
+                />
+                <Label className="text-xs font-medium text-gray-700">Custom Delivery Fee</Label>
+              </div>
+              
+              {watch('custom_delivery_fee_enabled') && !watch('free_delivery') && (
+                <div className="space-y-1">
+                  <Label htmlFor="custom_delivery_fee" className="text-xs font-medium text-gray-700">Delivery Fee Amount</Label>
+                  <Controller
+                    name="custom_delivery_fee"
+                    control={control}
+                    render={({ field }) => (
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        placeholder="Enter delivery fee"
+                        className="h-8 text-xs"
+                        value={field.value || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(value ? Number(value) : undefined);
+                        }}
+                      />
+                    )}
                   />
-                )}
-              />
-              <Label className="text-xs font-medium text-gray-700">Free Delivery</Label>
+                </div>
+              )}
             </div>
           </div>
 

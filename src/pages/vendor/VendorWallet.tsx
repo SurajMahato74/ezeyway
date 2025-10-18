@@ -56,7 +56,7 @@ const VendorWallet: React.FC = () => {
   // Fetch wallet data
   const fetchWalletData = async () => {
     try {
-      const { response, data } = await apiRequest('accounts/wallet/');
+      const { response, data } = await apiRequest('vendor-wallet/');
       
       if (response.ok && data) {
         setWalletData(data);
@@ -85,7 +85,7 @@ const VendorWallet: React.FC = () => {
         params.append('date_to', customDateTo);
       }
       
-      const { response, data } = await apiRequest(`accounts/wallet/transactions/?${params}`);
+      const { response, data } = await apiRequest(`wallet/transactions/?${params}`);
       
       if (response.ok && data) {
         setTransactions(data.transactions);
@@ -154,7 +154,7 @@ const VendorWallet: React.FC = () => {
 
   const verifyPayment = async (pidx: string) => {
     try {
-      const { response, data } = await apiRequest('accounts/wallet/khalti-verify/', {
+      const { response, data } = await apiRequest('wallet/khalti-verify/', {
         method: 'POST',
         body: JSON.stringify({ pidx }),
       });
@@ -188,7 +188,7 @@ const VendorWallet: React.FC = () => {
     if (selectedPaymentMethod === 'khalti') {
       try {
         // Initiate Khalti payment via backend
-        const { response, data } = await apiRequest('accounts/wallet/khalti-payment/', {
+        const { response, data } = await apiRequest('wallet/khalti-payment/', {
           method: 'POST',
           body: JSON.stringify({
             amount: parseFloat(rechargeAmount)

@@ -76,6 +76,8 @@ const VendorProfileManagement = () => {
   const [uploadingDocument, setUploadingDocument] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [shopImages, setShopImages] = useState<any[]>([]);
   
   const [profileData, setProfileData] = useState<VendorProfileData>({
     businessName: "Fresh Farm Valley",
@@ -144,10 +146,33 @@ const VendorProfileManagement = () => {
     { value: "dairy", label: "Dairy Products" },
   ];
 
-  const categories = [
-    "Vegetables", "Fruits", "Dairy", "Meat", "Bakery", "Beverages", 
-    "Snacks", "Organic", "Frozen", "Spices", "Grains", "Oil"
-  ];
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { response, data } = await apiRequest('/categories/');
+        if (response.ok && data.categories) {
+          setAvailableCategories(data.categories.map((cat: any) => cat.name));
+        } else {
+          // Fallback categories
+          setAvailableCategories([
+            "Vegetables", "Fruits", "Dairy", "Meat", "Bakery", "Beverages", 
+            "Snacks", "Organic", "Frozen", "Spices", "Grains", "Oil", "Electronics", "Decoration"
+          ]);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        // Fallback categories
+        setAvailableCategories([
+          "Vegetables", "Fruits", "Dairy", "Meat", "Bakery", "Beverages", 
+          "Snacks", "Organic", "Frozen", "Spices", "Grains", "Oil", "Electronics", "Decoration"
+        ]);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
@@ -178,8 +203,18 @@ const VendorProfileManagement = () => {
       const { response, data } = await apiRequest('/vendor-profiles/');
 
       if (response.ok && data) {
+        console.log('Full API Response:', data);
         if (data.results && data.results.length > 0) {
           const vendorProfile = data.results[0];
+          console.log('Vendor Profile:', vendorProfile);
+          console.log('Documents:', vendorProfile.documents);
+          console.log('Shop Images:', vendorProfile.shop_images);
+          console.log('Categories:', vendorProfile.categories);
+          
+          // Store documents and shop images
+          setDocuments(vendorProfile.documents || []);
+          setShopImages(vendorProfile.shop_images || []);
+          
           // Map API response to local state
           setProfileData({
             businessName: vendorProfile.business_name || '',
@@ -219,9 +254,9 @@ const VendorProfileManagement = () => {
             ifscCode: vendorProfile.ifsc_code || '',
             accountHolderName: vendorProfile.account_holder_name || '',
             upiId: vendorProfile.upi_id || '',
-            businessLicense: vendorProfile.business_license_file || '',
-            gstCertificate: vendorProfile.gst_certificate || '',
-            fssaiLicense: vendorProfile.fssai_license || '',
+            businessLicense: vendorProfile.business_license_file_url || vendorProfile.business_license_file || '',
+            gstCertificate: vendorProfile.gst_certificate_url || vendorProfile.gst_certificate || '',
+            fssaiLicense: vendorProfile.fssai_license_url || vendorProfile.fssai_license || '',
             autoAcceptOrders: vendorProfile.auto_accept_orders || false,
             notificationSettings: {
               orderAlerts: true,
@@ -299,8 +334,12 @@ const VendorProfileManagement = () => {
         auto_accept_orders: profileData.autoAcceptOrders,
       };
 
-      const { response } = await apiRequest('/vendor-profiles/', {
-        method: isFirstTime ? 'POST' : 'PUT',
+      const profileId = isFirstTime ? null : (await apiRequest('/vendor-profiles/')).data?.results?.[0]?.id;
+      const url = isFirstTime ? '/vendor-profiles/' : `/vendor-profiles/${profileId}/`;
+      const method = isFirstTime ? 'POST' : 'PATCH';
+      
+      const { response } = await apiRequest(url, {
+        method,
         body: JSON.stringify(payload),
       });
 
@@ -337,8 +376,15 @@ const VendorProfileManagement = () => {
       const formData = new FormData();
       formData.append(documentType, file);
       
-      const token = localStorage.getItem('token');
-      const { response } = await apiRequest('/vendor-profiles/', {
+      // Get the vendor profile ID first
+      const profileResponse = await apiRequest('/vendor-profiles/');
+      const profileId = profileResponse.data?.results?.[0]?.id;
+      
+      if (!profileId) {
+        throw new Error('Vendor profile not found');
+      }
+      
+      const { response, data } = await apiRequest(`/vendor-profiles/${profileId}/`, {
         method: 'PATCH',
         body: formData,
       });
@@ -347,10 +393,12 @@ const VendorProfileManagement = () => {
         throw new Error('Upload failed');
       }
       
-      const result = data;
-      const fileUrl = result[`${documentType}_url`] || result[documentType];
+      const fileUrl = data[`${documentType}_url`] || data[documentType];
       updateProfileData(documentType, fileUrl);
       alert(`Document uploaded successfully!`);
+      
+      // Refresh the profile data
+      await fetchVendorProfile();
     } catch (error) {
       console.error('Upload error:', error);
       alert('Failed to upload document. Please try again.');
@@ -367,6 +415,7 @@ const VendorProfileManagement = () => {
     { id: "timing", label: "Timing", icon: Clock },
     { id: "banking", label: "Banking", icon: CreditCard },
     { id: "documents", label: "Documents", icon: FileText },
+    { id: "debug", label: "Debug", icon: Shield },
     { id: "settings", label: "Settings", icon: Shield },
   ];
 
@@ -465,7 +514,7 @@ const VendorProfileManagement = () => {
         <div className="bg-white">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="overflow-x-auto">
-              <TabsList className="grid grid-cols-4 lg:grid-cols-8 w-full min-w-max">
+              <TabsList className="grid grid-cols-4 lg:grid-cols-9 w-full min-w-max">
                 {tabsConfig.map((tab) => (
                   <TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-2 text-xs">
                     <tab.icon className="h-4 w-4" />
@@ -590,16 +639,32 @@ const VendorProfileManagement = () => {
               <div>
                 <Label>Categories</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {categories.map((category) => (
+                  {/* Show current categories first */}
+                  {profileData.categories.map((category) => (
                     <Badge
                       key={category}
-                      variant={profileData.categories.includes(category) ? "default" : "outline"}
+                      variant="default"
                       className="cursor-pointer"
                       onClick={() => {
                         if (!isEditing) return;
-                        const newCategories = profileData.categories.includes(category)
-                          ? profileData.categories.filter(c => c !== category)
-                          : [...profileData.categories, category];
+                        const newCategories = profileData.categories.filter(c => c !== category);
+                        updateProfileData("categories", newCategories);
+                      }}
+                    >
+                      {category} {isEditing && '×'}
+                    </Badge>
+                  ))}
+                  {/* Show available categories that are not selected */}
+                  {availableCategories
+                    .filter(category => !profileData.categories.includes(category))
+                    .map((category) => (
+                    <Badge
+                      key={category}
+                      variant="outline"
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (!isEditing) return;
+                        const newCategories = [...profileData.categories, category];
                         updateProfileData("categories", newCategories);
                       }}
                     >
@@ -607,6 +672,9 @@ const VendorProfileManagement = () => {
                     </Badge>
                   ))}
                 </div>
+                {profileData.categories.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-2">No categories selected</p>
+                )}
               </div>
             </TabsContent>
 
@@ -833,6 +901,66 @@ const VendorProfileManagement = () => {
 
             {/* Documents Tab */}
             <TabsContent value="documents" className="p-4 space-y-4">
+              {/* Show existing documents */}
+              {profileData.businessName && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-4">Uploaded Documents</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    {/* Show documents from API */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-medium mb-2">Additional Documents ({documents.length})</h4>
+                      <div className="space-y-2">
+                        {documents.length > 0 ? (
+                          documents.map((doc, index) => (
+                            <div key={doc.id || index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm">Document {index + 1}</span>
+                              <a 
+                                href={doc.document_url || doc.document} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 text-sm hover:underline"
+                              >
+                                View
+                              </a>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-gray-600">No additional documents uploaded</p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Show shop images */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-medium mb-2">Shop Images ({shopImages.length})</h4>
+                      <div className="space-y-2">
+                        {shopImages.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-2">
+                            {shopImages.map((image, index) => (
+                              <div key={image.id || index} className="relative">
+                                <img 
+                                  src={image.image_url || image.image} 
+                                  alt={`Shop ${index + 1}`}
+                                  className="w-full h-20 object-cover rounded border"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                                {image.is_primary && (
+                                  <Badge className="absolute top-1 left-1 text-xs">Primary</Badge>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-600">No shop images uploaded</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="space-y-6">
                 {/* Business License */}
                 <div className="border border-gray-200 rounded-lg p-4">
@@ -1010,6 +1138,23 @@ const VendorProfileManagement = () => {
 
                 <div className="text-center py-2 text-gray-500 text-xs">
                   Supported formats: PDF, JPG, JPEG, PNG (Max 5MB)
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Debug Tab - Show raw API data */}
+            <TabsContent value="debug" className="p-4 space-y-4">
+              <div className="space-y-4">
+                <h3 className="font-semibold">API Response Debug</h3>
+                <div className="bg-gray-100 p-4 rounded-lg overflow-auto max-h-96">
+                  <pre className="text-xs">
+                    {JSON.stringify({
+                      documents: documents,
+                      shopImages: shopImages,
+                      categories: profileData.categories,
+                      availableCategories: availableCategories
+                    }, null, 2)}
+                  </pre>
                 </div>
               </div>
             </TabsContent>
