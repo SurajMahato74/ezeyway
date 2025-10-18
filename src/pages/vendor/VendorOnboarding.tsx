@@ -370,16 +370,51 @@ export default function VendorOnboarding() {
       }
 
       try {
-        const token = localStorage.getItem("token");
+        let token = localStorage.getItem("token");
         console.log(isUpdate ? "Updating vendor profile..." : "Submitting complete vendor onboarding...");
         const endpoint = isUpdate ? "complete-onboarding/" : "complete-onboarding/";
-        const response = await fetch(API_BASE + endpoint, {
+        
+        let response = await fetch(API_BASE + endpoint, {
           method: "POST",
           headers: {
             Authorization: `Token ${token}`,
           },
           body: formDataToSend,
         });
+        
+        // If 401, try to refresh token and retry
+        if (response.status === 401) {
+          console.log('🔄 401 error, attempting token refresh...');
+          try {
+            const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+            const vendorAuth = await simplePersistentAuth.getVendorAuth();
+            
+            if (vendorAuth?.token) {
+              // Update token and retry
+              token = vendorAuth.token;
+              localStorage.setItem('token', token);
+              
+              response = await fetch(API_BASE + endpoint, {
+                method: "POST",
+                headers: {
+                  Authorization: `Token ${token}`,
+                },
+                body: formDataToSend,
+              });
+              console.log('✅ Retry with refreshed token successful');
+            } else {
+              setErrorMessage('Session expired. Please login again.');
+              setTimeout(() => navigate('/vendor/login'), 2000);
+              return;
+            }
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+            setErrorMessage('Session expired. Please login again.');
+            setTimeout(() => navigate('/vendor/login'), 2000);
+            return;
+          }
+        }
+        
         const data = await response.json();
         console.log("Complete onboarding response:", response.status, data);
         if (!response.ok) {
