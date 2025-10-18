@@ -134,7 +134,48 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
   try {
     const response = await fetch(url, defaultOptions);
     
-
+    // Handle 401 Unauthorized - try to refresh token
+    if (response.status === 401 && includeAuth) {
+      console.log('🔄 401 error, attempting token refresh...');
+      
+      try {
+        const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+        const vendorAuth = await simplePersistentAuth.getVendorAuth();
+        
+        if (vendorAuth?.token) {
+          // Update main auth with vendor token
+          await authService.setAuth(vendorAuth.token, vendorAuth.user);
+          
+          // Retry request with new token
+          const newHeaders = await createApiHeaders(true, isFormData, endpoint);
+          const retryResponse = await fetch(url, {
+            ...defaultOptions,
+            headers: newHeaders
+          });
+          
+          if (retryResponse.ok) {
+            console.log('✅ Token refresh successful');
+            const responseClone = retryResponse.clone();
+            const contentType = retryResponse.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              const data = await retryResponse.json();
+              return { response: responseClone, data };
+            }
+            return { response: responseClone, data: null };
+          }
+        }
+        
+        // If refresh fails, redirect to login
+        console.log('❌ Token refresh failed, redirecting to login');
+        window.location.href = '/vendor/login';
+        return { response, data: { error: 'Authentication required' } };
+        
+      } catch (refreshError) {
+        console.error('Token refresh error:', refreshError);
+        window.location.href = '/vendor/login';
+        return { response, data: { error: 'Authentication required' } };
+      }
+    }
     
     // Clone response to avoid "body stream already read" error
     const responseClone = response.clone();
