@@ -5,19 +5,23 @@ import { CategoryScroll } from "@/components/CategoryScroll";
 import { BannerCarousel } from "@/components/BannerCarousel";
 import { TrendingItems } from "@/components/TrendingItems";
 import { FeaturedProducts } from "@/components/FeaturedProducts";
+import { LatestProducts } from "@/components/LatestProducts";
 import { BottomNavigation } from "@/components/BottomNavigation";
+import { HomeCartWidget } from "@/components/HomeCartWidget";
+import { Footer } from "@/components/Footer";
 import { useAppLoading } from "@/contexts/AppLoadingContext";
 
 const Index = () => {
   const { setHomeDataLoaded } = useAppLoading();
   const [trendingLoaded, setTrendingLoaded] = useState(false);
   const [featuredLoaded, setFeaturedLoaded] = useState(false);
+  const [latestLoaded, setLatestLoaded] = useState(false);
 
   useEffect(() => {
-    if (trendingLoaded && featuredLoaded) {
+    if (trendingLoaded && featuredLoaded && latestLoaded) {
       setHomeDataLoaded(true);
     }
-  }, [trendingLoaded, featuredLoaded, setHomeDataLoaded]);
+  }, [trendingLoaded, featuredLoaded, latestLoaded, setHomeDataLoaded]);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -27,6 +31,9 @@ const Index = () => {
       <BannerCarousel />
       <TrendingItems onDataLoaded={() => setTrendingLoaded(true)} />
       <FeaturedProducts onDataLoaded={() => setFeaturedLoaded(true)} />
+      <LatestProducts onDataLoaded={() => setLatestLoaded(true)} />
+      <Footer />
+      <HomeCartWidget />
       <BottomNavigation />
     </div>
   );

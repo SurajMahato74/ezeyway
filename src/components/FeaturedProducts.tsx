@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Heart, ShoppingCart, Loader2 } from "lucide-react";
+import { Heart, ShoppingCart, Loader2, Truck, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
+import { getDeliveryInfo } from "@/utils/deliveryUtils";
 
 import { API_BASE } from '@/config/api';
 import { filterOwnProducts } from '@/utils/productFilter';
@@ -110,7 +111,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
       // Calculate distance if location is available
       let distance = "N/A";
       let distanceValue = Infinity;
-
+      
       if (currentLocation && product.vendor_latitude && product.vendor_longitude) {
         distanceValue = calculateDistance(
           currentLocation.latitude, currentLocation.longitude,
@@ -118,6 +119,8 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
         );
         distance = `${distanceValue.toFixed(1)} km`;
       }
+
+      const deliveryInfo = getDeliveryInfo(product, product.vendor_delivery_fee);
 
       return {
         id: product.id,
@@ -131,7 +134,9 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
         image: primaryImage?.image_url || "/placeholder-product.jpg",
         inStock: product.quantity > 0,
         category: product.category,
-        featured: product.featured
+        featured: product.featured,
+        totalSold: product.total_sold || 0,
+        deliveryInfo
       };
     });
 
@@ -178,18 +183,13 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
     <section className="px-4 py-3 mb-8 bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-black">
+        <h2 className="text-lg font-semibold tracking-tight text-black">
           Featured Products
         </h2>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          style={{
-            borderColor: "#856043",
-            color: "#856043",
-            backgroundColor: "transparent",
-          }}
-          className="rounded-full hover:bg-[#856043] hover:text-white text-sm"
+          className="text-sm text-gray-600 hover:text-gray-800"
           onClick={() => navigate('/featured-items')}
         >
           View All
@@ -197,7 +197,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
       </div>
 
       {/* Responsive layout: horizontal scroll on mobile, grid on desktop */}
-      <div className="flex gap-3 overflow-x-auto pb-3 md:grid md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:overflow-visible md:pb-0">
+      <div className="flex gap-3 overflow-x-auto pb-3 md:grid md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 md:overflow-visible md:pb-0">
         {featuredProducts.map((product, index) => (
           <motion.div
             key={product.id}
@@ -205,7 +205,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1, duration: 0.3 }}
             whileHover={{ scale: 1.02, rotate: 0.5 }}
-            className="relative flex-shrink-0 w-40 md:w-auto rounded-lg bg-white border border-gray-200 hover:border-[#856043] shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-300 overflow-hidden group cursor-pointer"
+            className="relative flex-shrink-0 w-36 md:w-auto rounded-lg bg-white border border-gray-200 hover:border-[#856043] shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-300 overflow-hidden group cursor-pointer"
             onClick={() => handleProductClick(product.id)}
           >
             {/* Featured Badge */}
@@ -219,7 +219,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
             </motion.span>
 
             {/* Product Image */}
-            <div className="w-full h-32 overflow-hidden">
+            <div className="w-full h-28 overflow-hidden">
               <img
                 src={product.image}
                 alt={product.name}
@@ -229,24 +229,47 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
             </div>
 
             {/* Content */}
-            <div className="p-3 flex flex-col justify-between h-40">
+            <div className="p-3 flex flex-col justify-between h-36">
               <div>
-                <h3 className="font-medium text-xs md:text-sm text-gray-800 mb-1 line-clamp-2 leading-tight">
+                <h3 className="font-medium text-sm text-gray-800 mb-1 line-clamp-2 leading-tight">
                   {product.name}
                 </h3>
                 <p className="text-xs text-gray-600 mb-1 truncate">{product.vendor}</p>
               </div>
 
               <div>
-                {/* Price */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-medium text-sm text-[#856043]">
-                    {product.price}
-                  </span>
+                {/* Price and Delivery */}
+                <div className="space-y-1 mb-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm text-[#856043]">
+                      {product.price}
+                    </span>
+                    <span className="text-xs font-medium text-green-600">{product.totalSold || 0} sold</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <MapPin className="h-3 w-3" />
+                    <span className="font-medium">{product.distance}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Truck className="h-3 w-3 text-muted-foreground" />
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      product.deliveryInfo.isFreeDelivery 
+                        ? 'bg-green-100 text-green-700' 
+                        : product.deliveryInfo.deliveryFee === null
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {product.deliveryInfo.isFreeDelivery 
+                        ? 'Free' 
+                        : product.deliveryInfo.deliveryFee === null 
+                        ? 'TBD' 
+                        : `₹${product.deliveryInfo.deliveryFee}`}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Rating */}
-                <div className="flex items-center gap-1 mb-2">
+                <div className="flex items-center gap-1 mb-1">
                   {Array.from({ length: 5 }).map((_, idx) => (
                     <span
                       key={idx}
@@ -288,7 +311,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
                         handleBuyNow(product);
                       }}
                     >
-                      <ShoppingCart className="h-3 w-3 mr-1" /> Buy
+                      <ShoppingCart className="h-3 w-3 mr-1" /> Buy Now
                     </Button>
                   ) : (
                     <Button

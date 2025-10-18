@@ -24,9 +24,12 @@ interface VendorData {
   email: string;
   phone: string;
   address: string;
+  locationAddress: string;
   city: string;
   state: string;
   pincode: string;
+  latitude: number | null;
+  longitude: number | null;
   businessType: string;
   categories: string[];
   description: string;
@@ -36,10 +39,10 @@ interface VendorData {
   accountHolderName: string;
   gstNumber: string;
   panNumber: string;
-  businessLicense: File | null;
-  gstCertificate: File | null;
-  fssaiLicense: File | null;
-  additionalDocs: File[];
+  businessLicense: any;
+  citizenshipFront: any;
+  citizenshipBack: any;
+  shopImages: any[];
   deliveryRadius: string;
   minOrderAmount: string;
   profileImage: string | null;
@@ -65,9 +68,12 @@ const VendorMyProfile = () => {
     email: "",
     phone: "",
     address: "",
+    locationAddress: "",
     city: "",
     state: "",
     pincode: "",
+    latitude: null,
+    longitude: null,
     businessType: "",
     categories: [],
     description: "",
@@ -78,9 +84,9 @@ const VendorMyProfile = () => {
     gstNumber: "",
     panNumber: "",
     businessLicense: null,
-    gstCertificate: null,
-    fssaiLicense: null,
-    additionalDocs: [],
+    citizenshipFront: null,
+    citizenshipBack: null,
+    shopImages: [],
     deliveryRadius: "",
     minOrderAmount: "",
     profileImage: null
@@ -163,9 +169,12 @@ const VendorMyProfile = () => {
           email: profile.business_email || "",
           phone: profile.business_phone || "",
           address: profile.business_address || "",
+          locationAddress: profile.location_address || "",
           city: profile.city || "",
           state: profile.state || "",
           pincode: profile.pincode || "",
+          latitude: profile.latitude || null,
+          longitude: profile.longitude || null,
           businessType: profile.business_type || "",
           categories: Array.isArray(profile.categories) ? profile.categories : [],
           description: profile.description || "",
@@ -175,10 +184,10 @@ const VendorMyProfile = () => {
           accountHolderName: profile.account_holder_name || "",
           gstNumber: profile.gst_number || "",
           panNumber: profile.pan_number || "",
-          businessLicense: profile.business_license_file_url ? { name: "Business License", url: profile.business_license_file_url } : null,
-          gstCertificate: profile.gst_certificate_url ? { name: "GST Certificate", url: profile.gst_certificate_url } : null,
-          fssaiLicense: profile.fssai_license_url ? { name: "FSSAI License", url: profile.fssai_license_url } : null,
-          additionalDocs: (profile.documents || []).map(doc => ({ name: `Document ${doc.id}`, url: doc.document_url })),
+          businessLicense: profile.business_license_file_url ? { name: "PAN Registration", url: profile.business_license_file_url } : null,
+          citizenshipFront: profile.documents?.find(d => d.document_url?.includes('citizenship_front')) ? { name: "Citizenship Front", url: profile.documents.find(d => d.document_url?.includes('citizenship_front')).document_url } : null,
+          citizenshipBack: profile.documents?.find(d => d.document_url?.includes('citizenship_back')) ? { name: "Citizenship Back", url: profile.documents.find(d => d.document_url?.includes('citizenship_back')).document_url } : null,
+          shopImages: profile.shop_images || [],
           deliveryRadius: profile.delivery_radius?.toString() || "",
           minOrderAmount: profile.min_order_amount || "",
           profileImage: profile.user_info?.profile_picture || null
@@ -200,9 +209,12 @@ const VendorMyProfile = () => {
                 email: profile.business_email || "",
                 phone: profile.business_phone || "",
                 address: profile.business_address || "",
+                locationAddress: profile.location_address || "",
                 city: profile.city || "",
                 state: profile.state || "",
                 pincode: profile.pincode || "",
+                latitude: profile.latitude || null,
+                longitude: profile.longitude || null,
                 businessType: profile.business_type || "",
                 categories: Array.isArray(profile.categories) ? profile.categories : [],
                 description: profile.description || "",
@@ -212,10 +224,10 @@ const VendorMyProfile = () => {
                 accountHolderName: profile.account_holder_name || "",
                 gstNumber: profile.gst_number || "",
                 panNumber: profile.pan_number || "",
-                businessLicense: profile.business_license_file_url ? { name: "Business License", url: profile.business_license_file_url } : null,
-                gstCertificate: profile.gst_certificate_url ? { name: "GST Certificate", url: profile.gst_certificate_url } : null,
-                fssaiLicense: profile.fssai_license_url ? { name: "FSSAI License", url: profile.fssai_license_url } : null,
-                additionalDocs: (profile.documents || []).map(doc => ({ name: `Document ${doc.id}`, url: doc.document_url })),
+                businessLicense: profile.business_license_file_url ? { name: "PAN Registration", url: profile.business_license_file_url } : null,
+                citizenshipFront: profile.documents?.find(d => d.document_url?.includes('citizenship_front')) ? { name: "Citizenship Front", url: profile.documents.find(d => d.document_url?.includes('citizenship_front')).document_url } : null,
+                citizenshipBack: profile.documents?.find(d => d.document_url?.includes('citizenship_back')) ? { name: "Citizenship Back", url: profile.documents.find(d => d.document_url?.includes('citizenship_back')).document_url } : null,
+                shopImages: profile.shop_images || [],
                 deliveryRadius: profile.delivery_radius?.toString() || "",
                 minOrderAmount: profile.min_order_amount || "",
                 profileImage: profile.user_info?.profile_picture || null
@@ -332,38 +344,8 @@ const VendorMyProfile = () => {
     { value: "bakery", label: "Bakery" },
   ];
 
-  const availableCategories = [
-    "Electronics",
-    "Fashion",
-    "Food",
-    "Home",
-    "Books",
-    "Sports",
-    "Beauty",
-    "Toys",
-    "Jewelry",
-    "Furniture",
-    "Automotive",
-    "Health & Wellness",
-    "Pet Supplies",
-    "Stationery",
-    "Garden & Outdoor",
-    "Kids & Baby",
-    "Appliances",
-    "Hardware",
-    "Crafts & Hobbies",
-    "Travel & Luggage",
-  ];
-
   const updateVendorData = (field: string, value: any) => {
     setVendorData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const toggleCategory = (category: string) => {
-    const categories = vendorData.categories.includes(category)
-      ? vendorData.categories.filter((c) => c !== category)
-      : [...vendorData.categories, category];
-    updateVendorData("categories", categories);
   };
 
 
@@ -541,10 +523,10 @@ const VendorMyProfile = () => {
                     <DialogTitle>{title}</DialogTitle>
                   </DialogHeader>
                   <div className="flex-1 overflow-hidden">
-                    <iframe
+                    <img
                       src={document.url}
-                      className="w-full h-full border-0"
-                      title={title}
+                      alt={title}
+                      className="w-full h-full object-contain"
                     />
                   </div>
                 </DialogContent>
@@ -596,15 +578,19 @@ const VendorMyProfile = () => {
         business_email: vendorData.email,
         business_phone: vendorData.phone,
         business_address: vendorData.address,
+        location_address: vendorData.locationAddress,
         city: vendorData.city,
         state: vendorData.state,
         pincode: vendorData.pincode,
+        latitude: vendorData.latitude,
+        longitude: vendorData.longitude,
         business_type: vendorData.businessType,
         categories: vendorData.categories,
         description: vendorData.description,
         bank_name: vendorData.bankName,
         account_number: vendorData.accountNumber,
         account_holder_name: vendorData.accountHolderName,
+        ifsc_code: vendorData.ifscCode,
         gst_number: vendorData.gstNumber,
         pan_number: vendorData.panNumber,
         delivery_radius: vendorData.deliveryRadius ? parseFloat(vendorData.deliveryRadius) : null,
@@ -904,24 +890,22 @@ const VendorMyProfile = () => {
                 </div>
               </div>
               <div className="md:col-span-2">
-                <Label>Product Categories</Label>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  {availableCategories.map((category) => (
-                    <button
-                      key={category}
-                      type="button"
-                      onClick={() => toggleCategory(category)}
-                      disabled={!isEditing}
-                      className={`p-2 text-sm rounded-lg border text-left ${
-                        vendorData.categories.includes(category)
-                          ? "border-blue-500 bg-blue-50 text-blue-600"
-                          : "border-gray-200 hover:border-gray-300"
-                      } ${!isEditing ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      {category}
-                    </button>
-                  ))}
+                <Label>Selected Categories</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {vendorData.categories.length > 0 ? (
+                    vendorData.categories.map((category) => (
+                      <span
+                        key={category}
+                        className="px-3 py-1 text-sm bg-blue-50 text-blue-600 border border-blue-200 rounded-lg"
+                      >
+                        {category}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-500">No categories selected</span>
+                  )}
                 </div>
+                <p className="text-xs text-gray-500 mt-1">Categories are set during vendor onboarding and cannot be changed here.</p>
               </div>
               <div className="md:col-span-2">
                 <Label htmlFor="description">Business Description</Label>
@@ -939,11 +923,21 @@ const VendorMyProfile = () => {
             <TabsContent value="address" className="p-4 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <Label htmlFor="address">Full Address *</Label>
+                  <Label htmlFor="address">Shop Address *</Label>
                   <Textarea
                     id="address"
                     value={vendorData.address}
                     onChange={(e) => updateVendorData("address", e.target.value)}
+                    disabled={!isEditing}
+                    rows={2}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="locationAddress">Location Address (from Map)</Label>
+                  <Textarea
+                    id="locationAddress"
+                    value={vendorData.locationAddress}
+                    onChange={(e) => updateVendorData("locationAddress", e.target.value)}
                     disabled={!isEditing}
                     rows={2}
                   />
@@ -974,6 +968,12 @@ const VendorMyProfile = () => {
                     onChange={(e) => updateVendorData("pincode", e.target.value)}
                     disabled={!isEditing}
                   />
+                </div>
+                <div>
+                  <Label>Coordinates</Label>
+                  <div className="text-sm text-gray-600">
+                    Lat: {vendorData.latitude || 'N/A'}, Lng: {vendorData.longitude || 'N/A'}
+                  </div>
                 </div>
               </div>
             </TabsContent>
@@ -1026,135 +1026,53 @@ const VendorMyProfile = () => {
                 {/* Required Documents */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <DocumentUploadSection
-                    title="Business License"
+                    title="PAN Registration"
                     docType="business_license_file"
                     document={vendorData.businessLicense}
                     onUpload={(file) => handleFileUpload('business_license_file', file)}
                   />
                   <DocumentUploadSection
-                    title="GST Certificate"
-                    docType="gst_certificate"
-                    document={vendorData.gstCertificate}
-                    onUpload={(file) => handleFileUpload('gst_certificate', file)}
+                    title="Citizenship (Front)"
+                    docType="citizenship_front"
+                    document={vendorData.citizenshipFront}
+                    onUpload={(file) => handleFileUpload('citizenship_front', file)}
                   />
                   <DocumentUploadSection
-                    title="FSSAI License"
-                    docType="fssai_license"
-                    document={vendorData.fssaiLicense}
-                    onUpload={(file) => handleFileUpload('fssai_license', file)}
+                    title="Citizenship (Back)"
+                    docType="citizenship_back"
+                    document={vendorData.citizenshipBack}
+                    onUpload={(file) => handleFileUpload('citizenship_back', file)}
                   />
                 </div>
 
+                {/* Shop Images */}
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <Label>Additional Documents</Label>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="text-green-600 hover:text-green-700"
-                      onClick={() => setShowAddDocument(true)}
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Document
-                    </Button>
-                  </div>
+                  <Label className="text-lg font-medium">Shop Images</Label>
+                  <p className="text-sm text-gray-600 mb-3">Images of your shop (interior, exterior, products, etc.)</p>
                   
-                  {showAddDocument && (
-                    <div className="mb-4 p-4 border border-gray-200 rounded-lg bg-white">
-                      <div className="space-y-3">
-                        <div>
-                          <Label htmlFor="docName">Document Name</Label>
-                          <Input
-                            id="docName"
-                            value={newDocumentName}
-                            onChange={(e) => setNewDocumentName(e.target.value)}
-                            placeholder="Enter document name"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => {
-                              setShowAddDocument(false);
-                              setNewDocumentName("");
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            className="bg-green-600 hover:bg-green-700"
-                            onClick={() => {
-                              if (!newDocumentName.trim()) {
-                                toast({
-                                  title: "Error",
-                                  description: "Please enter a document name",
-                                  variant: "destructive",
-                                });
-                                return;
-                              }
-                              const input = document.createElement('input');
-                              input.type = 'file';
-                              input.accept = '.pdf,.jpg,.jpeg,.png';
-                              input.onchange = (e) => {
-                                const file = (e.target as HTMLInputElement).files?.[0];
-                                if (file) handleFileUpload('additionalDocs', file, newDocumentName);
-                              };
-                              input.click();
-                            }}
-                            disabled={documentUploading === 'additionalDocs'}
-                          >
-                            {documentUploading === 'additionalDocs' ? (
-                              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                            ) : (
-                              <Upload className="h-3 w-3 mr-1" />
-                            )}
-                            Upload Document
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {vendorData.additionalDocs.length > 0 ? (
-                    <div className="space-y-2">
-                      {vendorData.additionalDocs.map((doc, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded border">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-gray-500" />
-                            <span className="text-sm font-medium">{doc.name}</span>
+                  {vendorData.shopImages.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {vendorData.shopImages.map((image, index) => (
+                        <div key={index} className="relative">
+                          <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                            <img
+                              src={image.image_url}
+                              alt={`Shop image ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
-                          <div className="flex gap-2">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" className="text-blue-600 hover:text-blue-700">
-                                  <Eye className="h-3 w-3 mr-1" />
-                                  View
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-4xl w-full h-[80vh]">
-                                <DialogHeader>
-                                  <DialogTitle>{doc.name}</DialogTitle>
-                                </DialogHeader>
-                                <div className="flex-1 overflow-hidden">
-                                  <iframe
-                                    src={doc.url}
-                                    className="w-full h-full border-0"
-                                    title={doc.name}
-                                  />
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-
-                          </div>
+                          {image.is_primary && (
+                            <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs px-1 rounded">
+                              Primary
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="text-center py-8 text-gray-500">
-                      <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No additional documents uploaded</p>
+                      <Camera className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No shop images uploaded</p>
                     </div>
                   )}
                 </div>

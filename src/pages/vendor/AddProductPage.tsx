@@ -49,10 +49,21 @@ const productSchema = z.object({
   featured: z.boolean().default(false),
   free_delivery: z.boolean().default(false),
   custom_delivery_fee_enabled: z.boolean().default(false),
-  custom_delivery_fee: z.number().min(0).optional(),
+  custom_delivery_fee: z.number().min(0).nullable().optional(),
   seo_title: z.string().optional(),
   seo_description: z.string().optional(),
   dynamic_fields: z.record(z.any()).default({})
+}).refine((data) => {
+  // If free delivery is enabled, custom delivery fee is not required
+  if (data.free_delivery) return true;
+  // If custom delivery fee is enabled, then custom_delivery_fee must be provided
+  if (data.custom_delivery_fee_enabled && (data.custom_delivery_fee === null || data.custom_delivery_fee === undefined)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Custom delivery fee is required when custom delivery fee is enabled and free delivery is disabled",
+  path: ["custom_delivery_fee"]
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -205,6 +216,11 @@ const AddProductPage: React.FC = () => {
       const processedData = { ...data };
       if (processedData.cost_price === null || processedData.cost_price === undefined) {
         delete processedData.cost_price;
+      }
+      
+      // Remove custom_delivery_fee if free_delivery is enabled or custom_delivery_fee_enabled is false
+      if (processedData.free_delivery || !processedData.custom_delivery_fee_enabled) {
+        delete processedData.custom_delivery_fee;
       }
       
       await productApi.createProduct(processedData);

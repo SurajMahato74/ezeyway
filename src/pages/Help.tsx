@@ -213,32 +213,7 @@ export default function Help() {
           </CardContent>
         </Card>
 
-        {/* FAQ Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Frequently Asked Questions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2">
-              <div className="font-medium text-sm">How do I track my order?</div>
-              <div className="text-sm text-muted-foreground">
-                Go to My Orders in your profile and click on any order to see its current status and tracking information.
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="font-medium text-sm">What are the delivery charges?</div>
-              <div className="text-sm text-muted-foreground">
-                Free delivery for orders above ₹500. For orders below ₹500, a delivery fee of ₹40 applies.
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="font-medium text-sm">How do I cancel an order?</div>
-              <div className="text-sm text-muted-foreground">
-                You can cancel an order within 30 minutes of placement. Go to My Orders and select the cancel option.
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+
 
         {/* Support Hours */}
         <Card className="bg-primary/5 border-primary/20">

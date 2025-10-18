@@ -175,12 +175,33 @@ export default function CheckOut() {
   ] : (selectedCartItems || cart?.items || []);
 
   const subtotal = cartItems.reduce((sum, item) => {
-    return sum + parseFloat(item.total_price);
+    return sum + (parseFloat(item.product.price || item.total_price) * item.quantity);
   }, 0);
 
-  const deliveryFee = 0; // No delivery fee in bill
+  // Calculate delivery fee based on product settings
+  const calculateDeliveryFee = () => {
+    let totalDeliveryFee = 0;
+    
+    cartItems.forEach(item => {
+      const product = item.product;
+      if (product.free_delivery) {
+        // Free delivery - no fee
+        return;
+      } else if (product.custom_delivery_fee_enabled && product.custom_delivery_fee !== null) {
+        // Custom delivery fee set by vendor
+        totalDeliveryFee += parseFloat(product.custom_delivery_fee);
+      } else {
+        // Default delivery fee (₹40)
+        totalDeliveryFee += 40;
+      }
+    });
+    
+    return totalDeliveryFee;
+  };
+
+  const deliveryFee = calculateDeliveryFee();
   const tax = 0; // No tax
-  const total = subtotal; // Subtotal only
+  const total = subtotal + deliveryFee;
 
   const validateNepaliPhone = (phone: string) => {
     // Nepali mobile number validation: starts with 98 or 97 and has 10 digits total
@@ -302,7 +323,10 @@ export default function CheckOut() {
       const orderData = {
         items: cartItems.map(item => ({
           product_id: item.product.id,
-          quantity: item.quantity
+          quantity: item.quantity,
+          price: parseFloat(item.product.price || item.total_price),
+          delivery_fee: item.product.free_delivery ? 0 : 
+            (item.product.custom_delivery_fee_enabled ? parseFloat(item.product.custom_delivery_fee || 0) : 40)
         })),
         delivery_name: userInfo?.username || userInfo?.first_name || "Customer",
         delivery_phone: userInfo?.phone_number || deliveryAddress.phone,
@@ -311,7 +335,10 @@ export default function CheckOut() {
         delivery_longitude: lng,
         delivery_instructions: deliveryAddress.instructions,
         payment_method: paymentMethod,
-        notes: `Distance: ${validation.distance.toFixed(1)}km from vendor`
+        total_amount: total,
+        subtotal: subtotal,
+        delivery_fee: deliveryFee,
+        notes: `Distance: ${validation.distance.toFixed(1)}km from vendor. Items: ${cartItems.map(item => `${item.product.name} (${item.quantity}x)`).join(', ')}`
       };
       
       const result = await orderService.createOrder(orderData);
@@ -664,33 +691,45 @@ export default function CheckOut() {
                       <p className="font-semibold text-lg text-gray-800">{item.product.name}</p>
                       <p className="text-sm text-gray-500">{item.product.vendor_name}</p>
                       <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                      <p className="text-sm text-gray-500">Price: ₹{parseFloat(item.product.price || item.total_price).toFixed(2)} each</p>
+                      {item.product.free_delivery && (
+                        <p className="text-xs text-green-600 font-medium">✓ Free Delivery</p>
+                      )}
+                      {item.product.custom_delivery_fee_enabled && !item.product.free_delivery && (
+                        <p className="text-xs text-orange-600">Delivery: ₹{parseFloat(item.product.custom_delivery_fee || 0).toFixed(2)}</p>
+                      )}
                     </div>
-                    <p className="font-semibold text-lg text-gray-800">₹{parseFloat(item.total_price).toFixed(2)}</p>
+                    <p className="font-semibold text-lg text-gray-800">₹{(parseFloat(item.product.price || item.total_price) * item.quantity).toFixed(2)}</p>
                   </div>
                 ))}
                 <Separator className="my-4 bg-gray-200" />
                 <div className="space-y-4">
                   <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
-                    <h4 className="font-semibold text-emerald-800 mb-2">Bill Amount (Cash on Delivery)</h4>
-                    <div className="flex justify-between text-base text-gray-700">
-                      <span>Subtotal</span>
-                      <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="font-bold text-orange-800 text-lg">Delivery Fee</h4>
-                        <p className="text-sm text-orange-700">Pay on delivery</p>
+                    <h4 className="font-semibold text-emerald-800 mb-3">Order Summary</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-base text-gray-700">
+                        <span>Subtotal ({cartItems.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
+                        <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
                       </div>
-                      <span className="font-bold text-xl text-orange-600">To be determined</span>
+                      <div className="flex justify-between text-base text-gray-700">
+                        <span>Delivery Fee</span>
+                        <span className="font-semibold">
+                          {deliveryFee === 0 ? (
+                            <span className="text-green-600">Free</span>
+                          ) : (
+                            `₹${deliveryFee.toFixed(2)}`
+                          )}
+                        </span>
+                      </div>
+                      {deliveryFee > 0 && (
+                        <p className="text-xs text-gray-500">Delivery fees are set by individual vendors</p>
+                      )}
                     </div>
                   </div>
                   
                   <Separator className="my-2 bg-gray-200" />
                   <div className="flex justify-between text-lg font-bold text-gray-800">
-                    <span>Bill Total (Now)</span>
+                    <span>Total Amount (COD)</span>
                     <span>₹{total.toFixed(2)}</span>
                   </div>
                 </div>

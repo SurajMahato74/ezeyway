@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
-import { Star, MapPin, Flame, Loader2 } from "lucide-react";
+import { Star, MapPin, Flame, Loader2, Truck, ShoppingCart } from "lucide-react";
 import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useCart } from "@/contexts/CartContext";
+import { useToast } from "@/hooks/use-toast";
+import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
+import { getDeliveryInfo } from "@/utils/deliveryUtils";
 
 import { API_BASE } from '@/config/api';
 import { filterOwnProducts } from '@/utils/productFilter';
@@ -58,6 +62,9 @@ interface TrendingItemsProps {
 
 export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
   const navigate = useNavigate();
+  const { addToCart } = useCart();
+  const { toast } = useToast();
+  const { addToCartWithAuth } = useAuthAction();
   const [trendingItems, setTrendingItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
@@ -126,7 +133,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
       // Calculate distance if location is available
       let distance = "N/A";
       let distanceValue = Infinity;
-
+      
       if (currentLocation && product.vendor_latitude && product.vendor_longitude) {
         distanceValue = calculateDistance(
           currentLocation.latitude, currentLocation.longitude,
@@ -134,6 +141,8 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         );
         distance = `${distanceValue.toFixed(1)} km`;
       }
+
+      const deliveryInfo = getDeliveryInfo(product, product.vendor_delivery_fee);
 
       return {
         id: product.id,
@@ -146,7 +155,9 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
         inStock: product.quantity > 0,
-        category: product.category
+        category: product.category,
+        totalSold: product.total_sold || 0,
+        deliveryInfo
       };
     });
 
@@ -159,6 +170,20 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
 
   const handleItemClick = (itemId: number) => {
     navigate(`/product/${itemId}`);
+  };
+
+  const handleBuyNow = async (product: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await addToCartWithAuth(product.id.toString(), 1);
+      toast({
+        title: "Added to Cart",
+        description: `${product.name} added to your cart`,
+      });
+      navigate("/cart");
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
   };
 
   if (loading) {
@@ -190,16 +215,11 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
   return (
     <section className="px-4 sm:px-6 md:px-8 mb-6 lg:mb-8">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg sm:text-xl font-bold text-foreground tracking-tight">Trending Now 🔥</h2>
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">Trending Now 🔥</h2>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          style={{
-            borderColor: "#856043",
-            color: "#856043",
-            backgroundColor: "transparent",
-          }}
-          className="rounded-full hover:bg-[#856043] hover:text-white text-sm"
+          className="text-sm text-gray-600 hover:text-gray-800"
           onClick={() => navigate('/trending-items')}
         >
           View All
@@ -214,7 +234,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
             transition={{ duration: 0.4, delay: index * 0.08, ease: "easeOut" }}
             whileHover={{ scale: 1.03, boxShadow: "0 12px 24px rgba(0,0,0,0.15)" }}
             whileTap={{ scale: 0.97 }}
-            className="relative min-w-[120px] sm:min-w-[140px] md:min-w-[120px] bg-gradient-to-br from-card/90 to-card rounded-xl p-3 shadow-lg border border-border/20 hover:shadow-xl hover:border-primary/40 transition-all duration-300 cursor-pointer group snap-start"
+            className="relative min-w-[130px] sm:min-w-[150px] md:min-w-[130px] bg-gradient-to-br from-card/90 to-card rounded-xl p-3 shadow-lg border border-border/20 hover:shadow-xl hover:border-primary/40 transition-all duration-300 cursor-pointer group snap-start"
             onClick={() => handleItemClick(item.id)}
             aria-label={`View ${item.name} from ${item.vendor}`}
           >
@@ -252,7 +272,51 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
                 <TooltipContent side="bottom" className="text-xs">Distance from you</TooltipContent>
               </Tooltip>
             </div>
-            <p className="font-bold text-primary text-sm">{item.price}</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-primary text-sm">{item.price}</p>
+                  <p className="text-xs text-gray-500">{item.totalSold || 0} sold</p>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1">
+                      <Truck className="h-3 w-3 text-muted-foreground" />
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                        item.deliveryInfo.isFreeDelivery 
+                          ? 'bg-green-100 text-green-700' 
+                          : item.deliveryInfo.deliveryFee === null
+                          ? 'bg-orange-100 text-orange-700'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {item.deliveryInfo.isFreeDelivery 
+                          ? 'Free' 
+                          : item.deliveryInfo.deliveryFee === null 
+                          ? 'TBD' 
+                          : `₹${item.deliveryInfo.deliveryFee}`}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {item.deliveryInfo.isFreeDelivery 
+                      ? 'Free Delivery' 
+                      : item.deliveryInfo.deliveryFee === null 
+                      ? 'Delivery fee determined at checkout' 
+                      : `Delivery: ₹${item.deliveryInfo.deliveryFee}`}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full h-6 text-[10px] border-[#856043] text-[#856043] hover:bg-[#856043] hover:text-white"
+                disabled={!item.inStock}
+                onClick={(e) => handleBuyNow(item, e)}
+              >
+                <ShoppingCart className="h-2 w-2 mr-1" />
+                Buy Now
+              </Button>
+            </div>
           </motion.div>
         ))}
       </div>

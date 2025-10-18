@@ -27,6 +27,7 @@ import WishlistPage from "./pages/Wishlist";
 import ProfilePage from "./pages/Profile";
 import ProfileEdit from "./pages/ProfileEdit";
 import Privacy from "./pages/Privacy";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import CheckOut from "./pages/CheckOut";
@@ -250,6 +251,7 @@ const RoutesWithAnalytics = () => {
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/profile-edit" element={<ProtectedRoute><ProfileEdit /></ProtectedRoute>} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/product/:id" element={<ProductDetail />} />
       <Route path="/vendor/:vendorId" element={<VendorProfile />} />
       <Route path="/checkout" element={<ProtectedRoute><CheckOut /></ProtectedRoute>} />

@@ -9,6 +9,7 @@ import { useAuthAction } from "@/hooks/useAuthAction";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authService } from "@/services/authService";
+import { HeaderCartIcon } from "@/components/HeaderCartIcon";
 import logo from "@/assets/ezeywaylogo.png";
 
 export function Header() {
@@ -143,6 +144,7 @@ export function Header() {
       </div>
       
       <div className="flex items-center gap-2">
+        <HeaderCartIcon />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="p-1.5 hover:bg-muted rounded-lg transition-smooth relative">
