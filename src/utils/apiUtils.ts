@@ -20,21 +20,25 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false, e
     let token = await authService.getToken();
     console.log('🔑 Main token for', endpoint, ':', token ? `${token.substring(0, 10)}...` : 'NO TOKEN');
     
-    // If no main token, try vendor token as fallback
-    if (!token) {
+    // Always try to sync with vendor auth if on vendor pages
+    const isVendorEndpoint = endpoint.includes('vendor') || window.location.pathname.startsWith('/vendor');
+    
+    if (isVendorEndpoint || !token) {
       try {
         const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
         const vendorAuth = await simplePersistentAuth.getVendorAuth();
         if (vendorAuth?.token) {
-          token = vendorAuth.token;
-          console.log('🔄 Using vendor token as fallback for:', endpoint, `${token.substring(0, 10)}...`);
-          
-          // Sync vendor token back to main auth to prevent future issues
-          const { authService } = await import('@/services/authService');
-          await authService.setAuth(vendorAuth.token, vendorAuth.user);
-          console.log('⚙️ Synced vendor token to main auth');
-        } else {
-          console.log('❌ No vendor token available');
+          // Always use vendor token for vendor endpoints
+          if (isVendorEndpoint || !token) {
+            token = vendorAuth.token;
+            console.log('🔄 Using vendor token for:', endpoint, `${token.substring(0, 10)}...`);
+            
+            // Sync vendor token back to main auth to prevent future issues
+            await authService.setAuth(vendorAuth.token, vendorAuth.user);
+            console.log('⚙️ Synced vendor token to main auth');
+          }
+        } else if (isVendorEndpoint) {
+          console.log('❌ No vendor token available for vendor endpoint');
         }
       } catch (error) {
         console.error('Failed to get vendor token:', error);
@@ -70,8 +74,8 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
     });
   }
   
-  // Map vendor/orders to orders
-  if (cleanEndpoint.includes('/vendor/orders')) {
+  // Map vendor/orders to orders only for GET requests (list orders)
+  if (cleanEndpoint.includes('/vendor/orders') && (!options.method || options.method === 'GET')) {
     cleanEndpoint = '/orders/';
     console.log('🔧 Mapped vendor/orders to orders:', endpoint, '->', cleanEndpoint);
   }
@@ -94,7 +98,7 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
   if (endpoint.includes('accept')) {
     console.log('🎯 ORDER ACCEPT REQUEST DETECTED!');
     console.log('📍 Original endpoint:', endpoint);
-    console.log('📍 Normalized endpoint:', normalizedEndpoint);
+    console.log('📍 Normalized endpoint:', cleanEndpoint);
     console.log('📍 API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
     console.log('📍 Final URL:', url);
   }
@@ -143,6 +147,8 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
         const vendorAuth = await simplePersistentAuth.getVendorAuth();
         
         if (vendorAuth?.token) {
+          console.log('🔄 Found vendor auth, attempting refresh with vendor token');
+          
           // Update main auth with vendor token
           await authService.setAuth(vendorAuth.token, vendorAuth.user);
           
@@ -162,10 +168,20 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
               return { response: responseClone, data };
             }
             return { response: responseClone, data: null };
+          } else {
+            console.log('❌ Retry with vendor token also failed:', retryResponse.status);
           }
+        } else {
+          console.log('❌ No vendor auth available for token refresh');
         }
         
-        // If refresh fails, return error
+        // If refresh fails, check if we should redirect to login
+        const isVendorPage = window.location.pathname.startsWith('/vendor');
+        if (isVendorPage) {
+          console.log('🚨 Vendor authentication failed, may need re-login');
+          // Don't automatically redirect, let the component handle it
+        }
+        
         console.log('❌ Token refresh failed');
         return { response, data: { error: 'Authentication required' } };
         

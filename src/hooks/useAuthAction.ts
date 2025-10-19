@@ -55,8 +55,10 @@ export const useAuthAction = () => {
   const buyNowWithAuth = (productData: any) => {
     return executeWithAuth(
       async () => {
+        console.log('useAuthAction - Setting buyNowProduct in localStorage:', productData);
         localStorage.setItem('buyNowProduct', JSON.stringify(productData));
-        navigate('/checkout');
+        console.log('useAuthAction - Navigating to checkout with directBuy=true');
+        navigate('/checkout?directBuy=true');
       },
       {
         type: 'buy_now',

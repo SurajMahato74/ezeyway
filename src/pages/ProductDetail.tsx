@@ -35,6 +35,7 @@ interface Product {
   vendor_name: string;
   vendor_id: number;
   created_at: string;
+  dynamic_fields?: Record<string, any>;
 }
 
 export default function ProductDetail() {
@@ -94,13 +95,13 @@ export default function ProductDetail() {
 
   const processRelatedProducts = (products) => {
     const currentLocation = locationService.getLocation();
-    const DELIVERY_RADIUS_KM = 50;
+    const DELIVERY_RADIUS_KM = 10;
     
     return products
       .map(product => {
         const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
         let distance = "N/A";
-        let distanceValue = 0;
+        let distanceValue = Infinity;
         
         if (currentLocation && product.vendor_latitude && product.vendor_longitude) {
           distanceValue = calculateDistance(
@@ -119,10 +120,15 @@ export default function ProductDetail() {
           inStock: product.quantity > 0,
           totalSold: product.total_sold || 0,
           distance,
-          distanceValue
+          distanceValue,
+          vendorOnline: product.vendor_online !== false,
+          deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM
         };
       })
-      .filter(p => p.distanceValue <= DELIVERY_RADIUS_KM)
+      .filter(product => {
+        return product.vendorOnline && 
+               (product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius);
+      })
       .sort((a, b) => a.distanceValue - b.distanceValue);
   };
 
@@ -212,8 +218,17 @@ export default function ProductDetail() {
     setIsLoading(true);
     try {
       await addToCartWithAuth(product.id.toString(), quantity);
+      toast({
+        title: "Added to Cart",
+        description: `${product.name} added to your cart`,
+      });
     } catch (error) {
       console.error('Error adding to cart:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add product to cart",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -222,6 +237,8 @@ export default function ProductDetail() {
   const handleBuyNow = async () => {
     if (!product) return;
     
+    console.log('ProductDetail - Original product data:', product);
+    
     const productData = {
       id: product.id,
       name: product.name,
@@ -229,8 +246,14 @@ export default function ProductDetail() {
       quantity: quantity,
       vendor_name: product.vendor_name,
       vendor_id: product.vendor_id,
-      images: product.images
+      images: product.images,
+      // Include delivery properties
+      free_delivery: product.free_delivery,
+      custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+      custom_delivery_fee: product.custom_delivery_fee
     };
+    
+    console.log('ProductDetail - Prepared product data for buy now:', productData);
     
     await buyNowWithAuth(productData);
   };
@@ -240,11 +263,15 @@ export default function ProductDetail() {
     
     const token = await authService.getToken();
     if (!token) {
-      toast({
-        title: "Login Required",
-        description: "Please login to add favorites",
-        variant: "destructive",
-      });
+      localStorage.setItem('pendingAction', JSON.stringify({
+        type: 'toggleFavorite',
+        data: {
+          productId: product.id
+        },
+        path: '/wishlist',
+        timestamp: Date.now()
+      }));
+      navigate('/login');
       return;
     }
     
@@ -270,6 +297,10 @@ export default function ProductDetail() {
         title: data.is_favorite ? "Added to Favorites" : "Removed from Favorites",
         description: data.message,
       });
+      
+      if (data.is_favorite) {
+        navigate('/wishlist');
+      }
     } catch (error) {
       console.error('Error toggling favorite:', error);
       toast({
@@ -512,6 +543,29 @@ export default function ProductDetail() {
           />
         </div>
       </div>
+
+      {/* Product Parameters */}
+      {product.dynamic_fields && Object.keys(product.dynamic_fields).length > 0 && (
+        <div className="bg-white px-4 py-6 space-y-3 shadow-sm">
+          <div className="max-w-4xl mx-auto">
+            <h3 className="font-semibold text-lg text-gray-900 mb-3">Product Details</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {Object.entries(product.dynamic_fields).map(([key, value]) => (
+                <div key={key} className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-1">
+                    {key.replace('_', ' ')}
+                  </div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    {Array.isArray(value) ? value.join(', ') : 
+                     typeof value === 'boolean' ? (value ? 'Yes' : 'No') : 
+                     String(value)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tags */}
       {product.tags && product.tags.length > 0 && (

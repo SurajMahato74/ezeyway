@@ -47,7 +47,29 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
-    fetchLatestProducts();
+    
+    // Start location tracking immediately
+    locationService.startTracking();
+    
+    // Only fetch if we already have location, otherwise wait for location update
+    const currentLocation = locationService.getLocation();
+    if (currentLocation) {
+      fetchLatestProducts();
+    } else {
+      // If no location after 3 seconds, fetch without location (will show all products)
+      const timeoutId = setTimeout(() => {
+        if (!locationService.getLocation()) {
+          console.log('⚠️ No location available, fetching products without location filter');
+          fetchLatestProducts();
+        }
+      }, 3000);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        unsubscribe();
+      };
+    }
+    
     return unsubscribe;
   }, []);
 
@@ -84,6 +106,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
+    const DELIVERY_RADIUS_KM = 10;
     
     let processedProducts = products.map(product => {
       const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
@@ -105,6 +128,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
         id: product.id,
         name: product.name,
         vendor: product.vendor_name || "Unknown Vendor",
+        vendor_id: product.vendor_id,
         distance,
         distanceValue,
         rating: 4.5,
@@ -115,8 +139,18 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
         category: product.category,
         totalSold: product.total_sold || 0,
         deliveryInfo,
-        createdAt: product.created_at
+        createdAt: product.created_at,
+        vendorOnline: product.vendor_online !== false,
+        deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM,
+        // Include delivery properties for checkout
+        free_delivery: product.free_delivery,
+        custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+        custom_delivery_fee: product.custom_delivery_fee
       };
+    })
+    .filter(product => {
+      return product.vendorOnline && 
+             (product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius);
     });
 
     // Sort by creation date (newest first)
@@ -225,16 +259,45 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
                   </div>
                 </div>
                 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full h-6 text-[10px]"
-                  disabled={!product.inStock}
-                  onClick={(e) => handleAddToCart(product, e)}
-                >
-                  <ShoppingCart className="h-2 w-2 mr-1" />
-                  Cart
-                </Button>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-6 h-6 p-0 border-[#856043] text-[#856043] hover:bg-[#856043] hover:text-white"
+                    disabled={!product.inStock}
+                    onClick={(e) => handleAddToCart(product, e)}
+                  >
+                    <ShoppingCart className="h-2 w-2" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 h-6 text-[10px] bg-green-600 hover:bg-green-700 text-white"
+                    disabled={!product.inStock}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate("/checkout", {
+                        state: {
+                          directBuy: true,
+                          product: {
+                            id: product.id,
+                            name: product.name,
+                            price: product.price.replace('₹', ''),
+                            quantity: 1,
+                            vendor_name: product.vendor,
+                            vendor_id: product.vendor_id,
+                            images: [{ image_url: product.image }],
+                            // Include delivery properties
+                            free_delivery: product.free_delivery,
+                            custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+                            custom_delivery_fee: product.custom_delivery_fee
+                          }
+                        }
+                      });
+                    }}
+                  >
+                    Buy
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

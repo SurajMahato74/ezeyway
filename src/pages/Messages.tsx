@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageSquare, Send, Paperclip, ArrowLeft, ArrowLeftIcon } from "lucide-react";
+import { MessageSquare, Send, Paperclip, ArrowLeft, ArrowLeftIcon, RefreshCw } from "lucide-react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { messageService, type Conversation, type Message } from '@/services/messageService';
 import { authService } from '@/services/authService';
@@ -15,6 +15,19 @@ const Messages: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const vendorParam = searchParams.get('vendor');
+  const conversationParam = searchParams.get('conversation');
+  
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = await authService.getToken();
+      if (!token) {
+        const currentUrl = window.location.pathname + window.location.search;
+        navigate(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+      }
+    };
+    checkAuth();
+  }, [navigate]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -34,13 +47,23 @@ const Messages: React.FC = () => {
 
 
   useEffect(() => {
-    fetchCurrentUser();
-    loadConversations();
-    notificationService.initialize();
-    // If vendor parameter exists, create/open conversation with that vendor
-    if (vendorParam) {
-      handleVendorMessage(parseInt(vendorParam));
-    }
+    const initializeMessages = async () => {
+      await fetchCurrentUser();
+      await loadConversations();
+      notificationService.initialize();
+      
+      // If vendor parameter exists, create/open conversation with that vendor
+      if (vendorParam) {
+        handleVendorMessage(parseInt(vendorParam));
+      }
+      
+      // If conversation parameter exists, open that specific conversation
+      if (conversationParam) {
+        handleConversationOpen(parseInt(conversationParam));
+      }
+    };
+    
+    initializeMessages();
     
     // Listen for messages from other tabs
     const handleStorageChange = (e: StorageEvent) => {
@@ -59,7 +82,7 @@ const Messages: React.FC = () => {
     
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [vendorParam, currentUser]);
+  }, [vendorParam, conversationParam]); // Removed currentUser dependency to prevent re-runs
 
   const fetchCurrentUser = async () => {
     try {
@@ -82,38 +105,31 @@ const Messages: React.FC = () => {
     }
   }, [selectedConversation]);
 
-  // Poll for new messages
+  // Refresh messages on visibility change instead of polling
   useEffect(() => {
-    if (selectedConversation) {
-      const interval = setInterval(async () => {
-        const data = await messageService.getMessages(selectedConversation.id);
-        let messageArray = [];
-        if (Array.isArray(data)) {
-          messageArray = data.reverse();
-        } else if (data?.results && Array.isArray(data.results)) {
-          messageArray = data.results.reverse();
-        }
-        
-        if (messageArray.length > lastMessageCount) {
-          const newMessagesList = messageArray.slice(lastMessageCount);
-          for (const msg of newMessagesList) {
-            if (msg.sender.id !== currentUser?.id) {
-              await notificationService.notifyNewMessage(
-                msg.sender.username,
-                msg.content || 'Sent a file',
-                selectedConversation.id.toString(),
-                'customer'
-              );
-            }
+    if (!selectedConversation) return;
+    
+    const handleVisibilityChange = async () => {
+      if (!document.hidden) {
+        try {
+          const data = await messageService.getMessages(selectedConversation.id);
+          let messageArray = [];
+          if (Array.isArray(data)) {
+            messageArray = data.reverse();
+          } else if (data?.results && Array.isArray(data.results)) {
+            messageArray = data.results.reverse();
           }
+          setMessages(messageArray);
+          setLastMessageCount(messageArray.length);
+        } catch (error) {
+          console.error('Failed to refresh messages:', error);
         }
-        
-        setMessages(messageArray);
-        setLastMessageCount(messageArray.length);
-      }, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [selectedConversation, lastMessageCount, currentUser]);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [selectedConversation]);
 
 
 
@@ -275,6 +291,30 @@ const Messages: React.FC = () => {
     }
   };
 
+  const handleConversationOpen = async (conversationId: number) => {
+    try {
+      // Wait for conversations to load first
+      await new Promise(resolve => {
+        const checkConversations = () => {
+          if (conversations.length > 0 || !loading) {
+            resolve(true);
+          } else {
+            setTimeout(checkConversations, 100);
+          }
+        };
+        checkConversations();
+      });
+      
+      // Find the conversation in the loaded conversations
+      const conversation = conversations.find(conv => conv.id === conversationId);
+      if (conversation) {
+        setSelectedConversation(conversation);
+      }
+    } catch (error) {
+      console.error('Failed to open conversation:', error);
+    }
+  };
+
 
 
   const scrollToBottom = () => {
@@ -303,7 +343,11 @@ const Messages: React.FC = () => {
         
         {/* Chat Header */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setSelectedConversation(null)}>
+          <Button variant="ghost" size="sm" onClick={() => {
+            setSelectedConversation(null);
+            // Clear the conversation parameter from URL
+            navigate('/messages', { replace: true });
+          }}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <Avatar className="h-10 w-10">
@@ -314,6 +358,14 @@ const Messages: React.FC = () => {
             <h3 className="font-semibold text-sm">{selectedConversation.other_participant?.username}</h3>
             <p className="text-xs text-gray-500">Online</p>
           </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => loadMessages(selectedConversation.id)}
+            className="p-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
 
         </div>
 

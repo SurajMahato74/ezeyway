@@ -46,21 +46,30 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = await authService.getToken();
       if (!token) {
-        toast({
-          title: "Login Required",
-          description: "Please login to add items to cart",
-          variant: "destructive",
-        });
+        // Store pending action and redirect to login
+        localStorage.setItem('pendingAction', JSON.stringify({
+          type: 'add_to_cart',
+          data: {
+            productId,
+            quantity
+          },
+          path: '/cart',
+          timestamp: Date.now()
+        }));
+        window.location.href = '/login';
         return;
       }
-      
+
       const updatedCart = await cartService.addToCart(productId, quantity);
       setCart(updatedCart);
+      // Also fetch fresh cart data to ensure consistency
+      await fetchCart();
       toast({
         title: "Success",
         description: "Item added to cart",
       });
     } catch (error) {
+      console.error('Add to cart error:', error);
       toast({
         title: "Error",
         description: "Failed to add item to cart",
@@ -126,6 +135,21 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
     checkAuthAndFetchCart();
+    
+    // Listen for cart updates from redirectService
+    const handleCartUpdate = (event: CustomEvent) => {
+      if (event.detail) {
+        setCart(event.detail);
+      } else {
+        fetchCart();
+      }
+    };
+    
+    window.addEventListener('cartUpdated', handleCartUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('cartUpdated', handleCartUpdate as EventListener);
+    };
   }, []);
 
   return (

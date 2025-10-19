@@ -125,6 +125,115 @@ const Products: React.FC = () => {
       ...product,
       dynamic_fields: product.dynamic_fields || {}
     });
+    const [categoryParameters, setCategoryParameters] = useState<any[]>([]);
+    const [subcategoryParameters, setSubcategoryParameters] = useState<any[]>([]);
+
+    useEffect(() => {
+      if (product.category) {
+        fetchCategoryParameters(product.category);
+      }
+      if (product.subcategory) {
+        fetchSubcategoryParameters(product.subcategory);
+      }
+    }, [product.category, product.subcategory]);
+
+    const fetchCategoryParameters = async (categoryName: string) => {
+      try {
+        const { apiRequest } = await import('@/utils/apiUtils');
+        const { response, data } = await apiRequest(`/accounts/categories/parameters/?target_id=${categoryName}&target_type=category`);
+        if (response.ok && data?.parameters) {
+          setCategoryParameters(data.parameters);
+        }
+      } catch (error) {
+        console.error('Error fetching category parameters:', error);
+      }
+    };
+
+    const fetchSubcategoryParameters = async (subcategoryName: string) => {
+      try {
+        const { apiRequest } = await import('@/utils/apiUtils');
+        const { response, data } = await apiRequest(`/accounts/categories/parameters/?target_id=${subcategoryName}&target_type=subcategory`);
+        if (response.ok && data?.parameters) {
+          setSubcategoryParameters(data.parameters);
+        }
+      } catch (error) {
+        console.error('Error fetching subcategory parameters:', error);
+      }
+    };
+
+    const renderParameterField = (param: any) => {
+      const value = formData.dynamic_fields?.[param.name] || '';
+      
+      switch (param.field_type) {
+        case 'text':
+        case 'number':
+          return (
+            <div key={param.name}>
+              <Label>{param.label}</Label>
+              <Input
+                type={param.field_type}
+                value={value}
+                placeholder={param.placeholder}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  dynamic_fields: {
+                    ...formData.dynamic_fields,
+                    [param.name]: param.field_type === 'number' ? Number(e.target.value) : e.target.value
+                  }
+                })}
+              />
+            </div>
+          );
+        case 'select':
+          return (
+            <div key={param.name}>
+              <Label>{param.label}</Label>
+              <Select value={value} onValueChange={(val) => setFormData({
+                ...formData,
+                dynamic_fields: { ...formData.dynamic_fields, [param.name]: val }
+              })}>
+                <SelectTrigger>
+                  <SelectValue placeholder={`Select ${param.label}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {param.options?.map((option: string) => (
+                    <SelectItem key={option} value={option}>{option}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        case 'textarea':
+          return (
+            <div key={param.name}>
+              <Label>{param.label}</Label>
+              <Textarea
+                value={value}
+                placeholder={param.placeholder}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  dynamic_fields: { ...formData.dynamic_fields, [param.name]: e.target.value }
+                })}
+              />
+            </div>
+          );
+        case 'boolean':
+          return (
+            <div key={param.name} className="flex items-center space-x-2">
+              <Switch
+                checked={!!value}
+                onCheckedChange={(checked) => setFormData({
+                  ...formData,
+                  dynamic_fields: { ...formData.dynamic_fields, [param.name]: checked }
+                })}
+              />
+              <Label>{param.label}</Label>
+            </div>
+          );
+        default:
+          return null;
+      }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -222,6 +331,26 @@ const Products: React.FC = () => {
           />
         </div>
         
+        {/* Category Parameters */}
+        {categoryParameters.length > 0 && (
+          <div>
+            <Label className="text-sm font-semibold">Category Details</Label>
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              {categoryParameters.map(renderParameterField)}
+            </div>
+          </div>
+        )}
+
+        {/* Subcategory Parameters */}
+        {subcategoryParameters.length > 0 && (
+          <div>
+            <Label className="text-sm font-semibold">Subcategory Details</Label>
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              {subcategoryParameters.map(renderParameterField)}
+            </div>
+          </div>
+        )}
+        
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <Switch
@@ -235,11 +364,8 @@ const Products: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Switch
               id="free_delivery"
-              checked={formData.dynamic_fields?.free_delivery || false}
-              onCheckedChange={(checked) => setFormData({
-                ...formData, 
-                dynamic_fields: {...formData.dynamic_fields, free_delivery: checked}
-              })}
+              checked={formData.free_delivery || false}
+              onCheckedChange={(checked) => setFormData({...formData, free_delivery: checked})}
             />
             <Label htmlFor="free_delivery">Free Delivery</Label>
           </div>
@@ -492,6 +618,21 @@ const Products: React.FC = () => {
                                       <p>{stripHtml(viewingProduct.description)}</p>
                                     </div>
                                   </div>
+                                  {/* Dynamic Fields/Parameters */}
+                                  {viewingProduct.dynamic_fields && Object.keys(viewingProduct.dynamic_fields).length > 0 && (
+                                    <div>
+                                      <Label>Product Details</Label>
+                                      <div className="grid grid-cols-2 gap-4 mt-2">
+                                        {Object.entries(viewingProduct.dynamic_fields).map(([key, value]) => (
+                                          <div key={key}>
+                                            <Label className="text-sm text-gray-600">{key.replace('_', ' ').toUpperCase()}</Label>
+                                            <p className="font-medium">{Array.isArray(value) ? value.join(', ') : String(value)}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
                                   {viewingProduct.images && viewingProduct.images.length > 0 && (
                                     <div>
                                       <Label>Images</Label>

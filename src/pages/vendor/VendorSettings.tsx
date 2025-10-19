@@ -13,6 +13,7 @@ import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from '@/utils/apiUtils';
 import { authService } from '@/services/authService';
+import { verifyAuthentication, fixAuthenticationIssues } from '@/utils/authVerification';
 
 const settingsMenu = [
   {
@@ -62,24 +63,45 @@ export default function VendorSettings() {
 
   const fetchUserProfile = async () => {
     try {
+      // Verify and fix authentication issues first
+      console.log('🔍 Verifying authentication before profile fetch...');
+      await verifyAuthentication();
+      
       // Check persistent authentication
       const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
       const isVendorLoggedIn = await simplePersistentAuth.isVendorLoggedIn();
       
       if (!isVendorLoggedIn) {
-        navigate("/vendor/login");
-        return;
+        console.log('❌ No vendor login found, attempting to fix auth issues...');
+        const fixed = await fixAuthenticationIssues();
+        if (!fixed) {
+          console.log('❌ Could not fix auth issues, redirecting to login');
+          navigate("/vendor/login");
+          return;
+        }
       }
       
       // Restore auth for API calls
       const vendorAuth = await simplePersistentAuth.getVendorAuth();
       if (vendorAuth) {
+        console.log('⚙️ Restoring vendor auth for API calls');
         await authService.setAuth(vendorAuth.token, vendorAuth.user);
+      } else {
+        console.log('❌ No vendor auth found, redirecting to login');
+        navigate("/vendor/login");
+        return;
       }
 
       const { response: userResponse, data: userData } = await apiRequest('/profile/');
 
       if (!userResponse.ok) {
+        if (userResponse.status === 401) {
+          console.log('❌ Authentication failed, clearing auth and redirecting');
+          await authService.clearAuth();
+          await simplePersistentAuth.clearVendorAuth();
+          navigate("/vendor/login");
+          return;
+        }
         throw new Error("Failed to fetch user profile");
       }
 
@@ -117,6 +139,17 @@ export default function VendorSettings() {
       }
     } catch (err) {
       console.error("Error fetching profile:", err);
+      
+      // Handle authentication errors specifically
+      if (err.message?.includes('Authentication') || err.message?.includes('401')) {
+        console.log('❌ Authentication error, redirecting to login');
+        const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+        await authService.clearAuth();
+        await simplePersistentAuth.clearVendorAuth();
+        navigate("/vendor/login");
+        return;
+      }
+      
       setError("Failed to load profile data");
     } finally {
       setLoading(false);
@@ -587,7 +620,9 @@ export default function VendorSettings() {
             variant="outline"
             className="w-full flex items-center justify-center py-6 bg-red-50/40 border-red-200 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
             onClick={async () => {
+              const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
               await authService.clearAuth();
+              await simplePersistentAuth.clearVendorAuth();
               navigate("/vendor/login");
             }}
           >

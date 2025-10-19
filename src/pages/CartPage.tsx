@@ -64,10 +64,12 @@ const RecommendedProducts = () => {
       
       const processedProducts = (data.results || []).map(product => {
         const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
+        const DELIVERY_RADIUS_KM = 10;
         
         let distance = "N/A";
+        let distanceValue = Infinity;
         if (currentLocation && product.vendor_latitude && product.vendor_longitude) {
-          const distanceValue = calculateDistance(
+          distanceValue = calculateDistance(
             currentLocation.latitude, currentLocation.longitude,
             product.vendor_latitude, product.vendor_longitude
           );
@@ -81,11 +83,18 @@ const RecommendedProducts = () => {
           price: product.price,
           image: primaryImage?.image_url || "/placeholder-product.jpg",
           distance,
-          inStock: product.quantity > 0
+          distanceValue,
+          inStock: product.quantity > 0,
+          vendorOnline: product.vendor_online !== false,
+          deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM
         };
+      })
+      .filter(product => {
+        return product.vendorOnline && 
+               (product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius);
       });
       
-      setProducts(processedProducts);
+      setProducts(processedProducts.slice(0, 6));
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {
@@ -152,11 +161,16 @@ const RecommendedProducts = () => {
 
 function CartPage() {
   const { toast } = useToast();
-  const { cart, loading, updateCartItem, removeFromCart } = useCart();
+  const { cart, loading, updateCartItem, removeFromCart, fetchCart } = useCart();
   const [promoCode, setPromoCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const navigate = useNavigate();
+
+  // Force refresh cart when component mounts
+  useEffect(() => {
+    fetchCart();
+  }, []);
 
   const savedItems: any[] = [];
 

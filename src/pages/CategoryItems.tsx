@@ -1,15 +1,35 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Filter, MapPin, Star, Clock, Loader2, ShoppingCart, Plus, Heart } from "lucide-react";
+import { ArrowLeft, Filter, MapPin, Star, Clock, Loader2, ShoppingCart, Plus, Heart, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { locationService } from "@/services/locationService";
+import { authService } from "@/services/authService";
 import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
+import { getDeliveryInfo } from '@/utils/deliveryUtils';
 import { API_BASE } from '@/config/api';
+
+// CSS for hiding scrollbar
+const scrollbarHideStyles = `
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = scrollbarHideStyles;
+  document.head.appendChild(styleSheet);
+}
 
 // Google Maps precision Haversine formula with higher precision
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -66,6 +86,8 @@ export default function CategoryItems() {
   const [favorites, setFavorites] = useState(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('');
+  const [subCategories, setSubCategories] = useState([]);
+  const [selectedSubCategory, setSelectedSubCategory] = useState('');
   const { addToCart } = useCart();
   const { toast } = useToast();
 
@@ -83,12 +105,13 @@ export default function CategoryItems() {
     testDistance();
     fetchData();
     fetchFavorites();
+    fetchSubCategories();
     return unsubscribe;
   }, [categoryName]);
 
   useEffect(() => {
     fetchData(1);
-  }, [sortBy, categoryName]);
+  }, [sortBy, categoryName, selectedSubCategory]);
 
   // Refetch when location changes
   useEffect(() => {
@@ -97,6 +120,38 @@ export default function CategoryItems() {
       fetchData(1);
     }
   }, [userLocation]);
+
+  const fetchSubCategories = async () => {
+    try {
+      console.log('🔍 Fetching subcategories for:', categoryName);
+      const response = await fetch(`${API_BASE}categories/`);
+      const data = await response.json();
+      console.log('📊 Categories API response:', data);
+      
+      // Fix: Check for both data.categories and data.results
+      const categories = data.categories || data.results || [];
+      const category = categories.find(cat => 
+        cat.name.toLowerCase() === categoryName.toLowerCase()
+      );
+      console.log('🎯 Found category:', category);
+      
+      if (category?.subcategories) {
+        console.log('✅ Setting subcategories:', category.subcategories);
+        setSubCategories(category.subcategories);
+      } else {
+        console.log('❌ No subcategories found for category, trying alternative endpoint');
+        // Try the correct API endpoint from URL patterns
+        const subCatResponse = await fetch(`${API_BASE}categories/${categoryName}/subcategories/`);
+        if (subCatResponse.ok) {
+          const subCatData = await subCatResponse.json();
+          console.log('📊 Subcategories API response:', subCatData);
+          setSubCategories(subCatData.subcategories || subCatData.results || subCatData || []);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch subcategories:', error);
+    }
+  };
 
   const fetchData = async (page = 1) => {
     setLoading(true);
@@ -140,9 +195,12 @@ export default function CategoryItems() {
 
       // Since we're filtering on frontend, check if we have enough filtered products
       const allProducts = productsData.results || [];
-      const filteredCount = allProducts.filter(product =>
-        product.category && product.category.toLowerCase() === categoryName.toLowerCase()
-      ).length;
+      const filteredCount = allProducts.filter(product => {
+        const categoryMatch = product.category && product.category.toLowerCase() === categoryName.toLowerCase();
+        const subCategoryMatch = !selectedSubCategory || 
+          (product.subcategory && product.subcategory.toLowerCase() === selectedSubCategory.toLowerCase());
+        return categoryMatch && subCategoryMatch;
+      }).length;
 
       setPagination({
         page,
@@ -157,11 +215,15 @@ export default function CategoryItems() {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
+    const DELIVERY_RADIUS_KM = 10; // Default delivery radius in km
 
-    // Filter products by category first
-    let filteredProducts = products.filter(product =>
-      product.category && product.category.toLowerCase() === categoryName.toLowerCase()
-    );
+    // Filter products by category and subcategory
+    let filteredProducts = products.filter(product => {
+      const categoryMatch = product.category && product.category.toLowerCase() === categoryName.toLowerCase();
+      const subCategoryMatch = !selectedSubCategory || 
+        (product.subcategory && product.subcategory.toLowerCase() === selectedSubCategory.toLowerCase());
+      return categoryMatch && subCategoryMatch;
+    });
 
     let processedProducts = filteredProducts.map(product => {
       const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
@@ -178,10 +240,13 @@ export default function CategoryItems() {
         distance = `${distanceValue.toFixed(1)} km`;
       }
 
+      const deliveryInfo = getDeliveryInfo(product, product.vendor_delivery_fee);
+      
       return {
         id: product.id,
         name: product.name,
         vendor: product.vendor_name || "Unknown Vendor",
+        vendor_id: product.vendor_id,
         price: `₹${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
@@ -190,8 +255,37 @@ export default function CategoryItems() {
         distanceValue,
         deliveryTime: "30-45 mins",
         inStock: product.quantity > 0,
-        category: product.category
+        category: product.category,
+        totalSold: product.total_sold || 0,
+        deliveryInfo,
+        vendorOnline: product.vendor_online !== false, // Assume online if not specified
+        deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM,
+        // Include delivery properties
+        free_delivery: product.free_delivery,
+        custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+        custom_delivery_fee: product.custom_delivery_fee
       };
+    })
+    .filter(product => {
+      // Filter out products with zero stock
+      if (!product.inStock) {
+        console.log(`🚫 Excluding product ${product.name} - out of stock`);
+        return false;
+      }
+      
+      // Filter out products from offline vendors
+      if (!product.vendorOnline) {
+        console.log(`🚫 Excluding product ${product.name} - vendor offline`);
+        return false;
+      }
+      
+      // Filter out products outside delivery radius
+      if (product.distanceValue !== Infinity && product.distanceValue > product.deliveryRadius) {
+        console.log(`🚫 Excluding product ${product.name} - outside delivery radius (${product.distanceValue.toFixed(1)}km > ${product.deliveryRadius}km)`);
+        return false;
+      }
+      
+      return true;
     });
 
     // Apply sorting
@@ -325,8 +419,26 @@ export default function CategoryItems() {
                   </div>
                 </div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-primary text-sm">{product.price}</span>
-                  <span className="text-xs text-muted-foreground">{product.deliveryTime}</span>
+                  <div>
+                    <span className="font-bold text-primary text-sm">{product.price}</span>
+                    <p className="text-xs text-gray-500">{product.totalSold || 0} sold</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Truck className="h-3 w-3 text-muted-foreground" />
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      product.deliveryInfo?.isFreeDelivery 
+                        ? 'bg-green-100 text-green-700' 
+                        : product.deliveryInfo?.deliveryFee === null
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {product.deliveryInfo?.isFreeDelivery 
+                        ? 'Free' 
+                        : product.deliveryInfo?.deliveryFee === null 
+                        ? 'TBD' 
+                        : `₹${product.deliveryInfo?.deliveryFee}`}
+                    </span>
+                  </div>
                 </div>
               </CardContent>
             </div>
@@ -336,9 +448,32 @@ export default function CategoryItems() {
                 variant="outline"
                 className="flex-1 h-8 text-xs"
                 disabled={!product.inStock}
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
-                  addToCart(product.id, 1);
+                  const token = await authService.getToken();
+                  if (!token) {
+                    localStorage.setItem('pendingAction', JSON.stringify({
+                      type: 'add_to_cart',
+                      data: {
+                        productId: product.id,
+                        quantity: 1
+                      },
+                      path: '/cart',
+                      timestamp: Date.now()
+                    }));
+                    navigate('/login');
+                    return;
+                  }
+                  try {
+                    await addToCart(product.id, 1);
+                    toast({
+                      title: "Added to Cart",
+                      description: `${product.name} added to your cart`,
+                    });
+                    navigate('/cart');
+                  } catch (error) {
+                    console.error('Error adding to cart:', error);
+                  }
                 }}
               >
                 <ShoppingCart className="h-3 w-3 mr-1" />
@@ -348,8 +483,32 @@ export default function CategoryItems() {
                 size="sm"
                 className="flex-1 h-8 text-xs bg-green-600 hover:bg-green-700"
                 disabled={!product.inStock}
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
+                  const token = await authService.getToken();
+                  if (!token) {
+                    const productData = {
+                      id: product.id,
+                      name: product.name,
+                      price: product.price.replace('₹', ''),
+                      quantity: 1,
+                      vendor_name: product.vendor,
+                      vendor_id: product.vendor_id,
+                      images: [{ image_url: product.image }],
+                      // Include delivery properties
+                      free_delivery: product.free_delivery,
+                      custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+                      custom_delivery_fee: product.custom_delivery_fee
+                    };
+                    localStorage.setItem('pendingAction', JSON.stringify({
+                      type: 'buy_now',
+                      data: productData,
+                      path: '/checkout',
+                      timestamp: Date.now()
+                    }));
+                    navigate('/login');
+                    return;
+                  }
                   navigate("/checkout", {
                     state: {
                       directBuy: true,
@@ -359,7 +518,12 @@ export default function CategoryItems() {
                         price: product.price.replace('₹', ''),
                         quantity: 1,
                         vendor_name: product.vendor,
-                        images: [{ image_url: product.image }]
+                        vendor_id: product.vendor_id,
+                        images: [{ image_url: product.image }],
+                        // Include delivery properties
+                        free_delivery: product.free_delivery,
+                        custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+                        custom_delivery_fee: product.custom_delivery_fee
                       }
                     }
                   });
@@ -386,7 +550,7 @@ export default function CategoryItems() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border/50">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center gap-3 p-3">
           <Button
             variant="ghost"
@@ -409,10 +573,37 @@ export default function CategoryItems() {
             <Filter className="h-5 w-5" />
           </Button>
         </div>
+        
+        {/* Subcategories */}
+        <div className="px-3 pb-3">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide no-scrollbar">
+            <Button
+              variant={selectedSubCategory === '' ? 'default' : 'outline'}
+              size="sm"
+              className="whitespace-nowrap h-8 text-xs"
+              onClick={() => setSelectedSubCategory('')}
+            >
+              All
+            </Button>
+            {/* Dynamic subcategories from API */}
+            {Array.isArray(subCategories) && subCategories.map((subCat, index) => (
+              <Button
+                key={subCat.id || subCat.name || index}
+                variant={selectedSubCategory === (subCat.name || subCat) ? 'default' : 'outline'}
+                size="sm"
+                className="whitespace-nowrap h-8 text-xs"
+                onClick={() => setSelectedSubCategory(subCat.name || subCat)}
+              >
+                {subCat.name || subCat}
+              </Button>
+            ))}
+          </div>
+
+        </div>
       </div>
 
       {/* Search Results */}
-      <div className="p-4 pb-20">
+      <div className="p-4 pb-20 pt-32">
         {searchResults.products.length > 0 && (
           <div className="mb-6">
             {renderProducts()}

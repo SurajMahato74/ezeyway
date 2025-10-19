@@ -46,6 +46,7 @@ interface VendorData {
   deliveryRadius: string;
   minOrderAmount: string;
   profileImage: string | null;
+  referralCode: string | null;
 }
 
 const VendorMyProfile = () => {
@@ -89,7 +90,8 @@ const VendorMyProfile = () => {
     shopImages: [],
     deliveryRadius: "",
     minOrderAmount: "",
-    profileImage: null
+    profileImage: null,
+    referralCode: null
   });
 
   useEffect(() => {
@@ -190,7 +192,8 @@ const VendorMyProfile = () => {
           shopImages: profile.shop_images || [],
           deliveryRadius: profile.delivery_radius?.toString() || "",
           minOrderAmount: profile.min_order_amount || "",
-          profileImage: profile.user_info?.profile_picture || null
+          profileImage: profile.user_info?.profile_picture || null,
+          referralCode: profile.user_info?.referral_code || null
         });
       } else {
         // No vendor profile found, create one
@@ -230,7 +233,8 @@ const VendorMyProfile = () => {
                 shopImages: profile.shop_images || [],
                 deliveryRadius: profile.delivery_radius?.toString() || "",
                 minOrderAmount: profile.min_order_amount || "",
-                profileImage: profile.user_info?.profile_picture || null
+                profileImage: profile.user_info?.profile_picture || null,
+                referralCode: profile.user_info?.referral_code || null
               });
             } else {
               // Set default values if creation failed
@@ -816,6 +820,35 @@ const VendorMyProfile = () => {
                     onChange={(e) => updateVendorData("phone", e.target.value)}
                     disabled={!isEditing}
                   />
+                </div>
+                <div>
+                  <Label htmlFor="referralCode">My Referral Code</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="referralCode"
+                      value={vendorData.referralCode || 'Loading...'}
+                      disabled={true}
+                      className="bg-gray-50 font-mono text-center text-lg font-semibold text-blue-600"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (vendorData.referralCode) {
+                          navigator.clipboard.writeText(vendorData.referralCode);
+                          toast({
+                            title: "Copied!",
+                            description: "Referral code copied to clipboard",
+                          });
+                        }
+                      }}
+                      disabled={!vendorData.referralCode}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Share this code with customers to earn referral rewards</p>
                 </div>
               </div>
             </TabsContent>

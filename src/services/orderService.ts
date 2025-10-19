@@ -91,6 +91,23 @@ class OrderService {
     return data.results || data;
   }
 
+  async getOrdersPaginated(page: number = 1, pageSize: number = 10): Promise<{ results: Order[]; next: string | null; count: number }> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString()
+    });
+
+    const response = await fetch(`${API_BASE}orders/?${params}`, {
+      headers: await this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch orders');
+    }
+
+    return response.json();
+  }
+
   async getOrder(orderId: number): Promise<Order> {
     const response = await fetch(`${API_BASE}orders/${orderId}/`, {
       headers: await this.getAuthHeaders()

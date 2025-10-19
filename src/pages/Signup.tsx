@@ -17,6 +17,7 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
 
   const handleSignup = async () => {
     if (password !== confirmPassword) {
@@ -176,10 +177,33 @@ export default function Signup() {
                 placeholder="Confirm Password"
                 className="bg-white border-0 shadow-sm focus:ring-2 focus:ring-blue-500 w-80"
               />
+              
+              {/* Privacy Policy and Terms Checkbox */}
+              <div className="flex items-start space-x-2 w-80">
+                <input
+                  type="checkbox"
+                  id="agreeToTerms"
+                  checked={agreeToTerms}
+                  onChange={(e) => setAgreeToTerms(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 mt-1"
+                />
+                <label htmlFor="agreeToTerms" className="text-sm text-gray-700">
+                  I agree to the{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate('/privacy-policy')}
+                    className="text-blue-600 hover:text-blue-700 underline"
+                  >
+                    Privacy Policy
+                  </button>
+                  {" "}and Terms & Conditions
+                </label>
+              </div>
+              
               {error && <p className="text-red-600 text-center">{error}</p>}
               <Button
                 onClick={handleSignup}
-                disabled={!name || !phone || !email || !password || !confirmPassword || password !== confirmPassword || isLoading}
+                disabled={!name || !phone || !email || !password || !confirmPassword || password !== confirmPassword || !agreeToTerms || isLoading}
                 className="w-80 mx-auto bg-blue-600 hover:bg-blue-700"
               >
                 {isLoading ? "Creating Account..." : "Sign Up"}

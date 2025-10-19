@@ -300,8 +300,22 @@ export default function TrendingItemsPage() {
                 variant="outline"
                 className="flex-1 h-8 text-xs"
                 disabled={!product.inStock}
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
+                  const token = localStorage.getItem('token');
+                  if (!token) {
+                    localStorage.setItem('pendingAction', JSON.stringify({
+                      type: 'add_to_cart',
+                      data: {
+                        productId: product.id,
+                        quantity: 1
+                      },
+                      path: '/cart',
+                      timestamp: Date.now()
+                    }));
+                    navigate('/login');
+                    return;
+                  }
                   addToCart(product.id, 1);
                 }}
               >
@@ -312,8 +326,27 @@ export default function TrendingItemsPage() {
                 size="sm"
                 className="flex-1 h-8 text-xs bg-green-600 hover:bg-green-700"
                 disabled={!product.inStock}
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
+                  const token = localStorage.getItem('token');
+                  if (!token) {
+                    const productData = {
+                      id: product.id,
+                      name: product.name,
+                      price: product.price.replace('₹', ''),
+                      quantity: 1,
+                      vendor_name: product.vendor,
+                      images: [{ image_url: product.image }]
+                    };
+                    localStorage.setItem('pendingAction', JSON.stringify({
+                      type: 'buy_now',
+                      data: productData,
+                      path: '/checkout',
+                      timestamp: Date.now()
+                    }));
+                    navigate('/login');
+                    return;
+                  }
                   navigate("/checkout", {
                     state: {
                       directBuy: true,

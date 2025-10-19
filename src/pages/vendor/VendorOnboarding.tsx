@@ -46,6 +46,7 @@ export default function VendorOnboarding() {
     vendorType: "",
     categories: [],
     description: "",
+    referralCode: "",
   });
   const [locationError, setLocationError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -350,6 +351,9 @@ export default function VendorOnboarding() {
       formDataToSend.append("pan_number", formData.panNumber || "");
       formDataToSend.append("delivery_radius", formData.deliveryRadius || "");
       formDataToSend.append("min_order_amount", formData.minOrderAmount || "");
+      if (formData.referralCode) {
+        formDataToSend.append("referral_code", formData.referralCode);
+      }
       
       // Only add documents if new ones are uploaded
       if (formData.shopRegDoc) {
@@ -602,6 +606,13 @@ export default function VendorOnboarding() {
                 maxLength={9}
                 required
               />
+              <Input
+                placeholder="Referral Code (Optional)"
+                value={formData.referralCode}
+                onChange={(e) => updateFormData("referralCode", e.target.value.toUpperCase())}
+                maxLength={8}
+              />
+              <p className="text-xs text-gray-500">Enter a referral code from another vendor to get bonus points</p>
             </div>
           )}
           {currentStep === 2 && (
@@ -942,6 +953,7 @@ export default function VendorOnboarding() {
                   <p><strong>Phone:</strong> {formData.phone}</p>
                   <p><strong>Email:</strong> {formData.email}</p>
                   <p><strong>PAN Number:</strong> {formData.panNumber || "N/A"}</p>
+                  <p><strong>Referral Code:</strong> {formData.referralCode || "None"}</p>
                 </div>
 
                 {/* Address */}

@@ -71,7 +71,29 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
-    fetchTrendingItems();
+    
+    // Start location tracking immediately
+    locationService.startTracking();
+    
+    // Only fetch if we already have location, otherwise wait for location update
+    const currentLocation = locationService.getLocation();
+    if (currentLocation) {
+      fetchTrendingItems();
+    } else {
+      // If no location after 3 seconds, fetch without location (will show all products)
+      const timeoutId = setTimeout(() => {
+        if (!locationService.getLocation()) {
+          console.log('⚠️ No location available, fetching products without location filter');
+          fetchTrendingItems();
+        }
+      }, 3000);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        unsubscribe();
+      };
+    }
+    
     return unsubscribe;
   }, []);
 
@@ -126,6 +148,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
+    const DELIVERY_RADIUS_KM = 10;
 
     let processedProducts = products.map(product => {
       const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
@@ -148,6 +171,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         id: product.id,
         name: product.name,
         vendor: product.vendor_name || "Unknown Vendor",
+        vendor_id: product.vendor_id,
         distance,
         distanceValue,
         rating: 4.5, // Default rating since API might not have it
@@ -157,8 +181,18 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         inStock: product.quantity > 0,
         category: product.category,
         totalSold: product.total_sold || 0,
-        deliveryInfo
+        deliveryInfo,
+        vendorOnline: product.vendor_online !== false,
+        deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM,
+        // Include delivery properties for checkout
+        free_delivery: product.free_delivery,
+        custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+        custom_delivery_fee: product.custom_delivery_fee
       };
+    })
+    .filter(product => {
+      return product.vendorOnline && 
+             (product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius);
     });
 
     // Sort by rating (highest first) to simulate trending/popular items
@@ -174,16 +208,28 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
 
   const handleBuyNow = async (product: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await addToCartWithAuth(product.id.toString(), 1);
-      toast({
-        title: "Added to Cart",
-        description: `${product.name} added to your cart`,
-      });
-      navigate("/cart");
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-    }
+    
+    // Find the original product data to get delivery properties
+    const originalProduct = trendingItems.find(item => item.id === product.id);
+    
+    navigate("/checkout", {
+      state: {
+        directBuy: true,
+        product: {
+          id: product.id,
+          name: product.name,
+          price: product.price.replace('₹', ''),
+          quantity: 1,
+          vendor_name: product.vendor,
+          vendor_id: originalProduct?.vendor_id,
+          images: [{ image_url: product.image }],
+          // Include delivery properties
+          free_delivery: originalProduct?.free_delivery,
+          custom_delivery_fee_enabled: originalProduct?.custom_delivery_fee_enabled,
+          custom_delivery_fee: originalProduct?.custom_delivery_fee
+        }
+      }
+    });
   };
 
   if (loading) {
@@ -306,16 +352,78 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full h-6 text-[10px] border-[#856043] text-[#856043] hover:bg-[#856043] hover:text-white"
-                disabled={!item.inStock}
-                onClick={(e) => handleBuyNow(item, e)}
-              >
-                <ShoppingCart className="h-2 w-2 mr-1" />
-                Buy Now
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-6 h-6 p-0 border-[#856043] text-[#856043] hover:bg-[#856043] hover:text-white"
+                  disabled={!item.inStock}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const token = await authService.getToken();
+                    if (!token) {
+                      localStorage.setItem('pendingAction', JSON.stringify({
+                        type: 'add_to_cart',
+                        data: {
+                          productId: item.id,
+                          quantity: 1
+                        },
+                        path: '/cart',
+                        timestamp: Date.now()
+                      }));
+                      navigate('/login');
+                      return;
+                    }
+                    try {
+                      await addToCartWithAuth(item.id.toString(), 1);
+                      toast({
+                        title: "Added to Cart",
+                        description: `${item.name} added to your cart`,
+                      });
+                      navigate('/cart');
+                    } catch (error) {
+                      console.error('Error adding to cart:', error);
+                    }
+                  }}
+                >
+                  <ShoppingCart className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex-1 h-6 text-[10px] bg-green-600 hover:bg-green-700 text-white"
+                  disabled={!item.inStock}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const token = await authService.getToken();
+                    if (!token) {
+                      localStorage.setItem('pendingAction', JSON.stringify({
+                        type: 'buy_now',
+                        data: {
+                          id: item.id,
+                          name: item.name,
+                          price: item.price.replace('₹', ''),
+                          quantity: 1,
+                          vendor_name: item.vendor,
+                          vendor_id: item.vendor_id,
+                          images: [{ image_url: item.image }],
+                          // Include delivery properties
+                          free_delivery: item.free_delivery,
+                          custom_delivery_fee_enabled: item.custom_delivery_fee_enabled,
+                          custom_delivery_fee: item.custom_delivery_fee
+                        },
+                        path: '/checkout',
+                        timestamp: Date.now()
+                      }));
+                      navigate('/login');
+                      return;
+                    }
+                    handleBuyNow(item, e);
+                  }}
+                >
+                  Buy
+                </Button>
+              </div>
             </div>
           </motion.div>
         ))}

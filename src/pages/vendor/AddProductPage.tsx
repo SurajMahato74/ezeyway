@@ -30,6 +30,7 @@ import { useNavigate } from 'react-router-dom';
 import { productApi } from '@/lib/productApi';
 import { toast } from 'sonner';
 import SuccessNotification from '@/components/SuccessNotification';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const productSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
@@ -79,8 +80,13 @@ const AddProductPage: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [vendorCategories, setVendorCategories] = useState<string[]>([]);
-  const [availableSubcategories, setAvailableSubcategories] = useState<string[]>([]);
+  const [apiCategories, setApiCategories] = useState<any[]>([]);
+  const [availableSubcategories, setAvailableSubcategories] = useState<any[]>([]);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [categoryParameters, setCategoryParameters] = useState<any[]>([]);
+  const [subcategoryParameters, setSubcategoryParameters] = useState<any[]>([]);
+  const [loadingParameters, setLoadingParameters] = useState(false);
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -110,13 +116,25 @@ const AddProductPage: React.FC = () => {
     // Clear subcategory when category changes
     setValue('subcategory', '');
     
-    // Fetch subcategories when category changes
+    // Fetch subcategories and parameters when category changes
     if (watchedCategory) {
       fetchSubcategories(watchedCategory, false);
+      fetchCategoryParameters(watchedCategory);
     } else {
       setAvailableSubcategories([]);
+      setCategoryParameters([]);
     }
   }, [watchedCategory, setValue]);
+
+  // Watch subcategory changes to fetch subcategory parameters
+  const watchedSubcategory = watch('subcategory');
+  useEffect(() => {
+    if (watchedSubcategory) {
+      fetchSubcategoryParameters(watchedSubcategory);
+    } else {
+      setSubcategoryParameters([]);
+    }
+  }, [watchedSubcategory]);
 
   const fetchSubcategories = async (categoryName: string, autoSelect = false) => {
     try {
@@ -126,11 +144,15 @@ const AddProductPage: React.FC = () => {
       
       if (response.ok && data) {
         const subcategories = data.subcategories || [];
-        setAvailableSubcategories(subcategories);
+        // Convert to objects with id and name if they're just strings
+        const subcategoryObjects = subcategories.map((sub: any, index: number) => 
+          typeof sub === 'string' ? { id: index + 1, name: sub } : sub
+        );
+        setAvailableSubcategories(subcategoryObjects);
         
         // Auto-select first subcategory if requested and available
-        if (autoSelect && subcategories.length > 0) {
-          setValue('subcategory', subcategories[0]);
+        if (autoSelect && subcategoryObjects.length > 0) {
+          setValue('subcategory', subcategoryObjects[0].name);
         }
       } else {
         setAvailableSubcategories([]);
@@ -143,11 +165,63 @@ const AddProductPage: React.FC = () => {
     }
   };
 
-  // Fetch vendor profile and set default category
+  const fetchCategoryParameters = async (categoryName: string) => {
+    try {
+      setLoadingParameters(true);
+      const categoryId = apiCategories.find(cat => cat.name === categoryName)?.id;
+      if (!categoryId) return;
+      
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { response, data } = await apiRequest(`/accounts/categories/parameters/?target_id=${categoryId}&target_type=category`);
+      
+      if (response.ok && data?.parameters) {
+        setCategoryParameters(data.parameters);
+      } else {
+        setCategoryParameters([]);
+      }
+    } catch (error) {
+      console.error('Error fetching category parameters:', error);
+      setCategoryParameters([]);
+    } finally {
+      setLoadingParameters(false);
+    }
+  };
+
+  const fetchSubcategoryParameters = async (subcategoryName: string) => {
+    try {
+      setLoadingParameters(true);
+      const subcategory = availableSubcategories.find(sub => sub.name === subcategoryName);
+      if (!subcategory?.id) return;
+      
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { response, data } = await apiRequest(`/accounts/categories/parameters/?target_id=${subcategory.id}&target_type=subcategory`);
+      
+      if (response.ok && data?.parameters) {
+        setSubcategoryParameters(data.parameters);
+      } else {
+        setSubcategoryParameters([]);
+      }
+    } catch (error) {
+      console.error('Error fetching subcategory parameters:', error);
+      setSubcategoryParameters([]);
+    } finally {
+      setLoadingParameters(false);
+    }
+  };
+
+  // Fetch categories and vendor profile
   useEffect(() => {
-    const fetchVendorProfile = async () => {
+    const fetchData = async () => {
       try {
         const { apiRequest } = await import('@/utils/apiUtils');
+        
+        // Fetch categories from API
+        const { response: catResponse, data: catData } = await apiRequest('/categories/');
+        if (catResponse.ok && catData?.categories) {
+          setApiCategories(catData.categories);
+        }
+        
+        // Fetch vendor profile
         const { response, data } = await apiRequest('/vendor-profiles/');
         console.log('Vendor profile response:', { response: response.ok, data });
         
@@ -158,21 +232,22 @@ const AddProductPage: React.FC = () => {
           setVendorCategories(categories);
           
           // Auto-select first category
-          if (categories.length > 0) {
-            const firstCategory = categories[0];
+          const categoriesToUse = categories.length > 0 ? categories : (catData?.categories || []);
+          if (categoriesToUse.length > 0) {
+            const firstCategory = typeof categoriesToUse[0] === 'string' ? categoriesToUse[0] : categoriesToUse[0].name;
             setValue('category', firstCategory);
             setSelectedCategory(firstCategory);
-            
-            // Fetch and auto-select first subcategory
             fetchSubcategories(firstCategory, true);
           }
         }
       } catch (error) {
-        console.error('Error fetching vendor profile:', error);
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoadingCategories(false);
       }
     };
     
-    fetchVendorProfile();
+    fetchData();
   }, [setValue]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,20 +311,12 @@ const AddProductPage: React.FC = () => {
       setImagePreviews([]);
       setTags([]);
       
-      // Re-set the vendor's category after reset
-      if (vendorCategories.length > 0) {
-        const categoryMapping: Record<string, string> = {
-          'Clothing': 'clothing',
-          'Electronics': 'electronics',
-          'Food': 'food',
-          'Baby': 'baby',
-          'Grocery': 'grocery',
-          'Meat': 'meat',
-          'Medicine': 'medicine'
-        };
-        const mappedCategory = categoryMapping[vendorCategories[0]] || vendorCategories[0].toLowerCase();
-        setValue('category', mappedCategory);
-        setSelectedCategory(mappedCategory);
+      // Re-set category after reset
+      const categoriesToUse = vendorCategories.length > 0 ? vendorCategories : apiCategories;
+      if (categoriesToUse.length > 0) {
+        const firstCategory = typeof categoriesToUse[0] === 'string' ? categoriesToUse[0] : categoriesToUse[0].name;
+        setValue('category', firstCategory);
+        setSelectedCategory(firstCategory);
       }
     } catch (error) {
       toast.error('Failed to create product. Please try again.');
@@ -257,7 +324,230 @@ const AddProductPage: React.FC = () => {
     }
   };
 
+  const renderParameterField = (param: any) => {
+    if (!param || !param.name || !param.field_type) {
+      return null;
+    }
+    
+    const fieldName = `dynamic_fields.${param.name}`;
+    
+    switch (param.field_type) {
+      case 'text':
+        return (
+          <div key={param.name} className="space-y-1">
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">
+              {param.label} {param.is_required && <span className="text-red-500">*</span>}
+            </Label>
+            <Controller
+              name={fieldName}
+              control={control}
+              rules={{ required: param.is_required }}
+              render={({ field: formField }) => (
+                <Input {...formField} placeholder={param.placeholder} className="h-8 text-xs" />
+              )}
+            />
+          </div>
+        );
+      
+      case 'number':
+        return (
+          <div key={param.name} className="space-y-1">
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">
+              {param.label} {param.is_required && <span className="text-red-500">*</span>}
+            </Label>
+            <Controller
+              name={fieldName}
+              control={control}
+              rules={{ required: param.is_required }}
+              render={({ field: formField }) => (
+                <Input 
+                  {...formField} 
+                  type="number" 
+                  placeholder={param.placeholder}
+                  className="h-8 text-xs"
+                  onChange={(e) => formField.onChange(Number(e.target.value))}
+                />
+              )}
+            />
+          </div>
+        );
+      
+      case 'select':
+        return (
+          <div key={param.name} className="space-y-1">
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">
+              {param.label} {param.is_required && <span className="text-red-500">*</span>}
+            </Label>
+            <Controller
+              name={fieldName}
+              control={control}
+              rules={{ required: param.is_required }}
+              render={({ field: formField }) => (
+                <Select onValueChange={formField.onChange} value={formField.value}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder={`Select ${param.label.toLowerCase()}`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {param.options?.map((option: string, index: number) => (
+                      <SelectItem key={`${param.name}-${option}-${index}`} value={option} className="text-xs">{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+        );
+      
+      case 'multiselect':
+        return (
+          <div key={param.name} className="space-y-1">
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">
+              {param.label} {param.is_required && <span className="text-red-500">*</span>}
+            </Label>
+            <Controller
+              name={fieldName}
+              control={control}
+              rules={{ required: param.is_required }}
+              render={({ field: formField }) => {
+                const selectedValues = formField.value || [];
+                return (
+                  <div className="space-y-2">
+                    <Select onValueChange={(value) => {
+                      if (!selectedValues.includes(value)) {
+                        formField.onChange([...selectedValues, value]);
+                      }
+                    }}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder={`Select ${param.label.toLowerCase()}`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {param.options?.map((option: string, index: number) => (
+                          <SelectItem key={`${param.name}-multiselect-${option}-${index}`} value={option} className="text-xs">{option}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedValues.map((value: string, index: number) => (
+                        <Badge key={`${param.name}-badge-${value}-${index}`} variant="secondary" className="text-xs flex items-center gap-1">
+                          {value}
+                          <X 
+                            className="h-2 w-2 cursor-pointer" 
+                            onClick={() => {
+                              formField.onChange(selectedValues.filter((v: string) => v !== value));
+                            }}
+                          />
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }}
+            />
+          </div>
+        );
+      
+      case 'textarea':
+        return (
+          <div key={param.name} className="space-y-1">
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">
+              {param.label} {param.is_required && <span className="text-red-500">*</span>}
+            </Label>
+            <Controller
+              name={fieldName}
+              control={control}
+              rules={{ required: param.is_required }}
+              render={({ field: formField }) => (
+                <Textarea {...formField} placeholder={param.placeholder} className="text-xs" rows={2} />
+              )}
+            />
+          </div>
+        );
+      
+      case 'boolean':
+        return (
+          <div key={param.name} className="flex items-center space-x-2">
+            <Controller
+              name={fieldName}
+              control={control}
+              render={({ field: formField }) => (
+                <Switch 
+                  checked={formField.value} 
+                  onCheckedChange={formField.onChange}
+                />
+              )}
+            />
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">{param.label}</Label>
+          </div>
+        );
+      
+      case 'date':
+        return (
+          <div key={param.name} className="space-y-1">
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">
+              {param.label} {param.is_required && <span className="text-red-500">*</span>}
+            </Label>
+            <Controller
+              name={fieldName}
+              control={control}
+              rules={{ required: param.is_required }}
+              render={({ field: formField }) => (
+                <Input {...formField} type="date" className="h-8 text-xs" />
+              )}
+            />
+          </div>
+        );
+      
+      case 'color':
+        return (
+          <div key={param.name} className="space-y-1">
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">
+              {param.label} {param.is_required && <span className="text-red-500">*</span>}
+            </Label>
+            <Controller
+              name={fieldName}
+              control={control}
+              rules={{ required: param.is_required }}
+              render={({ field: formField }) => (
+                <Input {...formField} type="color" className="h-8 text-xs" />
+              )}
+            />
+          </div>
+        );
+      
+      case 'range':
+        return (
+          <div key={param.name} className="space-y-1">
+            <Label htmlFor={param.name} className="text-xs font-medium text-gray-700">
+              {param.label} {param.is_required && <span className="text-red-500">*</span>}
+            </Label>
+            <Controller
+              name={fieldName}
+              control={control}
+              rules={{ required: param.is_required }}
+              render={({ field: formField }) => (
+                <Input 
+                  {...formField} 
+                  type="range" 
+                  min={param.min_value || 0}
+                  max={param.max_value || 100}
+                  step={param.step || 1}
+                  className="h-8 text-xs" 
+                />
+              )}
+            />
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
+
   const renderDynamicField = (field: CategoryField) => {
+    if (!field || !field.name || !field.type) {
+      return null;
+    }
+    
     const fieldName = `dynamic_fields.${field.name}`;
     
     switch (field.type) {
@@ -317,8 +607,8 @@ const AddProductPage: React.FC = () => {
                     <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
                   </SelectTrigger>
                   <SelectContent>
-                    {field.options?.map((option: string) => (
-                      <SelectItem key={option} value={option} className="text-xs">{option}</SelectItem>
+                    {field.options?.filter(option => option != null).map((option: string, index: number) => (
+                      <SelectItem key={`${field.name}-${option}-${index}`} value={option} className="text-xs">{option}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -350,14 +640,14 @@ const AddProductPage: React.FC = () => {
                         <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
                       </SelectTrigger>
                       <SelectContent>
-                        {field.options?.map((option: string) => (
-                          <SelectItem key={option} value={option} className="text-xs">{option}</SelectItem>
+                        {field.options?.filter(option => option != null).map((option: string, index: number) => (
+                          <SelectItem key={`${field.name}-multiselect-${option}-${index}`} value={option} className="text-xs">{option}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <div className="flex flex-wrap gap-1">
-                      {selectedValues.map((value: string) => (
-                        <Badge key={value} variant="secondary" className="text-xs flex items-center gap-1">
+                      {selectedValues.map((value: string, index: number) => (
+                        <Badge key={`${field.name}-badge-${value}-${index}`} variant="secondary" className="text-xs flex items-center gap-1">
                           {value}
                           <X 
                             className="h-2 w-2 cursor-pointer" 
@@ -531,14 +821,21 @@ const AddProductPage: React.FC = () => {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {vendorCategories.map((categoryName) => (
-                          <SelectItem key={categoryName} value={categoryName} className="text-xs">
-                            <div className="flex items-center gap-2">
-                              <span>📦</span>
-                              <span>{categoryName}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
+                        {loadingCategories ? (
+                          <SelectItem value="loading" disabled className="text-xs">Loading...</SelectItem>
+                        ) : vendorCategories.length > 0 ? (
+                          vendorCategories.map((categoryName) => (
+                            <SelectItem key={categoryName} value={categoryName} className="text-xs">
+                              📦 {categoryName}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          apiCategories.map((category) => (
+                            <SelectItem key={category.id} value={category.name} className="text-xs">
+                              📦 {category.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   )}
@@ -560,8 +857,8 @@ const AddProductPage: React.FC = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {availableSubcategories.map((subcategory) => (
-                            <SelectItem key={subcategory} value={subcategory} className="text-xs">
-                              {subcategory}
+                            <SelectItem key={subcategory.id} value={subcategory.name} className="text-xs">
+                              {subcategory.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -582,7 +879,33 @@ const AddProductPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Category-Specific Fields */}
+          {/* Category Parameters */}
+          {categoryParameters.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Tag className="h-4 w-4 text-green-600" />
+                <h3 className="text-sm font-semibold text-gray-900">Category Details</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {categoryParameters.map(renderParameterField)}
+              </div>
+            </div>
+          )}
+
+          {/* Subcategory Parameters */}
+          {subcategoryParameters.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Tag className="h-4 w-4 text-blue-600" />
+                <h3 className="text-sm font-semibold text-gray-900">Subcategory Details</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {subcategoryParameters.map(renderParameterField)}
+              </div>
+            </div>
+          )}
+
+          {/* Category-Specific Fields (Legacy) */}
           {selectedCategory && categoryConfigs[selectedCategory] && (
             <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
               <div className="flex items-center gap-2 mb-2">
@@ -590,9 +913,6 @@ const AddProductPage: React.FC = () => {
                 <span className="mr-1">{categoryConfigs[selectedCategory].icon}</span>
                 <h3 className="text-sm font-semibold text-gray-900">{categoryConfigs[selectedCategory].name} Details</h3>
               </div>
-              
-
-              
               <div className="grid grid-cols-2 gap-3">
                 {categoryConfigs[selectedCategory].fields.map(renderDynamicField)}
               </div>
@@ -792,23 +1112,27 @@ const AddProductPage: React.FC = () => {
               <Controller
                 name="description"
                 control={control}
-                render={({ field }) => (
-                  <ReactQuill
-                    theme="snow"
-                    value={field.value}
-                    onChange={field.onChange}
-                    modules={{
-                      toolbar: [
-                        [{ 'header': [1, 2, 3, false] }],
-                        ['bold', 'italic', 'underline'],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        ['link'],
-                        ['clean']
-                      ],
-                    }}
-                    style={{ minHeight: '120px', fontSize: '12px' }}
-                  />
-                )}
+                render={({ field }) => {
+                  const quillRef = React.useRef(null);
+                  return (
+                    <ReactQuill
+                      ref={quillRef}
+                      theme="snow"
+                      value={field.value}
+                      onChange={field.onChange}
+                      modules={{
+                        toolbar: [
+                          [{ 'header': [1, 2, 3, false] }],
+                          ['bold', 'italic', 'underline'],
+                          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                          ['link'],
+                          ['clean']
+                        ],
+                      }}
+                      style={{ minHeight: '120px', fontSize: '12px' }}
+                    />
+                  );
+                }}
               />
               {errors.description && <p className="text-red-500 text-xs">{errors.description.message}</p>}
             </div>
@@ -833,8 +1157,8 @@ const AddProductPage: React.FC = () => {
             
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-xs flex items-center gap-1">
+                {tags.map((tag, index) => (
+                  <Badge key={`tag-${tag}-${index}`} variant="secondary" className="text-xs flex items-center gap-1">
                     {tag}
                     <X 
                       className="h-2 w-2 cursor-pointer" 
@@ -878,4 +1202,12 @@ const AddProductPage: React.FC = () => {
   );
 };
 
-export default AddProductPage;
+const AddProductPageWithErrorBoundary: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <AddProductPage />
+    </ErrorBoundary>
+  );
+};
+
+export default AddProductPageWithErrorBoundary;

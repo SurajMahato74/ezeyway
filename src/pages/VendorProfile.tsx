@@ -65,11 +65,13 @@ export default function VendorProfile() {
       setError(null);
       
       // Fetch vendor profile first
-      const { response: vendorResponse, data: vendorData } = await apiRequest(`/api/vendor-profiles/${vendorId}/`);
+      const { response: vendorResponse, data: vendorData } = await apiRequest(`vendor-profiles/${vendorId}/`);
       
       if (!vendorResponse.ok) {
         if (vendorResponse.status === 404) {
           throw new Error('Vendor not found');
+        } else if (vendorResponse.status === 500) {
+          throw new Error('Server error - vendor profile unavailable');
         }
         throw new Error('Failed to fetch vendor profile');
       }
@@ -90,21 +92,20 @@ export default function VendorProfile() {
       }
       
       // Fetch products for this vendor using search API with vendor name
-      const { response: productsResponse, data: productsData } = await apiRequest(`search/products/?search=${encodeURIComponent(vendorData.business_name)}`);
-      
-      if (productsResponse.ok && productsData) {
-        // Filter products to only show ones from this specific vendor
-        const vendorProducts = productsData.results?.filter(product => 
-          product.vendor_name === vendorData.business_name
-        ) || [];
-        setProducts(vendorProducts);
-      }
-      
-      if (!vendorResponse.ok) {
-        if (vendorResponse.status === 404) {
-          throw new Error('Vendor not found');
+      try {
+        const { response: productsResponse, data: productsData } = await apiRequest(`search/products/?search=${encodeURIComponent(vendorData.business_name)}`);
+        
+        if (productsResponse.ok && productsData) {
+          // Filter products to only show ones from this specific vendor
+          const vendorProducts = productsData.results?.filter(product => 
+            product.vendor_name === vendorData.business_name
+          ) || [];
+          setProducts(vendorProducts);
         }
-        throw new Error('Failed to fetch vendor profile');
+      } catch (productsError) {
+        console.error('Error fetching products:', productsError);
+        // Don't fail the whole page if products can't be loaded
+        setProducts([]);
       }
 
     } catch (err) {
@@ -112,7 +113,7 @@ export default function VendorProfile() {
       setError(err.message);
       toast({
         title: "Error",
-        description: "Failed to load vendor profile",
+        description: err.message || "Failed to load vendor profile",
         variant: "destructive",
       });
     } finally {

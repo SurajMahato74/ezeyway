@@ -263,9 +263,22 @@ const VendorHome: React.FC = () => {
       const { apiRequest } = await import('@/utils/apiUtils');
       const { response, data } = await apiRequest('sliders/?user_type=vendor');
       
+      console.log('🔍 VendorHome API Response:', data);
+      
       if (response.ok && data && data.sliders) {
-        setSliders(data.sliders);
-        if (data.sliders.length > 0) {
+        // Filter banners based on visibility for vendor side
+        const filteredSliders = data.sliders.filter(slider => {
+          const visibility = slider.visibility || 'both';
+          const shouldShow = visibility === 'vendor' || visibility === 'both';
+          console.log(`🎯 VendorHome Slider "${slider.title}": visibility="${visibility}", shouldShow=${shouldShow}`);
+          return shouldShow;
+        });
+        
+        console.log(`📊 VendorHome: BEFORE filtering: ${data.sliders.length} sliders`);
+        console.log(`📊 VendorHome: AFTER filtering: ${filteredSliders.length} sliders`);
+        
+        setSliders(filteredSliders);
+        if (filteredSliders.length > 0) {
           setCurrentSlide(1);
         }
       }

@@ -65,6 +65,7 @@ import ProductManagement from "./pages/vendor/ProductManagement";
 import VendorNotifications from "./pages/vendor/VendorNotifications";
 import VendorSummary from "./pages/vendor/VendorSummary";
 import VendorAnalytics from "./pages/vendor/VendorAnalytics";
+import { Notifications } from "./pages/Notifications";
 
 
 // Placeholder components for new routes
@@ -301,6 +302,7 @@ const RoutesWithAnalytics = () => {
       <Route path="/vendor/settings" element={<VendorSettings />} />
       <Route path="/vendor/summary" element={<VendorSummary />} />
       <Route path="/vendor/analytics" element={<VendorAnalytics />} />
+      <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
     </Routes>

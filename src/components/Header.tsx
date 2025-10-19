@@ -130,9 +130,9 @@ export function Header() {
   };
 
   return (
-    <div className="sticky top-0 z-50 flex items-center justify-between px-3 py-2 md:py-1 bg-card/95 backdrop-blur-sm border-b border-border/30 min-h-[60px] md:min-h-[50px]">
+    <div className="sticky top-0 z-50 flex items-center justify-between px-3 py-1 bg-card/95 backdrop-blur-sm border-b border-border/30 min-h-[45px]">
       <div className="flex items-center">
-        <img src={logo} alt="Ezeyway" className="h-20 w-20 md:h-12 md:w-24 object-contain" />
+        <img src={logo} alt="Ezeyway" className="h-24 w-24 md:h-16 md:w-28 object-contain" />
       </div>
       
       <div className="flex items-center gap-1.5 cursor-pointer text-center" onClick={getCurrentLocation}>
@@ -144,7 +144,6 @@ export function Header() {
       </div>
       
       <div className="flex items-center gap-2">
-        <HeaderCartIcon />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="p-1.5 hover:bg-muted rounded-lg transition-smooth relative">
@@ -173,7 +172,7 @@ export function Header() {
                     className={`p-3 border-b hover:bg-muted/50 cursor-pointer ${
                       conversation.unread_count > 0 ? 'bg-blue-50/50' : ''
                     }`}
-                    onClick={() => navigateWithAuth('/messages')}
+                    onClick={() => navigateWithAuth(`/messages?conversation=${conversation.id}`)}
                   >
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">

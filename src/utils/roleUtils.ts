@@ -40,25 +40,33 @@ export const switchToVendorRole = async () => {
     }
     
     if (user.user_type === 'vendor') {
+      console.log('✅ Already in vendor role');
       return { success: true, message: 'Already in vendor role' };
     }
     
+    console.log('🔄 Switching to vendor role...');
     const { response, data } = await apiRequest('/switch-role/', {
       method: 'POST',
       body: JSON.stringify({ role: 'vendor' })
     });
 
     if (response.ok) {
-      const updatedUser = { ...user, user_type: 'vendor' };
-      const token = await authService.getToken();
+      console.log('✅ Role switch API call successful');
       
-      // Update both auth services with the same token
-      await authService.setAuth(token, updatedUser);
+      // Get fresh token from response if provided
+      const newToken = data?.token || await authService.getToken();
+      const updatedUser = { ...user, user_type: 'vendor', current_role: 'vendor' };
+      
+      console.log('🔄 Updating auth services with vendor role...');
+      
+      // Update main auth service first
+      await authService.setAuth(newToken, updatedUser);
+      
+      // Update vendor persistent auth
       const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
-      await simplePersistentAuth.saveVendorLogin(token, updatedUser);
+      await simplePersistentAuth.saveVendorLogin(newToken, updatedUser);
       
-      // Ensure the main authService token is updated for API calls
-      await authService.updateUser(updatedUser);
+      console.log('✅ Auth services updated successfully');
       
       // Check if vendor profile exists, create if not
       try {
@@ -66,7 +74,7 @@ export const switchToVendorRole = async () => {
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
           if (!profileData.results || profileData.results.length === 0) {
-            // Create vendor profile
+            console.log('🏪 Creating vendor profile...');
             await createVendorProfile(user);
           }
         }
@@ -74,12 +82,13 @@ export const switchToVendorRole = async () => {
         console.log('Profile check failed, will create on first access:', profileError);
       }
       
-      return { success: true, message: 'Switched to vendor role' };
+      return { success: true, message: 'Switched to vendor role', user: updatedUser };
     } else {
+      console.error('❌ Role switch API failed:', response.status, data);
       throw new Error(data?.error || 'Role switch failed');
     }
   } catch (error) {
-    console.error('Role switch error:', error);
+    console.error('💥 Role switch error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -93,31 +102,40 @@ export const switchToCustomerRole = async () => {
     }
     
     if (user.user_type === 'customer') {
+      console.log('✅ Already in customer role');
       return { success: true, message: 'Already in customer role' };
     }
     
+    console.log('🔄 Switching to customer role...');
     const { response, data } = await apiRequest('/switch-role/', {
       method: 'POST',
       body: JSON.stringify({ role: 'customer' })
     });
 
     if (response.ok) {
-      const updatedUser = { ...user, user_type: 'customer' };
-      const token = await authService.getToken();
+      console.log('✅ Role switch API call successful');
+      
+      // Get fresh token from response if provided
+      const newToken = data?.token || await authService.getToken();
+      const updatedUser = { ...user, user_type: 'customer', current_role: 'customer' };
+      
+      console.log('🔄 Updating auth services with customer role...');
       
       // Update main auth service
-      await authService.setAuth(token, updatedUser);
+      await authService.setAuth(newToken, updatedUser);
       
-      // Clear vendor-specific storage when switching to customer
-      const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
-      await simplePersistentAuth.clearVendorAuth();
+      // Keep vendor auth for future role switches but don't clear it
+      // This allows seamless switching between roles
       
-      return { success: true, message: 'Switched to customer role' };
+      console.log('✅ Auth services updated successfully');
+      
+      return { success: true, message: 'Switched to customer role', user: updatedUser };
     } else {
+      console.error('❌ Role switch API failed:', response.status, data);
       throw new Error(data?.error || 'Role switch failed');
     }
   } catch (error) {
-    console.error('Role switch error:', error);
+    console.error('💥 Role switch error:', error);
     return { success: false, error: error.message };
   }
 };

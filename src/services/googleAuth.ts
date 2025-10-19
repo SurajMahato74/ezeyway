@@ -83,7 +83,7 @@ class GoogleAuthService {
     console.log('Google credential response:', response);
   }
 
-  async signIn(): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
+  async signIn(): Promise<{ success: boolean; user?: any; token?: string; error?: string; needs_privacy_agreement?: boolean; user_id?: number; user_type?: string; has_vendor_profile?: boolean }> {
     try {
       await this.initialize();
       
@@ -94,7 +94,7 @@ class GoogleAuthService {
     }
   }
 
-  private async showPopup(): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
+  private async showPopup(): Promise<{ success: boolean; user?: any; token?: string; error?: string; needs_privacy_agreement?: boolean; user_id?: number; user_type?: string; has_vendor_profile?: boolean }> {
     return new Promise((resolve) => {
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: this.clientId,
@@ -157,7 +157,7 @@ class GoogleAuthService {
     }
   }
 
-  private async authenticateWithBackend(userInfo: any): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
+  private async authenticateWithBackend(userInfo: any): Promise<{ success: boolean; user?: any; token?: string; error?: string; needs_privacy_agreement?: boolean; user_id?: number; user_type?: string; has_vendor_profile?: boolean }> {
     try {
       const { response, data } = await apiRequest('/auth/google/', {
         method: 'POST',
@@ -187,6 +187,15 @@ class GoogleAuthService {
             google_login: data.google_login
           },
           token: data.token
+        };
+      } else if (response.ok && data.needs_privacy_agreement) {
+        return {
+          success: false,
+          needs_privacy_agreement: true,
+          user_id: data.user_id,
+          user_type: data.user_type,
+          has_vendor_profile: data.has_vendor_profile,
+          error: data.message
         };
       } else {
         return {

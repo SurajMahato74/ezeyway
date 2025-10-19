@@ -52,7 +52,29 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
-    fetchFeaturedProducts();
+    
+    // Start location tracking immediately
+    locationService.startTracking();
+    
+    // Only fetch if we already have location, otherwise wait for location update
+    const currentLocation = locationService.getLocation();
+    if (currentLocation) {
+      fetchFeaturedProducts();
+    } else {
+      // If no location after 3 seconds, fetch without location (will show all products)
+      const timeoutId = setTimeout(() => {
+        if (!locationService.getLocation()) {
+          console.log('⚠️ No location available, fetching products without location filter');
+          fetchFeaturedProducts();
+        }
+      }, 3000);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        unsubscribe();
+      };
+    }
+    
     return unsubscribe;
   }, []);
 
@@ -101,6 +123,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
+    const DELIVERY_RADIUS_KM = 10;
 
     // Filter for featured products only
     let featuredProducts = products.filter(product => product.featured === true);
@@ -136,8 +159,14 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
         category: product.category,
         featured: product.featured,
         totalSold: product.total_sold || 0,
-        deliveryInfo
+        deliveryInfo,
+        vendorOnline: product.vendor_online !== false,
+        deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM
       };
+    })
+    .filter(product => {
+      return product.vendorOnline && 
+             (product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius);
     });
 
     // Sort by rating (highest first) for featured products
@@ -287,32 +316,40 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
                   </span>
                 </div>
 
-                {/* Button */}
-                <div className="flex justify-center">
+                {/* Buttons */}
+                <div className="flex gap-1">
                   {product.inStock ? (
-                    <Button
-                      variant="outline"
-                      className="w-full text-xs py-1.5 shadow-sm h-7"
-                      style={{
-                        borderColor: "#856043",
-                        color: "#856043",
-                        backgroundColor: "transparent",
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.backgroundColor = "#856043";
-                        e.currentTarget.style.color = "#ffffff";
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.backgroundColor = "transparent";
-                        e.currentTarget.style.color = "#856043";
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation(); // Prevent card click
-                        handleBuyNow(product);
-                      }}
-                    >
-                      <ShoppingCart className="h-3 w-3 mr-1" /> Buy Now
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-7 h-7 p-0 border-[#856043] text-[#856043] hover:bg-[#856043] hover:text-white"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await addToCartWithAuth(product.id.toString(), 1);
+                            toast({
+                              title: "Added to Cart",
+                              description: `${product.name} added to your cart`,
+                            });
+                          } catch (error) {
+                            console.error('Error adding to cart:', error);
+                          }
+                        }}
+                      >
+                        <ShoppingCart className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="default"
+                        className="flex-1 text-xs py-1.5 shadow-sm h-7 bg-green-600 hover:bg-green-700 text-white"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBuyNow(product);
+                        }}
+                      >
+                        Buy
+                      </Button>
+                    </>
                   ) : (
                     <Button
                       disabled

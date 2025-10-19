@@ -155,8 +155,20 @@ export default function CheckOut() {
 
   // Check if this is a direct buy from product detail, search, or wishlist
   const location = useLocation();
-  const directBuyData = location.state?.directBuy ? location.state : null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const isDirectBuyFromUrl = urlParams.get('directBuy') === 'true';
+  
+  // Get buyNowProduct from localStorage if coming from redirectService
+  const buyNowProduct = isDirectBuyFromUrl ? JSON.parse(localStorage.getItem('buyNowProduct') || 'null') : null;
+  
+  const directBuyData = location.state?.directBuy ? location.state : 
+    (isDirectBuyFromUrl && buyNowProduct ? { directBuy: true, product: buyNowProduct } : null);
   const selectedCartItems = location.state?.selectedItems;
+  
+  console.log('Checkout - Location state:', location.state);
+  console.log('Checkout - URL params directBuy:', isDirectBuyFromUrl);
+  console.log('Checkout - buyNowProduct from localStorage:', buyNowProduct);
+  console.log('Checkout - Final directBuyData:', directBuyData);
   
   // Use either direct buy product, selected cart items, or all cart items
   const cartItems = directBuyData ? [
@@ -165,41 +177,70 @@ export default function CheckOut() {
       product: {
         id: directBuyData.product.id,
         name: directBuyData.product.name,
+        price: directBuyData.product.price, // Add missing price property
         vendor_name: directBuyData.product.vendor_name,
         vendor_id: directBuyData.product.vendor_id,
-        images: directBuyData.product.images
+        images: directBuyData.product.images,
+        // Include delivery properties from direct buy data
+        free_delivery: directBuyData.product.free_delivery,
+        custom_delivery_fee_enabled: directBuyData.product.custom_delivery_fee_enabled,
+        custom_delivery_fee: directBuyData.product.custom_delivery_fee
       },
       quantity: directBuyData.product.quantity,
       total_price: (parseFloat(directBuyData.product.price) * directBuyData.product.quantity).toString()
     }
   ] : (selectedCartItems || cart?.items || []);
+  
+  console.log('Checkout - Cart items:', cartItems);
+  console.log('Checkout - Direct buy data:', directBuyData);
+  console.log('Checkout - Buy now product from localStorage:', buyNowProduct);
 
   const subtotal = cartItems.reduce((sum, item) => {
-    return sum + (parseFloat(item.product.price || item.total_price) * item.quantity);
+    const itemPrice = parseFloat(item.product.price || item.total_price || 0);
+    console.log(`Checkout - Item: ${item.product.name}, Price: ${item.product.price}, Total: ${item.total_price}, Calculated: ${itemPrice}, Quantity: ${item.quantity}`);
+    return sum + (itemPrice * item.quantity);
   }, 0);
 
   // Calculate delivery fee based on product settings
   const calculateDeliveryFee = () => {
     let totalDeliveryFee = 0;
+    let hasUndeterminedFee = false;
+    
+    console.log('Checkout - Calculating delivery fee for items:', cartItems);
     
     cartItems.forEach(item => {
       const product = item.product;
-      if (product.free_delivery) {
+      console.log('Checkout - Processing item:', {
+        name: product.name,
+        free_delivery: product.free_delivery,
+        custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+        custom_delivery_fee: product.custom_delivery_fee
+      });
+      
+      // Handle cases where delivery properties might be missing
+      if (product.free_delivery === true) {
         // Free delivery - no fee
+        console.log('Checkout - Free delivery for:', product.name);
         return;
-      } else if (product.custom_delivery_fee_enabled && product.custom_delivery_fee !== null) {
+      } else if (product.custom_delivery_fee_enabled === true && product.custom_delivery_fee !== null && product.custom_delivery_fee !== undefined) {
         // Custom delivery fee set by vendor
-        totalDeliveryFee += parseFloat(product.custom_delivery_fee);
+        const fee = parseFloat(product.custom_delivery_fee.toString());
+        console.log('Checkout - Custom delivery fee for:', product.name, 'Fee:', fee);
+        totalDeliveryFee += fee;
       } else {
-        // Default delivery fee (₹40)
-        totalDeliveryFee += 40;
+        // Yet to be determined - no specific fee set or properties missing
+        console.log('Checkout - Undetermined delivery fee for:', product.name);
+        hasUndeterminedFee = true;
       }
     });
     
-    return totalDeliveryFee;
+    console.log('Checkout - Final delivery calculation:', { fee: totalDeliveryFee, hasUndetermined: hasUndeterminedFee });
+    return { fee: totalDeliveryFee, hasUndetermined: hasUndeterminedFee };
   };
 
-  const deliveryFee = calculateDeliveryFee();
+  const deliveryResult = calculateDeliveryFee();
+  const deliveryFee = deliveryResult.fee;
+  const hasUndeterminedDelivery = deliveryResult.hasUndetermined;
   const tax = 0; // No tax
   const total = subtotal + deliveryFee;
 
@@ -320,13 +361,26 @@ export default function CheckOut() {
     
     // Create order
     try {
+      console.log('Checkout - About to create order with cartItems:', cartItems);
+      
+      if (!cartItems || cartItems.length === 0) {
+        toast({
+          title: "No Items",
+          description: "No items found to place order. Please add items to cart first.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       const orderData = {
         items: cartItems.map(item => ({
           product_id: item.product.id,
           quantity: item.quantity,
-          price: parseFloat(item.product.price || item.total_price),
-          delivery_fee: item.product.free_delivery ? 0 : 
-            (item.product.custom_delivery_fee_enabled ? parseFloat(item.product.custom_delivery_fee || 0) : 40)
+          price: parseFloat(item.product.price || item.total_price || 0),
+          delivery_fee: item.product.free_delivery === true ? 0 : 
+            (item.product.custom_delivery_fee_enabled === true && item.product.custom_delivery_fee !== null && item.product.custom_delivery_fee !== undefined
+              ? parseFloat(item.product.custom_delivery_fee.toString()) 
+              : 0) // 0 for undetermined (backend doesn't accept null)
         })),
         delivery_name: userInfo?.username || userInfo?.first_name || "Customer",
         delivery_phone: userInfo?.phone_number || deliveryAddress.phone,
@@ -343,26 +397,42 @@ export default function CheckOut() {
       
       const result = await orderService.createOrder(orderData);
       
+      // Handle multiple orders response
+      const orders = result.orders || [result.order];
+      const orderCount = result.total_orders || orders.length;
+      
       toast({
         title: "Order Placed Successfully!",
-        description: `Order #${result.order.order_number} has been placed.`,
+        description: orderCount > 1 
+          ? `${orderCount} orders created for different vendors`
+          : `Order #${orders[0].order_number} has been placed.`,
       });
       
       // Show immediate browser notification for testing
       if ('Notification' in window && Notification.permission === 'granted') {
+        const firstOrder = orders[0];
         new Notification('New Order Placed!', {
-          body: `Order #${result.order.order_number} for ₹${result.order.total_amount}`,
+          body: orderCount > 1
+            ? `${orderCount} orders created for ₹${orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0).toFixed(2)}`
+            : `Order #${firstOrder.order_number} for ₹${firstOrder.total_amount}`,
           icon: '/favicon.ico',
-          tag: `order-${result.order.id}`,
+          tag: `order-${firstOrder.id}`,
           requireInteraction: true
         });
       }
       
-      // Trigger vendor notification event
+      // Trigger vendor notification event for each order
       if (window.dispatchEvent) {
-        window.dispatchEvent(new CustomEvent('orderCreated', { 
-          detail: { order: result.order } 
-        }));
+        orders.forEach(order => {
+          window.dispatchEvent(new CustomEvent('orderCreated', { 
+            detail: { order } 
+          }));
+        });
+      }
+      
+      // Clear buyNowProduct from localStorage if it was a direct buy
+      if (directBuyData && isDirectBuyFromUrl) {
+        localStorage.removeItem('buyNowProduct');
       }
       
       // Clear cart if not direct buy
@@ -384,10 +454,19 @@ export default function CheckOut() {
         }
       }
       
-      // Navigate to order confirmation
-      navigate(`/order-confirmation/${result.order.id}`, {
-        state: { order: result.order }
-      });
+      // Navigate to order confirmation - use first order for single order, or orders page for multiple
+      if (orderCount === 1) {
+        navigate(`/order-confirmation/${orders[0].id}`, {
+          state: { order: orders[0] }
+        });
+      } else {
+        navigate('/orders', {
+          state: { 
+            message: `${orderCount} orders created successfully`,
+            newOrders: orders
+          }
+        });
+      }
     } catch (error) {
       console.error('Order creation error:', error);
       toast({
@@ -691,15 +770,18 @@ export default function CheckOut() {
                       <p className="font-semibold text-lg text-gray-800">{item.product.name}</p>
                       <p className="text-sm text-gray-500">{item.product.vendor_name}</p>
                       <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                      <p className="text-sm text-gray-500">Price: ₹{parseFloat(item.product.price || item.total_price).toFixed(2)} each</p>
-                      {item.product.free_delivery && (
+                      <p className="text-sm text-gray-500">Price: ₹{parseFloat(item.product.price || item.total_price || 0).toFixed(2)} each</p>
+                      {item.product.free_delivery === true && (
                         <p className="text-xs text-green-600 font-medium">✓ Free Delivery</p>
                       )}
-                      {item.product.custom_delivery_fee_enabled && !item.product.free_delivery && (
-                        <p className="text-xs text-orange-600">Delivery: ₹{parseFloat(item.product.custom_delivery_fee || 0).toFixed(2)}</p>
+                      {item.product.custom_delivery_fee_enabled === true && item.product.custom_delivery_fee !== null && item.product.custom_delivery_fee !== undefined && item.product.free_delivery !== true && (
+                        <p className="text-xs text-orange-600">Delivery: ₹{parseFloat(item.product.custom_delivery_fee.toString()).toFixed(2)}</p>
+                      )}
+                      {item.product.free_delivery !== true && (item.product.custom_delivery_fee_enabled !== true || item.product.custom_delivery_fee === null || item.product.custom_delivery_fee === undefined) && (
+                        <p className="text-xs text-orange-600">Delivery: To be determined</p>
                       )}
                     </div>
-                    <p className="font-semibold text-lg text-gray-800">₹{(parseFloat(item.product.price || item.total_price) * item.quantity).toFixed(2)}</p>
+                    <p className="font-semibold text-lg text-gray-800">₹{(parseFloat(item.product.price || item.total_price || 0) * item.quantity).toFixed(2)}</p>
                   </div>
                 ))}
                 <Separator className="my-4 bg-gray-200" />
@@ -714,22 +796,29 @@ export default function CheckOut() {
                       <div className="flex justify-between text-base text-gray-700">
                         <span>Delivery Fee</span>
                         <span className="font-semibold">
-                          {deliveryFee === 0 ? (
+                          {deliveryFee === 0 && !hasUndeterminedDelivery ? (
                             <span className="text-green-600">Free</span>
+                          ) : hasUndeterminedDelivery ? (
+                            <span className="text-orange-600">To be determined</span>
                           ) : (
                             `₹${deliveryFee.toFixed(2)}`
                           )}
                         </span>
                       </div>
-                      {deliveryFee > 0 && (
-                        <p className="text-xs text-gray-500">Delivery fees are set by individual vendors</p>
+                      {(deliveryFee > 0 || hasUndeterminedDelivery) && (
+                        <p className="text-xs text-gray-500">
+                          {hasUndeterminedDelivery 
+                            ? "Delivery fee will be determined based on your location"
+                            : "Delivery fees are set by individual vendors"
+                          }
+                        </p>
                       )}
                     </div>
                   </div>
                   
                   <Separator className="my-2 bg-gray-200" />
                   <div className="flex justify-between text-lg font-bold text-gray-800">
-                    <span>Total Amount (COD)</span>
+                    <span>Total Amount</span>
                     <span>₹{total.toFixed(2)}</span>
                   </div>
                 </div>
@@ -756,7 +845,7 @@ export default function CheckOut() {
         <footer className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-2xl py-4">
           <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
             <div className="flex flex-col">
-              <p className="text-sm text-gray-500">Total Amount (COD)</p>
+              <p className="text-sm text-gray-500">Total Amount</p>
               <p className="text-2xl font-bold text-gray-800">₹{total.toFixed(2)}</p>
             </div>
             <Button
@@ -764,7 +853,7 @@ export default function CheckOut() {
               disabled={!isDeliveryComplete()}
               className="px-10 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Place Order (COD)
+              Place Order
             </Button>
           </div>
         </footer>

@@ -119,13 +119,45 @@ export function BannerCarousel() {
     const fetchSliders = async () => {
       try {
         const { API_BASE } = await import('@/config/api');
-        const response = await fetch(API_BASE + 'sliders/?user_type=customer');
+        
+        // Determine current user role
+        let userType = 'customer'; // default
+        const currentPath = window.location.pathname;
+        
+        if (currentPath.startsWith('/vendor')) {
+          userType = 'vendor';
+        }
+        
+        console.log(`🎯 Fetching banners for user type: ${userType}`);
+        
+        // Fetch banners for current role (customer, vendor, or both)
+        const response = await fetch(`${API_BASE}sliders/?user_type=${userType}`);
         const data = await response.json();
         
+        console.log(`🔍 BannerCarousel API Response:`, data);
+        
         if (response.ok && data && data.sliders) {
-          setSliders(data.sliders);
-          setCurrentSlide(1);
+          console.log('🔍 All sliders from API:', data.sliders);
+          console.log('🔍 Current userType:', userType);
+          
+          // Filter banners based on visibility
+          const filteredSliders = data.sliders.filter(slider => {
+            const visibility = slider.visibility || 'both';
+            const shouldShow = visibility === userType || visibility === 'both';
+            console.log(`🎯 Slider "${slider.title}": visibility="${visibility}", userType="${userType}", shouldShow=${shouldShow}`);
+            return shouldShow;
+          });
+          
+          console.log(`📊 BEFORE filtering: ${data.sliders.length} sliders`);
+          console.log(`📊 AFTER filtering: ${filteredSliders.length} sliders for userType="${userType}"`);
+          console.log('📊 Filtered sliders:', filteredSliders);
+          
+          setSliders(filteredSliders);
+          if (filteredSliders.length > 0) {
+            setCurrentSlide(1);
+          }
         } else {
+          console.log('❌ No sliders data or API error');
           setSliders([]);
         }
       } catch (error) {

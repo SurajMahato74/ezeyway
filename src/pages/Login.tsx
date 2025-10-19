@@ -11,6 +11,7 @@ import { LoginSwitcher } from '@/components/LoginSwitcher';
 import { googleAuthService } from '@/services/googleAuth';
 import { facebookAuthService } from '@/services/facebookAuth';
 import { ProfileCompletion } from '@/components/ProfileCompletion';
+import { PrivacyPolicyAgreement } from '@/components/PrivacyPolicyAgreement';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -29,9 +30,25 @@ export default function Login() {
   const [isFacebookLoading, setIsFacebookLoading] = useState(false);
   const [showProfileCompletion, setShowProfileCompletion] = useState(false);
   const [googleUserData, setGoogleUserData] = useState(null);
+  const [showPrivacyAgreement, setShowPrivacyAgreement] = useState(false);
+  const [privacyAgreementData, setPrivacyAgreementData] = useState(null);
 
   // Load saved credentials and check existing session
   useEffect(() => {
+    // Check if returning from privacy policy page
+    const savedPrivacyState = sessionStorage.getItem('privacyAgreementState');
+    if (savedPrivacyState) {
+      const state = JSON.parse(savedPrivacyState);
+      setPrivacyAgreementData({
+        userId: state.userId,
+        userType: state.userType,
+        hasVendorProfile: state.hasVendorProfile
+      });
+      setShowPrivacyAgreement(true);
+      sessionStorage.removeItem('privacyAgreementState');
+      return;
+    }
+
     const checkExistingSession = async () => {
       try {
         // Load saved credentials if remember me was checked
@@ -80,6 +97,17 @@ export default function Login() {
 
       if (!response.ok) {
         throw new Error(data?.error || "Login failed");
+      }
+
+      // Check if privacy policy agreement is needed
+      if (data.needs_privacy_agreement) {
+        setPrivacyAgreementData({
+          userId: data.user_id,
+          userType: data.user_type,
+          hasVendorProfile: data.has_vendor_profile
+        });
+        setShowPrivacyAgreement(true);
+        return;
       }
 
       // Ensure user data is properly structured
@@ -156,6 +184,17 @@ export default function Login() {
         throw new Error(data?.error || "OTP verification failed");
       }
       
+      // Check if privacy policy agreement is needed
+      if (data.needs_privacy_agreement) {
+        setPrivacyAgreementData({
+          userId: data.user_id,
+          userType: data.user_type,
+          hasVendorProfile: data.has_vendor_profile
+        });
+        setShowPrivacyAgreement(true);
+        return;
+      }
+      
       // Store token and user data using authService
       if (data.user && data.token) {
         // Set user_type to customer if not specified
@@ -223,6 +262,14 @@ export default function Login() {
           // Proceed with normal login flow
           proceedAfterLogin();
         }
+      } else if (result.needs_privacy_agreement) {
+        // Handle privacy policy agreement for Facebook login
+        setPrivacyAgreementData({
+          userId: result.user_id,
+          userType: result.user_type,
+          hasVendorProfile: result.has_vendor_profile
+        });
+        setShowPrivacyAgreement(true);
       } else {
         setError(result.error || 'Facebook login failed');
       }
@@ -266,6 +313,14 @@ export default function Login() {
           // Proceed with normal login flow
           proceedAfterLogin();
         }
+      } else if (result.needs_privacy_agreement) {
+        // Handle privacy policy agreement for Google login
+        setPrivacyAgreementData({
+          userId: result.user_id,
+          userType: result.user_type,
+          hasVendorProfile: result.has_vendor_profile
+        });
+        setShowPrivacyAgreement(true);
       } else {
         setError(result.error || 'Google login failed');
       }
@@ -296,6 +351,18 @@ export default function Login() {
   const handleProfileCompletionSkip = () => {
     setShowProfileCompletion(false);
     proceedAfterLogin();
+  };
+
+  const handlePrivacyAgreementComplete = (userData, token) => {
+    setShowPrivacyAgreement(false);
+    setPrivacyAgreementData(null);
+    // Login is already handled in the PrivacyPolicyAgreement component
+  };
+
+  const handlePrivacyAgreementCancel = () => {
+    setShowPrivacyAgreement(false);
+    setPrivacyAgreementData(null);
+    setError("Privacy policy agreement is required to login");
   };
 
 
@@ -473,7 +540,7 @@ export default function Login() {
               </div>
             </div>
             
-            <div className="flex justify-center space-x-4">
+            <div className="flex justify-center">
               <button
                 onClick={handleGoogleLogin}
                 disabled={isGoogleLoading}
@@ -490,29 +557,21 @@ export default function Login() {
                   </svg>
                 )}
               </button>
-              
-              <button
-                onClick={handleFacebookLogin}
-                disabled={isFacebookLoading}
-                className="w-12 h-12 bg-white hover:bg-gray-50 border border-gray-300 rounded-full flex items-center justify-center transition-colors shadow-sm"
-              >
-                {isFacebookLoading ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
-                ) : (
-                  <svg className="w-6 h-6" viewBox="0 0 24 24">
-                    <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                  </svg>
-                )}
-              </button>
             </div>
           </div>
 
-          <div className="text-center">
+          <div className="text-center space-y-3 mt-6">
             <button
               onClick={handleSignup}
-              className="text-blue-600 hover:text-blue-700 text-sm"
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium block mx-auto"
             >
               Don't have an account? Sign up
+            </button>
+            <button
+              onClick={() => navigate('/privacy-policy')}
+              className="text-gray-500 hover:text-gray-700 text-sm block mx-auto"
+            >
+              Privacy Policy
             </button>
           </div>
         </div>
@@ -525,6 +584,17 @@ export default function Login() {
           user={googleUserData.userData}
           onComplete={handleProfileCompletionComplete}
           onSkip={handleProfileCompletionSkip}
+        />
+      )}
+      
+      {/* Privacy Policy Agreement Modal */}
+      {showPrivacyAgreement && privacyAgreementData && (
+        <PrivacyPolicyAgreement
+          userId={privacyAgreementData.userId}
+          userType={privacyAgreementData.userType}
+          hasVendorProfile={privacyAgreementData.hasVendorProfile}
+          onComplete={handlePrivacyAgreementComplete}
+          onCancel={handlePrivacyAgreementCancel}
         />
       )}
     </div>

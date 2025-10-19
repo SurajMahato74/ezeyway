@@ -25,6 +25,8 @@ const VendorOrders: React.FC = () => {
   const [vehicleColor, setVehicleColor] = useState('');
   const [estimatedDeliveryTime, setEstimatedDeliveryTime] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
+  const [isDeliveryFeeReadonly, setIsDeliveryFeeReadonly] = useState(false);
+  const [deliveryFeeSource, setDeliveryFeeSource] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [ordersData, setOrdersData] = useState<any[]>([]);
@@ -427,6 +429,45 @@ const VendorOrders: React.FC = () => {
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedOrder(order);
+                  
+                  // Auto-calculate delivery fee based on product settings
+                  let calculatedFee = '';
+                  let feeSource = '';
+                  let isReadonly = false;
+                  
+                  if (order.items && order.items.length > 0) {
+                    // Check if any product has free delivery
+                    const hasFreeDelivery = order.items.some(item => 
+                      item.product_details?.free_delivery === true
+                    );
+                    
+                    if (hasFreeDelivery) {
+                      calculatedFee = '0';
+                      feeSource = 'Free delivery (set by vendor)';
+                      isReadonly = true;
+                    } else {
+                      // Check for custom delivery fee
+                      const customDeliveryItem = order.items.find(item => 
+                        item.product_details?.custom_delivery_fee_enabled === true &&
+                        item.product_details?.custom_delivery_fee > 0
+                      );
+                      
+                      if (customDeliveryItem) {
+                        calculatedFee = customDeliveryItem.product_details.custom_delivery_fee.toString();
+                        feeSource = `Custom delivery fee (₹${customDeliveryItem.product_details.custom_delivery_fee})`;
+                        isReadonly = true;
+                      } else {
+                        // No specific delivery settings, allow manual entry
+                        calculatedFee = '';
+                        feeSource = 'Enter delivery charge manually';
+                        isReadonly = false;
+                      }
+                    }
+                  }
+                  
+                  setDeliveryFee(calculatedFee);
+                  setDeliveryFeeSource(feeSource);
+                  setIsDeliveryFeeReadonly(isReadonly);
                   setShowDeliveryForm(true);
                 }}
               >
@@ -440,7 +481,7 @@ const VendorOrders: React.FC = () => {
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {
-                    const { response } = await apiRequest(`/vendor/orders/${order.id}/status/`, {
+                    const { response } = await apiRequest(`vendor/orders/${order.id}/status/`, {
                       method: 'POST',
                       body: JSON.stringify({
                         status: 'delivered',
@@ -1053,13 +1094,35 @@ const VendorOrders: React.FC = () => {
                         </div>
                         <div>
                           <Label className="text-xs font-medium text-gray-700">Delivery Fee <span className="text-red-500">*</span></Label>
+                          {deliveryFeeSource && (
+                            <p className={`text-xs mt-1 mb-2 px-2 py-1 rounded ${
+                              isDeliveryFeeReadonly 
+                                ? deliveryFee === '0' 
+                                  ? 'bg-green-50 text-green-700 border border-green-200'
+                                  : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-gray-50 text-gray-600 border border-gray-200'
+                            }`}>
+                              {deliveryFeeSource}
+                            </p>
+                          )}
                           <Input 
                             type="number"
                             value={deliveryFee}
                             onChange={(e) => setDeliveryFee(e.target.value)}
-                            placeholder="e.g., 50"
-                            className="h-8 text-xs mt-1"
+                            placeholder={isDeliveryFeeReadonly ? "Auto-calculated" : "e.g., 50"}
+                            className={`h-8 text-xs mt-1 ${
+                              isDeliveryFeeReadonly 
+                                ? 'bg-gray-50 cursor-not-allowed' 
+                                : ''
+                            }`}
+                            readOnly={isDeliveryFeeReadonly}
+                            disabled={isDeliveryFeeReadonly}
                           />
+                          {!isDeliveryFeeReadonly && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              💡 No delivery settings found for products. Enter charge manually.
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1442,7 +1505,47 @@ const VendorOrders: React.FC = () => {
                 {selectedOrder.status === 'confirmed' && (
                   <div className="fixed bottom-4 left-4 right-4 flex gap-2">
                     {!showDeliveryForm ? (
-                      <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => setShowDeliveryForm(true)}>
+                      <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => {
+                        // Auto-calculate delivery fee based on product settings
+                        let calculatedFee = '';
+                        let feeSource = '';
+                        let isReadonly = false;
+                        
+                        if (selectedOrder.items && selectedOrder.items.length > 0) {
+                          // Check if any product has free delivery
+                          const hasFreeDelivery = selectedOrder.items.some(item => 
+                            item.product_details?.free_delivery === true
+                          );
+                          
+                          if (hasFreeDelivery) {
+                            calculatedFee = '0';
+                            feeSource = 'Free delivery (set by vendor)';
+                            isReadonly = true;
+                          } else {
+                            // Check for custom delivery fee
+                            const customDeliveryItem = selectedOrder.items.find(item => 
+                              item.product_details?.custom_delivery_fee_enabled === true &&
+                              item.product_details?.custom_delivery_fee > 0
+                            );
+                            
+                            if (customDeliveryItem) {
+                              calculatedFee = customDeliveryItem.product_details.custom_delivery_fee.toString();
+                              feeSource = `Custom delivery fee (₹${customDeliveryItem.product_details.custom_delivery_fee})`;
+                              isReadonly = true;
+                            } else {
+                              // No specific delivery settings, allow manual entry
+                              calculatedFee = '';
+                              feeSource = 'Enter delivery charge manually';
+                              isReadonly = false;
+                            }
+                          }
+                        }
+                        
+                        setDeliveryFee(calculatedFee);
+                        setDeliveryFeeSource(feeSource);
+                        setIsDeliveryFeeReadonly(isReadonly);
+                        setShowDeliveryForm(true);
+                      }}>
                         <Truck className="h-4 w-4 mr-2" />
                         Ship Order
                       </Button>
@@ -1455,6 +1558,8 @@ const VendorOrders: React.FC = () => {
                           setVehicleColor('');
                           setEstimatedDeliveryTime('');
                           setDeliveryFee('');
+                          setDeliveryFeeSource('');
+                          setIsDeliveryFeeReadonly(false);
                         }}>
                           Cancel
                         </Button>
@@ -1463,7 +1568,7 @@ const VendorOrders: React.FC = () => {
                           disabled={!deliveryBoyPhone || !vehicleNumber || !estimatedDeliveryTime || !deliveryFee}
                           onClick={async () => {
                             try {
-                              const { response } = await apiRequest(`/vendor/orders/${selectedOrder.id}/status/`, {
+                              const { response } = await apiRequest(`vendor/orders/${selectedOrder.id}/status/`, {
                                 method: 'POST',
                                 body: JSON.stringify({
                                   status: 'out_for_delivery',
@@ -1484,6 +1589,8 @@ const VendorOrders: React.FC = () => {
                                 setVehicleColor('');
                                 setEstimatedDeliveryTime('');
                                 setDeliveryFee('');
+                                setDeliveryFeeSource('');
+                                setIsDeliveryFeeReadonly(false);
                                 setSelectedOrder(null);
                               }
                             } catch (error) {

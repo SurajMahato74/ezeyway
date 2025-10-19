@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bell, Check, CheckCheck, Trash2 } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,19 @@ import { useNavigate } from 'react-router-dom';
 export function Notifications() {
   const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications } = useUserNotifications();
+  
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { authService } = await import('@/services/authService');
+      const token = await authService.getToken();
+      if (!token) {
+        const currentUrl = window.location.pathname + window.location.search;
+        navigate(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+      }
+    };
+    checkAuth();
+  }, [navigate]);
 
   const handleNotificationClick = (notification: any) => {
     if (!notification.read) {
@@ -47,7 +60,18 @@ export function Notifications() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50">
+      <div className="sticky top-0 z-50 bg-white border-b px-4 py-3 flex items-center gap-3">
+        <Button 
+          variant="ghost" 
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+        <h1 className="text-lg font-semibold">Notifications</h1>
+      </div>
       <div className="max-w-4xl mx-auto p-4">
         <Card>
           <CardHeader>

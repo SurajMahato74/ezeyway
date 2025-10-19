@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Package, Clock, MapPin, Phone, Star, RotateCcw, Truck, X, Store, Upload, AlertTriangle, Eye, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthAction } from "@/hooks/useAuthAction";
+import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { orderService } from "@/services/orderService";
 import { authService } from "@/services/authService";
 import { NotificationHeader } from "@/components/NotificationHeader";
@@ -29,6 +30,8 @@ export default function Orders() {
   const { navigateWithAuth } = useAuthAction();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pagination, setPagination] = useState({ page: 1, hasMore: true, total: 0 });
   const [activeTab, setActiveTab] = useState("all");
   const [cancelReason, setCancelReason] = useState("");
   const [refundOption, setRefundOption] = useState("");
@@ -58,41 +61,11 @@ export default function Orders() {
   
   // Use notification system
   const { notifications, unreadCount, isConnected } = useNotificationWebSocket();
+  
+  // Debounce timer for notifications
+  const notificationDebounceRef = useRef(null);
 
-  useEffect(() => {
-    fetchOrders();
-    
-    // Listen for order notifications to refresh orders
-    const handleNewNotification = (event: CustomEvent) => {
-      const notification = event.detail;
-      if (notification.type === 'order') {
-        // Refresh orders when order notification is received
-        fetchOrders();
-      }
-    };
-
-    window.addEventListener('newNotification', handleNewNotification as EventListener);
-    
-    // Auto-refresh orders every 30 seconds (less frequent since we have WebSocket)
-    const interval = setInterval(async () => {
-      try {
-        const token = await authService.getToken();
-        if (!token) return;
-        
-        const orders = await orderService.getOrders();
-        setOrders(orders);
-      } catch (error) {
-        console.error('Auto-refresh error:', error);
-      }
-    }, 30000);
-    
-    return () => {
-      window.removeEventListener('newNotification', handleNewNotification as EventListener);
-      clearInterval(interval);
-    };
-  }, []);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async (page = 1, reset = false) => {
     try {
       const token = await authService.getToken();
       if (!token) {
@@ -100,18 +73,38 @@ export default function Orders() {
         return;
       }
 
-      const orders = await orderService.getOrders();
-      setOrders(orders);
-      
-      // Check vendor status for each order
-      const statuses = {};
-      for (const order of orders) {
-        const vendorName = order.items?.[0]?.product_details?.vendor_name;
-        if (vendorName && !statuses[vendorName]) {
-          statuses[vendorName] = await checkVendorStatus(vendorName);
-        }
+      if (page === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
       }
-      setVendorStatuses(statuses);
+
+      const response = await orderService.getOrdersPaginated(page, 10);
+      
+      if (reset || page === 1) {
+        setOrders(response.results || []);
+      } else {
+        setOrders(prev => [...prev, ...(response.results || [])]);
+      }
+      
+      setPagination({
+        page,
+        hasMore: !!response.next,
+        total: response.count || 0
+      });
+      
+      // Check vendor status for each order (optimized)
+      const statuses = {};
+      const uniqueVendors = [...new Set((response.results || []).map(order => 
+        order.items?.[0]?.product_details?.vendor_name
+      ).filter(Boolean))];
+      
+      // Check status for vendors (cache will handle duplicates)
+      for (const vendorName of uniqueVendors) {
+        statuses[vendorName] = await checkVendorStatus(vendorName);
+      }
+      
+      setVendorStatuses(prev => ({ ...prev, ...statuses }));
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast({
@@ -121,8 +114,52 @@ export default function Orders() {
       });
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  };
+  }, [navigateWithAuth, toast]);
+
+  useEffect(() => {
+    fetchOrdersRef.current(1, true);
+    
+    // Listen for order notifications to refresh orders (only when page is visible)
+    const handleNewNotification = (event: CustomEvent) => {
+      const notification = event.detail;
+      if (notification.type === 'order' && !document.hidden) {
+        // Clear existing debounce timer
+        if (notificationDebounceRef.current) {
+          clearTimeout(notificationDebounceRef.current);
+        }
+        
+        // Debounce the refresh to prevent multiple rapid calls
+        notificationDebounceRef.current = setTimeout(() => {
+          if (!document.hidden) {
+            fetchOrdersRef.current(1, true);
+          }
+        }, 2000); // Increased to 2 seconds
+      }
+    };
+
+    // Handle visibility change to refresh orders when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Refresh orders when page becomes visible after being hidden
+        fetchOrdersRef.current(1, true);
+      }
+    };
+
+    window.addEventListener('newNotification', handleNewNotification as EventListener);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('newNotification', handleNewNotification as EventListener);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      
+      // Clear debounce timer on cleanup
+      if (notificationDebounceRef.current) {
+        clearTimeout(notificationDebounceRef.current);
+      }
+    };
+  }, []); // Empty dependency array to prevent re-renders
 
   const getStatusColor = (status) => {
     const colors = {
@@ -171,8 +208,7 @@ export default function Orders() {
       });
       setShowCancelDialog(false);
       setCancelReason("");
-      setRefundOption("");
-      fetchOrders();
+      fetchOrdersRef.current(1, true);
     } catch (error) {
       console.error('Error cancelling order:', error);
       toast({
@@ -183,17 +219,37 @@ export default function Orders() {
     }
   };
 
-  const checkVendorStatus = async (vendorName) => {
+  // Cache for vendor status to prevent repeated API calls
+  const vendorStatusCache = useRef(new Map());
+  
+  const checkVendorStatus = useCallback(async (vendorName) => {
+    // Check cache first
+    if (vendorStatusCache.current.has(vendorName)) {
+      const cached = vendorStatusCache.current.get(vendorName);
+      // Cache for 5 minutes
+      if (Date.now() - cached.timestamp < 300000) {
+        return cached.status;
+      }
+    }
+    
     try {
       const { response, data } = await apiRequest(`search/vendors/?search=${encodeURIComponent(vendorName)}`);
       if (!response.ok) return false;
       const vendor = data?.results?.find(v => v.business_name === vendorName);
-      return vendor?.is_active || false;
+      const status = vendor?.is_active || false;
+      
+      // Cache the result
+      vendorStatusCache.current.set(vendorName, {
+        status,
+        timestamp: Date.now()
+      });
+      
+      return status;
     } catch (error) {
       console.error('Error checking vendor status:', error);
       return false;
     }
-  };
+  }, []);
 
   const handleReorder = async (order) => {
     try {
@@ -229,7 +285,27 @@ export default function Orders() {
     }
   };
 
-  const OrderCard = ({ order }) => (
+  // Create a ref for fetchOrders to avoid circular dependency
+  const fetchOrdersRef = useRef(fetchOrders);
+  fetchOrdersRef.current = fetchOrders;
+
+  // Load more orders when scrolling
+  const loadMoreOrders = useCallback(() => {
+    if (!loadingMore && pagination.hasMore) {
+      fetchOrdersRef.current(pagination.page + 1);
+    }
+  }, [loadingMore, pagination.hasMore, pagination.page]);
+
+  // Infinite scroll hook
+  const { sentinelRef } = useInfiniteScroll({
+    hasMore: pagination.hasMore,
+    isLoading: loadingMore,
+    onLoadMore: loadMoreOrders,
+    threshold: 300
+  });
+
+  // Memoized OrderCard component for better performance
+  const OrderCard = memo(({ order }) => (
     <Card 
       key={order.id} 
       className="cursor-pointer hover:shadow-md transition-shadow mb-4"
@@ -488,16 +564,69 @@ export default function Orders() {
         </div>
       </CardContent>
     </Card>
+  ));
+
+  // Loading skeleton component
+  const OrderSkeleton = () => (
+    <Card className="mb-4">
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <div className="h-5 bg-gray-200 rounded animate-pulse w-32"></div>
+            <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
+          </div>
+          <div className="h-6 bg-gray-200 rounded animate-pulse w-20"></div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          <div className="flex gap-3">
+            <div className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
+              <div className="h-3 bg-gray-200 rounded animate-pulse w-1/2"></div>
+            </div>
+          </div>
+          <div className="h-4 bg-gray-200 rounded animate-pulse w-full"></div>
+          <div className="flex justify-between items-center pt-2">
+            <div className="h-6 bg-gray-200 rounded animate-pulse w-20"></div>
+            <div className="flex gap-2">
+              <div className="h-8 bg-gray-200 rounded animate-pulse w-16"></div>
+              <div className="h-8 bg-gray-200 rounded animate-pulse w-16"></div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 
-  if (loading) {
+  if (loading && orders.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your orders...</p>
+      <CustomerAuthGuard>
+        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
+          <header className="sticky top-0 z-50 bg-white shadow-lg border-b py-4 px-6">
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate(-1)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <ArrowLeft className="h-6 w-6 text-gray-700" />
+              </Button>
+              <h1 className="text-2xl font-bold text-gray-800">My Orders</h1>
+              <NotificationHeader />
+            </div>
+          </header>
+          <main className="max-w-4xl mx-auto p-4 pt-2">
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <OrderSkeleton key={i} />
+              ))}
+            </div>
+          </main>
         </div>
-      </div>
+      </CustomerAuthGuard>
     );
   }
 
@@ -535,6 +664,13 @@ export default function Orders() {
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <div className="mb-4">
+              {pagination.total > 0 && (
+                <p className="text-sm text-gray-600 text-center">
+                  Showing {orders.length} of {pagination.total} orders
+                </p>
+              )}
+            </div>
             <div className="overflow-x-auto">
               <TabsList className="flex w-max min-w-full gap-1">
                 <TabsTrigger value="all" className="flex-shrink-0 px-2">
@@ -566,6 +702,17 @@ export default function Orders() {
 
             <TabsContent value="all" className="space-y-4">
               {orders.map(order => <OrderCard key={order.id} order={order} />)}
+              {pagination.hasMore && (
+                <div className="text-center py-4">
+                  <div ref={sentinelRef} className="h-4" />
+                  {loadingMore && (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600 mr-2"></div>
+                      <span className="text-gray-600">Loading more orders...</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="pending" className="space-y-4">
@@ -740,7 +887,7 @@ export default function Orders() {
                                         title: "Appeal Submitted",
                                         description: "Your appeal has been submitted for review.",
                                       });
-                                      fetchOrders();
+                                      fetchOrders(1, true);
                                     }
                                   } catch (error) {
                                     toast({
@@ -932,19 +1079,7 @@ export default function Orders() {
               </div>
             )}
 
-            <div>
-              <Label htmlFor="refund">Refund Option *</Label>
-              <Select value={refundOption} onValueChange={setRefundOption}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select refund method" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="original_payment">Refund to original payment method</SelectItem>
-                  <SelectItem value="wallet">Refund to wallet</SelectItem>
-                  <SelectItem value="bank_transfer">Bank transfer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
 
             <div className="flex gap-2 pt-4">
               <Button
@@ -957,7 +1092,7 @@ export default function Orders() {
               <Button
                 onClick={handleCancelOrder}
                 className="flex-1 bg-red-600 hover:bg-red-700"
-                disabled={!cancelReason || !refundOption}
+                disabled={!cancelReason}
               >
                 Cancel Order
               </Button>
@@ -1286,7 +1421,7 @@ export default function Orders() {
                       description: "Your return request has been submitted successfully.",
                     });
                     setShowReturnSheet(false);
-                    fetchOrders();
+                    fetchOrders(1, true);
                   }
                 } catch (error) {
                   toast({

@@ -23,14 +23,26 @@ export function RoleSwitcher() {
       if (newRole === 'vendor') {
         // Check if user already has vendor role
         if (state.user?.available_roles?.includes('vendor')) {
+          console.log('🔄 User has vendor role, switching...');
           // User has vendor role, just switch
           const switchResult = await switchToVendorRole();
           if (switchResult.success) {
-            const updatedUser = { ...state.user!, user_type: 'vendor', current_role: 'vendor' };
+            console.log('✅ Vendor role switch successful');
+            const updatedUser = switchResult.user || { ...state.user!, user_type: 'vendor', current_role: 'vendor' };
             const token = await authService.getToken();
             await login(updatedUser, token);
-            // Add a small delay to ensure state is updated
-            setTimeout(() => navigate('/vendor/dashboard'), 100);
+            
+            // Ensure vendor auth is properly set
+            const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+            await simplePersistentAuth.saveVendorLogin(token, updatedUser);
+            
+            // Navigate with a small delay to ensure state is updated
+            setTimeout(() => {
+              console.log('📍 Navigating to vendor dashboard');
+              navigate('/vendor/dashboard');
+            }, 100);
+          } else {
+            console.error('❌ Vendor role switch failed:', switchResult.error);
           }
         } else {
           // User doesn't have vendor role, start onboarding
@@ -38,14 +50,22 @@ export function RoleSwitcher() {
           navigate('/vendor/onboarding');
         }
       } else {
+        console.log('🔄 Switching to customer role...');
         // Switch to customer
         const switchResult = await switchToCustomerRole();
         if (switchResult.success) {
-          const updatedUser = { ...state.user!, user_type: 'customer', current_role: 'customer' };
+          console.log('✅ Customer role switch successful');
+          const updatedUser = switchResult.user || { ...state.user!, user_type: 'customer', current_role: 'customer' };
           const token = await authService.getToken();
           await login(updatedUser, token);
-          // Add a small delay to ensure state is updated
-          setTimeout(() => navigate('/home'), 100);
+          
+          // Navigate with a small delay to ensure state is updated
+          setTimeout(() => {
+            console.log('📍 Navigating to customer home');
+            navigate('/home');
+          }, 100);
+        } else {
+          console.error('❌ Customer role switch failed:', switchResult.error);
         }
       }
     } catch (error) {

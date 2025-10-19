@@ -43,7 +43,9 @@ const ProductManagement: React.FC = () => {
   const [newImages, setNewImages] = useState<File[]>([]);
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [subcategories, setSubcategories] = useState<string[]>([]);
+  const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [categoryParameters, setCategoryParameters] = useState<any[]>([]);
+  const [subcategoryParameters, setSubcategoryParameters] = useState<any[]>([]);
   const [showPackageDialog, setShowPackageDialog] = useState(false);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   const [selectedProductForFeatured, setSelectedProductForFeatured] = useState<Product | null>(null);
@@ -66,6 +68,18 @@ const ProductManagement: React.FC = () => {
     fetchCategories();
   }, []);
 
+  // Fetch parameters when edit mode changes
+  useEffect(() => {
+    if (editMode && selectedProduct) {
+      if (selectedProduct.category) {
+        fetchCategoryParameters(selectedProduct.category);
+      }
+      if (selectedProduct.subcategory) {
+        fetchSubcategoryParameters(selectedProduct.subcategory);
+      }
+    }
+  }, [editMode, selectedProduct]);
+
   const fetchCategories = async () => {
     try {
       const { apiRequest } = await import('@/utils/apiUtils');
@@ -80,10 +94,57 @@ const ProductManagement: React.FC = () => {
     try {
       const { apiRequest } = await import('@/utils/apiUtils');
       const { data } = await apiRequest(`/categories/${categoryName}/subcategories/`);
-      setSubcategories(data.subcategories || []);
+      const subcats = data.subcategories || [];
+      const subcategoryObjects = subcats.map((sub: any, index: number) => 
+        typeof sub === 'string' ? { id: index + 1, name: sub } : sub
+      );
+      setSubcategories(subcategoryObjects);
     } catch (error) {
       console.error('Failed to fetch subcategories:', error);
       setSubcategories([]);
+    }
+  };
+
+  const fetchCategoryParameters = async (categoryName: string) => {
+    try {
+      // First get the category ID from the categories API
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const { data: categoriesData } = await apiRequest('/categories/');
+      const category = categoriesData.categories?.find((cat: any) => cat.name === categoryName);
+      
+      if (category?.id) {
+        const { data } = await apiRequest(`/accounts/categories/parameters/?target_id=${category.id}&target_type=category`);
+        setCategoryParameters(data.parameters || []);
+      } else {
+        setCategoryParameters([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch category parameters:', error);
+      setCategoryParameters([]);
+    }
+  };
+
+  const fetchSubcategoryParameters = async (subcategoryName: string) => {
+    try {
+      // Get subcategory ID from the current product's category
+      const { apiRequest } = await import('@/utils/apiUtils');
+      const currentCategory = editData.category || selectedProduct?.category;
+      if (!currentCategory) return;
+      
+      const { data: subcatData } = await apiRequest(`/categories/${currentCategory}/subcategories/`);
+      const subcategoryIndex = subcatData.subcategories?.indexOf(subcategoryName);
+      
+      if (subcategoryIndex !== -1) {
+        // Use a simple ID mapping - this should match your backend logic
+        const subcategoryId = subcategoryIndex + 1;
+        const { data } = await apiRequest(`/accounts/categories/parameters/?target_id=${subcategoryId}&target_type=subcategory`);
+        setSubcategoryParameters(data.parameters || []);
+      } else {
+        setSubcategoryParameters([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch subcategory parameters:', error);
+      setSubcategoryParameters([]);
     }
   };
 
@@ -540,7 +601,10 @@ const ProductManagement: React.FC = () => {
                           onClick={() => {
                             setSelectedProduct(product);
                             setEditMode(true);
-                            setEditData(product);
+                            setEditData({
+                              ...product, 
+                              dynamic_fields: product.dynamic_fields || {}
+                            });
                             if (product.category) {
                               fetchSubcategories(product.category);
                             }
@@ -829,7 +893,13 @@ const ProductManagement: React.FC = () => {
                       size="sm"
                       onClick={() => {
                         setEditMode(true);
-                        setEditData(selectedProduct || {});
+                        setEditData({
+                          ...selectedProduct,
+                          dynamic_fields: selectedProduct?.dynamic_fields || {}
+                        });
+                        if (selectedProduct?.category) {
+                          fetchSubcategories(selectedProduct.category);
+                        }
                       }}
                     >
                       <Edit className="h-4 w-4 mr-1" />
@@ -1034,6 +1104,8 @@ const ProductManagement: React.FC = () => {
                           onValueChange={(value) => {
                             setEditData({...editData, category: value, subcategory: ''});
                             fetchSubcategories(value);
+                            fetchCategoryParameters(value);
+                            setSubcategoryParameters([]);
                           }}
                         >
                           <SelectTrigger>
@@ -1055,14 +1127,17 @@ const ProductManagement: React.FC = () => {
                       {editMode ? (
                         <Select 
                           value={editData.subcategory || selectedProduct.subcategory || ''} 
-                          onValueChange={(value) => setEditData({...editData, subcategory: value})}
+                          onValueChange={(value) => {
+                            setEditData({...editData, subcategory: value});
+                            fetchSubcategoryParameters(value);
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select subcategory" />
                           </SelectTrigger>
                           <SelectContent>
                             {subcategories.map(subcategory => (
-                              <SelectItem key={subcategory} value={subcategory}>{subcategory}</SelectItem>
+                              <SelectItem key={subcategory.id} value={subcategory.name}>{subcategory.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1132,6 +1207,134 @@ const ProductManagement: React.FC = () => {
                       <p className="text-sm text-gray-600">{stripHtml(selectedProduct.description)}</p>
                     )}
                   </div>
+
+                  {/* Category Parameters */}
+                  {editMode && categoryParameters.length > 0 && (
+                    <div>
+                      <Label>Category Details</Label>
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        {categoryParameters.map((param) => {
+                          const value = editData.dynamic_fields?.[param.name] || '';
+                          return (
+                            <div key={param.name}>
+                              <Label className="text-xs">{param.label}</Label>
+                              {param.field_type === 'text' || param.field_type === 'number' ? (
+                                <Input
+                                  type={param.field_type}
+                                  value={value}
+                                  placeholder={param.placeholder}
+                                  onChange={(e) => setEditData({
+                                    ...editData,
+                                    dynamic_fields: {
+                                      ...editData.dynamic_fields,
+                                      [param.name]: param.field_type === 'number' ? Number(e.target.value) : e.target.value
+                                    }
+                                  })}
+                                />
+                              ) : param.field_type === 'select' ? (
+                                <Select value={value} onValueChange={(val) => setEditData({
+                                  ...editData,
+                                  dynamic_fields: { ...editData.dynamic_fields, [param.name]: val }
+                                })}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={`Select ${param.label}`} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {param.options?.map((option: string) => (
+                                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : param.field_type === 'boolean' ? (
+                                <div className="flex items-center space-x-2 mt-1">
+                                  <Switch
+                                    checked={!!value}
+                                    onCheckedChange={(checked) => setEditData({
+                                      ...editData,
+                                      dynamic_fields: { ...editData.dynamic_fields, [param.name]: checked }
+                                    })}
+                                  />
+                                  <Label className="text-xs">{param.label}</Label>
+                                </div>
+                              ) : (
+                                <Input
+                                  value={Array.isArray(value) ? value.join(', ') : String(value)}
+                                  onChange={(e) => setEditData({
+                                    ...editData,
+                                    dynamic_fields: { ...editData.dynamic_fields, [param.name]: e.target.value }
+                                  })}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Subcategory Parameters */}
+                  {editMode && subcategoryParameters.length > 0 && (
+                    <div>
+                      <Label>Subcategory Details</Label>
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        {subcategoryParameters.map((param) => {
+                          const value = editData.dynamic_fields?.[param.name] || '';
+                          return (
+                            <div key={param.name}>
+                              <Label className="text-xs">{param.label}</Label>
+                              {param.field_type === 'text' || param.field_type === 'number' ? (
+                                <Input
+                                  type={param.field_type}
+                                  value={value}
+                                  placeholder={param.placeholder}
+                                  onChange={(e) => setEditData({
+                                    ...editData,
+                                    dynamic_fields: {
+                                      ...editData.dynamic_fields,
+                                      [param.name]: param.field_type === 'number' ? Number(e.target.value) : e.target.value
+                                    }
+                                  })}
+                                />
+                              ) : param.field_type === 'select' ? (
+                                <Select value={value} onValueChange={(val) => setEditData({
+                                  ...editData,
+                                  dynamic_fields: { ...editData.dynamic_fields, [param.name]: val }
+                                })}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={`Select ${param.label}`} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {param.options?.map((option: string) => (
+                                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : param.field_type === 'boolean' ? (
+                                <div className="flex items-center space-x-2 mt-1">
+                                  <Switch
+                                    checked={!!value}
+                                    onCheckedChange={(checked) => setEditData({
+                                      ...editData,
+                                      dynamic_fields: { ...editData.dynamic_fields, [param.name]: checked }
+                                    })}
+                                  />
+                                  <Label className="text-xs">{param.label}</Label>
+                                </div>
+                              ) : (
+                                <Input
+                                  value={Array.isArray(value) ? value.join(', ') : String(value)}
+                                  onChange={(e) => setEditData({
+                                    ...editData,
+                                    dynamic_fields: { ...editData.dynamic_fields, [param.name]: e.target.value }
+                                  })}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="space-y-3">
                     <div className="flex items-center space-x-2">
@@ -1199,6 +1402,25 @@ const ProductManagement: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  
+                  {/* Dynamic Fields/Parameters */}
+                  {selectedProduct.dynamic_fields && Object.keys(selectedProduct.dynamic_fields).length > 0 && (
+                    <div>
+                      <Label>Product Parameters</Label>
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        {Object.entries(selectedProduct.dynamic_fields).map(([key, value]) => (
+                          <div key={key} className="border rounded p-2">
+                            <Label className="text-xs text-gray-600">{key.replace('_', ' ').toUpperCase()}</Label>
+                            <p className="text-sm font-medium">
+                              {Array.isArray(value) ? value.join(', ') : 
+                               typeof value === 'boolean' ? (value ? 'Yes' : 'No') : 
+                               String(value)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   {selectedProduct.tags && selectedProduct.tags.length > 0 && (
                     <div>

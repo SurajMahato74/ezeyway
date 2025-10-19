@@ -1,5 +1,7 @@
+import { API_BASE } from '@/config/api';
+
 interface PendingAction {
-  type: 'add_to_cart' | 'buy_now' | 'view_orders' | 'view_profile' | 'navigate';
+  type: 'add_to_cart' | 'buy_now' | 'view_orders' | 'view_profile' | 'navigate' | 'toggleFavorite';
   data?: any;
   path?: string;
 }
@@ -63,11 +65,35 @@ class RedirectService {
       switch (action.type) {
         case 'add_to_cart':
           if (action.data) {
+            console.log('Executing add_to_cart action:', action.data);
             const { cartService } = await import('./cartService');
-            await cartService.addToCart(action.data.productId, action.data.quantity || 1);
-            console.log('Added to cart successfully');
-            this.clearPendingAction();
-            return true;
+            try {
+              const updatedCart = await cartService.addToCart(action.data.productId, action.data.quantity || 1);
+              console.log('Added to cart successfully:', updatedCart);
+              
+              // Trigger cart context refresh by dispatching a custom event
+              window.dispatchEvent(new CustomEvent('cartUpdated', { detail: updatedCart }));
+              
+              // Show success toast
+              try {
+                const { toast } = await import('@/hooks/use-toast');
+                toast({
+                  title: "Added to Cart",
+                  description: "Product added successfully",
+                });
+              } catch (toastError) {
+                console.log('Toast not available, but item added successfully');
+              }
+              
+              this.clearPendingAction();
+              // Navigate to cart after adding item
+              window.location.href = action.path || '/cart';
+              return true;
+            } catch (error) {
+              console.error('Failed to add to cart:', error);
+              this.clearPendingAction();
+              return false;
+            }
           }
           break;
 
@@ -75,9 +101,55 @@ class RedirectService {
           if (action.data) {
             // Store product for checkout and navigate
             localStorage.setItem('buyNowProduct', JSON.stringify(action.data));
-            window.location.href = '/checkout';
             this.clearPendingAction();
+            // Navigate to checkout with directBuy state
+            const checkoutUrl = new URL('/checkout', window.location.origin);
+            checkoutUrl.searchParams.set('directBuy', 'true');
+            window.location.href = checkoutUrl.toString();
             return true;
+          }
+          break;
+
+        case 'toggleFavorite':
+          if (action.data) {
+            console.log('Executing toggleFavorite action:', action.data);
+            try {
+              const response = await fetch(`${API_BASE}favorites/toggle/`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Token ${token}`,
+                  'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify({ product_id: action.data.productId }),
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                console.log('Favorite toggled successfully:', data);
+                
+                // Show success toast
+                try {
+                  const { toast } = await import('@/hooks/use-toast');
+                  toast({
+                    title: data.is_favorite ? "Added to Favorites" : "Removed from Favorites",
+                    description: data.message,
+                  });
+                } catch (toastError) {
+                  console.log('Toast not available, but favorite toggled successfully');
+                }
+                
+                this.clearPendingAction();
+                window.location.href = action.path || '/wishlist';
+                return true;
+              } else {
+                console.error('Failed to toggle favorite:', response.status);
+              }
+            } catch (error) {
+              console.error('Failed to toggle favorite:', error);
+            }
+            this.clearPendingAction();
+            return false;
           }
           break;
 
