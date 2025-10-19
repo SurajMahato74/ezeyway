@@ -9,6 +9,7 @@ import { LatestProducts } from "@/components/LatestProducts";
 import { BottomNavigation } from "@/components/BottomNavigation";
 
 import { Footer } from "@/components/Footer";
+import { FloatingChat } from "@/components/FloatingChat";
 import { useAppLoading } from "@/contexts/AppLoadingContext";
 
 const Index = () => {
@@ -33,7 +34,7 @@ const Index = () => {
       <FeaturedProducts onDataLoaded={() => setFeaturedLoaded(true)} />
       <LatestProducts onDataLoaded={() => setLatestLoaded(true)} />
       <Footer />
-
+      <FloatingChat />
       <BottomNavigation />
     </div>
   );

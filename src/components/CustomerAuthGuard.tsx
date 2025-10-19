@@ -25,8 +25,8 @@ export function CustomerAuthGuard({ children, redirectTo = '/login' }: CustomerA
       if (user) {
         // User is in context, check if they have customer access
         if (!user.available_roles?.includes('customer')) {
-          console.log('CustomerAuthGuard: Customer role not available');
-          navigate('/access-denied');
+          console.log('CustomerAuthGuard: Customer role not available, user type:', user.user_type);
+          setHasAccess(false);
           return;
         }
         console.log('CustomerAuthGuard: Access granted for user:', user.user_type);
@@ -37,22 +37,22 @@ export function CustomerAuthGuard({ children, redirectTo = '/login' }: CustomerA
       // Fallback to authService if no context user
       const isAuth = await authService.isAuthenticated();
       if (!isAuth) {
-        console.log('CustomerAuthGuard: Not authenticated, redirecting to login');
-        navigate(redirectTo);
+        console.log('CustomerAuthGuard: Not authenticated');
+        setHasAccess(false);
         return;
       }
 
       const authUser = await authService.getUser();
       if (!authUser) {
-        console.log('CustomerAuthGuard: No user data, redirecting to login');
-        navigate(redirectTo);
+        console.log('CustomerAuthGuard: No user data');
+        setHasAccess(false);
         return;
       }
 
       // Check if user has customer role available
       if (!authUser.available_roles?.includes('customer')) {
-        console.log('CustomerAuthGuard: Customer role not available');
-        navigate('/access-denied');
+        console.log('CustomerAuthGuard: Customer role not available, user type:', authUser.user_type);
+        setHasAccess(false);
         return;
       }
 
@@ -60,7 +60,7 @@ export function CustomerAuthGuard({ children, redirectTo = '/login' }: CustomerA
       setHasAccess(true);
     } catch (error) {
       console.error('Customer auth guard error:', error);
-      navigate(redirectTo);
+      setHasAccess(false);
     } finally {
       setIsChecking(false);
     }
@@ -68,15 +68,17 @@ export function CustomerAuthGuard({ children, redirectTo = '/login' }: CustomerA
 
   if (isChecking) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mb-4"></div>
+        <p className="text-gray-600">Checking authentication...</p>
       </div>
     );
   }
 
-  if (!hasAccess) {
-    return null;
-  }
+  // Always render children - let the Orders page handle unauthenticated state
+  // if (!hasAccess) {
+  //   return null;
+  // }
 
   return <>{children}</>;
 }

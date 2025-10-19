@@ -581,6 +581,21 @@ export default function VendorSettings() {
             </div>
             <RoleSwitcher />
           </div>
+
+          {/* Logout Button */}
+          <Button
+            variant="outline"
+            className="w-full flex items-center justify-center py-4 bg-red-50/40 border-red-200 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
+            onClick={async () => {
+              const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+              await authService.clearAuth();
+              await simplePersistentAuth.clearVendorAuth();
+              navigate("/vendor/login");
+            }}
+          >
+            <LucideLogOut className="h-5 w-5 mr-2" />
+            <span className="font-medium">Logout</span>
+          </Button>
           {settingsMenu.map((section) => (
             <div key={section.category} className="bg-white rounded-lg overflow-hidden">
               <div className="p-4 border-b bg-gray-50">
@@ -614,21 +629,7 @@ export default function VendorSettings() {
               </div>
             </div>
           ))}
-          
-          {/* Logout Button */}
-          <Button
-            variant="outline"
-            className="w-full flex items-center justify-center py-6 bg-red-50/40 border-red-200 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
-            onClick={async () => {
-              const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
-              await authService.clearAuth();
-              await simplePersistentAuth.clearVendorAuth();
-              navigate("/vendor/login");
-            }}
-          >
-            <LucideLogOut className="h-5 w-5 mr-2" />
-            <span className="font-medium text-base">Logout</span>
-          </Button>
+
         </div>
       </div>
     </VendorPage>

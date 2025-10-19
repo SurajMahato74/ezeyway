@@ -137,8 +137,9 @@ export default function Login() {
           const executed = await redirectService.executePendingAction();
           if (!executed) {
             const urlParams = new URLSearchParams(window.location.search);
+            const redirect = urlParams.get('redirect');
             const returnTo = urlParams.get('returnTo');
-            const from = returnTo || location.state?.from?.pathname || '/home';
+            const from = redirect || returnTo || location.state?.from?.pathname || '/home';
             navigate(from, { replace: true });
           }
         }, 100);
@@ -213,8 +214,9 @@ export default function Login() {
         const executed = await redirectService.executePendingAction();
         if (!executed) {
           const urlParams = new URLSearchParams(window.location.search);
+          const redirect = urlParams.get('redirect');
           const returnTo = urlParams.get('returnTo');
-          const from = returnTo || location.state?.from?.pathname || '/home';
+          const from = redirect || returnTo || location.state?.from?.pathname || '/home';
           navigate(from, { replace: true });
         }
       }, 100);
@@ -336,8 +338,9 @@ export default function Login() {
       const executed = await redirectService.executePendingAction();
       if (!executed) {
         const urlParams = new URLSearchParams(window.location.search);
+        const redirect = urlParams.get('redirect');
         const returnTo = urlParams.get('returnTo');
-        const from = returnTo || location.state?.from?.pathname || '/home';
+        const from = redirect || returnTo || location.state?.from?.pathname || '/home';
         navigate(from, { replace: true });
       }
     }, 100);

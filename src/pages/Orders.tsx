@@ -28,6 +28,7 @@ export default function Orders() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { navigateWithAuth } = useAuthAction();
+  const [hasAccess, setHasAccess] = useState(false);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -67,9 +68,11 @@ export default function Orders() {
 
   const fetchOrders = useCallback(async (page = 1, reset = false) => {
     try {
-      const token = await authService.getToken();
-      if (!token) {
-        navigateWithAuth('/orders');
+      const isAuth = await authService.isAuthenticated();
+      if (!isAuth) {
+        // Don't show error, just return - CustomerAuthGuard will handle redirect
+        setLoading(false);
+        setLoadingMore(false);
         return;
       }
 
@@ -107,11 +110,15 @@ export default function Orders() {
       setVendorStatuses(prev => ({ ...prev, ...statuses }));
     } catch (error) {
       console.error('Error fetching orders:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load orders",
-        variant: "destructive",
-      });
+      // Only show error if user is authenticated but request failed
+      const token = await authService.getToken();
+      if (token) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to load orders",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -119,7 +126,18 @@ export default function Orders() {
   }, [navigateWithAuth, toast]);
 
   useEffect(() => {
-    fetchOrdersRef.current(1, true);
+    // Check authentication and fetch orders
+    const checkAndFetch = async () => {
+      const isAuth = await authService.isAuthenticated();
+      setHasAccess(isAuth);
+      if (isAuth) {
+        fetchOrdersRef.current(1, true);
+      } else {
+        setLoading(false);
+      }
+    };
+    
+    checkAndFetch();
     
     // Listen for order notifications to refresh orders (only when page is visible)
     const handleNewNotification = (event: CustomEvent) => {
@@ -602,31 +620,29 @@ export default function Orders() {
 
   if (loading && orders.length === 0) {
     return (
-      <CustomerAuthGuard>
-        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
-          <header className="sticky top-0 z-50 bg-white shadow-lg border-b py-4 px-6">
-            <div className="flex items-center justify-between max-w-4xl mx-auto">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate(-1)}
-                className="p-2 hover:bg-gray-100 rounded-full"
-              >
-                <ArrowLeft className="h-6 w-6 text-gray-700" />
-              </Button>
-              <h1 className="text-2xl font-bold text-gray-800">My Orders</h1>
-              <NotificationHeader />
-            </div>
-          </header>
-          <main className="max-w-4xl mx-auto p-4 pt-2">
-            <div className="space-y-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <OrderSkeleton key={i} />
-              ))}
-            </div>
-          </main>
-        </div>
-      </CustomerAuthGuard>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
+        <header className="sticky top-0 z-50 bg-white shadow-lg border-b py-4 px-6">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-gray-100 rounded-full"
+            >
+              <ArrowLeft className="h-6 w-6 text-gray-700" />
+            </Button>
+            <h1 className="text-2xl font-bold text-gray-800">My Orders</h1>
+            <NotificationHeader />
+          </div>
+        </header>
+        <main className="max-w-4xl mx-auto p-4 pt-2">
+          <div className="space-y-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <OrderSkeleton key={i} />
+            ))}
+          </div>
+        </main>
+      </div>
     );
   }
 
@@ -655,12 +671,26 @@ export default function Orders() {
             <Package className="h-16 w-16 mx-auto mb-4 text-gray-400" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No orders yet</h3>
             <p className="text-gray-500 mb-6">Start shopping to see your orders here</p>
-            <Button
-              onClick={() => navigate('/')}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              Start Shopping
-            </Button>
+            <div className="space-y-4">
+              <Button
+                onClick={() => navigate('/')}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                Start Shopping
+              </Button>
+              {!hasAccess && (
+                <div className="text-center">
+                  <p className="text-sm text-gray-500 mb-2">Need to sign in?</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate('/login?redirect=/orders')}
+                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                  >
+                    Sign In
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

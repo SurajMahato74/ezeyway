@@ -4,6 +4,8 @@ import { isDevelopment, checkBackendHealth, showBackendWarning } from '@/utils/d
 
 // Track if we've already shown the backend warning
 let backendWarningShown = false;
+// Track token refresh attempts to prevent infinite loops
+let isRefreshing = false;
 
 export const createApiHeaders = async (includeAuth = true, isFormData = false, endpoint = '') => {
   const headers: Record<string, string> = {
@@ -20,24 +22,22 @@ export const createApiHeaders = async (includeAuth = true, isFormData = false, e
     let token = await authService.getToken();
     console.log('🔑 Main token for', endpoint, ':', token ? `${token.substring(0, 10)}...` : 'NO TOKEN');
     
-    // Always try to sync with vendor auth if on vendor pages
-    const isVendorEndpoint = endpoint.includes('vendor') || window.location.pathname.startsWith('/vendor');
+    // Only try vendor auth if we're actually on vendor pages AND making vendor API calls
+    const isVendorEndpoint = endpoint.includes('vendor');
+    const isVendorPage = window.location.pathname.startsWith('/vendor');
     
-    if (isVendorEndpoint || !token) {
+    if (isVendorEndpoint && isVendorPage && !token) {
       try {
         const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
         const vendorAuth = await simplePersistentAuth.getVendorAuth();
         if (vendorAuth?.token) {
-          // Always use vendor token for vendor endpoints
-          if (isVendorEndpoint || !token) {
-            token = vendorAuth.token;
-            console.log('🔄 Using vendor token for:', endpoint, `${token.substring(0, 10)}...`);
-            
-            // Sync vendor token back to main auth to prevent future issues
-            await authService.setAuth(vendorAuth.token, vendorAuth.user);
-            console.log('⚙️ Synced vendor token to main auth');
-          }
-        } else if (isVendorEndpoint) {
+          token = vendorAuth.token;
+          console.log('🔄 Using vendor token for:', endpoint, `${token.substring(0, 10)}...`);
+          
+          // Sync vendor token back to main auth to prevent future issues
+          await authService.setAuth(vendorAuth.token, vendorAuth.user);
+          console.log('⚙️ Synced vendor token to main auth');
+        } else {
           console.log('❌ No vendor token available for vendor endpoint');
         }
       } catch (error) {
@@ -138,55 +138,62 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
   try {
     const response = await fetch(url, defaultOptions);
     
-    // Handle 401 Unauthorized - try to refresh token
-    if (response.status === 401 && includeAuth) {
+    // Handle 401 Unauthorized - try to refresh token (but prevent infinite loops)
+    if (response.status === 401 && includeAuth && !isRefreshing) {
+      isRefreshing = true;
       console.log('🔄 401 error, attempting token refresh...');
       
       try {
-        const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
-        const vendorAuth = await simplePersistentAuth.getVendorAuth();
+        // Only try vendor auth refresh for actual vendor endpoints on vendor pages
+        const isVendorEndpoint = endpoint.includes('vendor');
+        const isVendorPage = window.location.pathname.startsWith('/vendor');
         
-        if (vendorAuth?.token) {
-          console.log('🔄 Found vendor auth, attempting refresh with vendor token');
+        if (isVendorEndpoint && isVendorPage) {
+          const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
+          const vendorAuth = await simplePersistentAuth.getVendorAuth();
           
-          // Update main auth with vendor token
-          await authService.setAuth(vendorAuth.token, vendorAuth.user);
-          
-          // Retry request with new token
-          const newHeaders = await createApiHeaders(true, isFormData, endpoint);
-          const retryResponse = await fetch(url, {
-            ...defaultOptions,
-            headers: newHeaders
-          });
-          
-          if (retryResponse.ok) {
-            console.log('✅ Token refresh successful');
-            const responseClone = retryResponse.clone();
-            const contentType = retryResponse.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-              const data = await retryResponse.json();
-              return { response: responseClone, data };
+          if (vendorAuth?.token) {
+            console.log('🔄 Found vendor auth, attempting refresh with vendor token');
+            
+            // Update main auth with vendor token
+            await authService.setAuth(vendorAuth.token, vendorAuth.user);
+            
+            // Retry request with new token
+            const newHeaders = await createApiHeaders(true, isFormData, endpoint);
+            const retryResponse = await fetch(url, {
+              ...defaultOptions,
+              headers: newHeaders
+            });
+            
+            if (retryResponse.ok) {
+              console.log('✅ Token refresh successful');
+              isRefreshing = false;
+              const responseClone = retryResponse.clone();
+              const contentType = retryResponse.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                const data = await retryResponse.json();
+                return { response: responseClone, data };
+              }
+              return { response: responseClone, data: null };
+            } else {
+              console.log('❌ Retry with vendor token also failed:', retryResponse.status);
+              // Clear expired vendor auth
+              await simplePersistentAuth.clearVendorAuth();
             }
-            return { response: responseClone, data: null };
           } else {
-            console.log('❌ Retry with vendor token also failed:', retryResponse.status);
+            console.log('❌ No vendor auth available for token refresh');
           }
         } else {
-          console.log('❌ No vendor auth available for token refresh');
-        }
-        
-        // If refresh fails, check if we should redirect to login
-        const isVendorPage = window.location.pathname.startsWith('/vendor');
-        if (isVendorPage) {
-          console.log('🚨 Vendor authentication failed, may need re-login');
-          // Don't automatically redirect, let the component handle it
+          console.log('❌ Not a vendor endpoint, skipping vendor auth refresh');
         }
         
         console.log('❌ Token refresh failed');
+        isRefreshing = false;
         return { response, data: { error: 'Authentication required' } };
         
       } catch (refreshError) {
         console.error('Token refresh error:', refreshError);
+        isRefreshing = false;
         return { response, data: { error: 'Authentication required' } };
       }
     }

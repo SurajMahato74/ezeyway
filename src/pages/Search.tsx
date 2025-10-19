@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { performanceMonitor, debounce, imagePreloader } from "@/utils/performance";
 import { getDeliveryInfo } from '@/utils/deliveryUtils';
+import { FloatingChat } from "@/components/FloatingChat";
 import { API_BASE } from '@/config/api';
 
 // Lazy load heavy components
@@ -1076,6 +1077,7 @@ export default function Search() {
         </div>
       )}
 
+      <FloatingChat />
       <BottomNavigation />
     </div>
   );

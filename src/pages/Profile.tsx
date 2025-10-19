@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
+import { FloatingChat } from "@/components/FloatingChat";
 import { ProfilePasswordSetup } from "@/components/ProfilePasswordSetup";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { API_BASE } from '@/config/api';
@@ -198,14 +199,35 @@ const ProfilePage = () => {
             </Button>
           </div>
           <p className="text-gray-800 text-base font-medium">{user.email}</p>
-          <div className="mt-3">
-            <RoleSwitcher />
-          </div>
         </div>
       </div>
 
       {/* Menu Section */}
       <div className="p-4 space-y-6 pb-20">
+        {/* Role Switcher and Logout Section */}
+        <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100 space-y-4">
+          <div>
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-1">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Account Type
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">Switch between your Customer and Vendor accounts</p>
+            <RoleSwitcher />
+          </div>
+          
+          {/* Logout Button */}
+          <Button
+            variant="outline"
+            className="w-full flex items-center justify-center py-4 bg-red-50/40 border-red-200 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-5 w-5 mr-2" />
+            <span className="font-medium">Logout</span>
+          </Button>
+        </div>
+        
         {/* Password Setup for Google OAuth users */}
         <ProfilePasswordSetup />
         
@@ -237,17 +259,10 @@ const ProfilePage = () => {
 
 
 
-        {/* Logout Button */}
-        <Button
-          variant="outline"
-          className="w-full flex items-center justify-center py-6 bg-red-50/40 border-red-200 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
-          onClick={handleLogout}
-        >
-          <LogOut className="h-5 w-5 mr-2" />
-          <span className="font-medium text-base">Logout</span>
-        </Button>
+
       </div>
 
+      <FloatingChat />
       <BottomNavigation />
     </div>
   );

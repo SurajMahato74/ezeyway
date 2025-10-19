@@ -257,7 +257,7 @@ const RoutesWithAnalytics = () => {
       <Route path="/vendor/:vendorId" element={<VendorProfile />} />
       <Route path="/checkout" element={<ProtectedRoute><CheckOut /></ProtectedRoute>} />
       <Route path="/order-confirmation/:orderId" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
-      <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+      <Route path="/orders" element={<Orders />} />
       <Route path="/addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
       <Route path="/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
 

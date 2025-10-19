@@ -41,6 +41,18 @@ export interface Order {
 class OrderService {
   private async getAuthHeaders() {
     const token = await authService.getToken();
+    const user = await authService.getUser();
+    
+    // For customer orders, don't use vendor tokens
+    if (user?.user_type === 'vendor' && user?.available_roles?.includes('customer')) {
+      // Vendor with customer role - check if we need customer token
+      return {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        ...(token && { 'Authorization': `Token ${token}` })
+      };
+    }
+    
     return {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
@@ -92,6 +104,11 @@ class OrderService {
   }
 
   async getOrdersPaginated(page: number = 1, pageSize: number = 10): Promise<{ results: Order[]; next: string | null; count: number }> {
+    const isAuth = await authService.isAuthenticated();
+    if (!isAuth) {
+      return { results: [], next: null, count: 0 };
+    }
+
     const params = new URLSearchParams({
       page: page.toString(),
       page_size: pageSize.toString()
@@ -102,6 +119,10 @@ class OrderService {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        // Don't clear auth, just return empty results
+        return { results: [], next: null, count: 0 };
+      }
       throw new Error('Failed to fetch orders');
     }
 
