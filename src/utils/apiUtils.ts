@@ -74,11 +74,8 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, in
     });
   }
   
-  // Map vendor/orders to orders only for GET requests (list orders)
-  if (cleanEndpoint.includes('/vendor/orders') && (!options.method || options.method === 'GET')) {
-    cleanEndpoint = '/orders/';
-    console.log('🔧 Mapped vendor/orders to orders:', endpoint, '->', cleanEndpoint);
-  }
+  // Remove incorrect vendor/orders mapping - vendors should use /vendor/orders/ endpoint
+  // This was causing vendor orders to be mapped to customer orders endpoint
   
   const url = `${API_CONFIG.BASE_URL}${cleanEndpoint}`;
 
