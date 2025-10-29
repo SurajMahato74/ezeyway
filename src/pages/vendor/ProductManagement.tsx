@@ -298,7 +298,7 @@ const ProductManagement: React.FC = () => {
       
       // Show success toast
       toast.success('Featured Package Purchased!', {
-        description: `${selectedProductForFeatured.name} is now featured until ${new Date(data.end_date).toLocaleDateString()}. Wallet balance: ₹${data.new_wallet_balance}`,
+        description: `${selectedProductForFeatured.name} is now featured until ${new Date(data.end_date).toLocaleDateString()}. Wallet balance: Rs ${data.new_wallet_balance}`,
         duration: 5000,
       });
       
@@ -549,9 +549,9 @@ const ProductManagement: React.FC = () => {
                       <div>
                         <h4 className="text-sm font-medium text-gray-900 truncate">{product.name}</h4>
                         
-                        <p className="text-sm font-semibold text-gray-900">₹{product.price}</p>
+                        <p className="text-sm font-semibold text-gray-900">Rs {product.price}</p>
                         {product.cost_price && (
-                          <p className="text-xs text-gray-500">Cost: ₹{product.cost_price}</p>
+                          <p className="text-xs text-gray-500">Cost: Rs {product.cost_price}</p>
                         )}
                       </div>
                       <div>
@@ -577,7 +577,7 @@ const ProductManagement: React.FC = () => {
                             <span className="text-xs bg-green-100 text-green-800 px-1 rounded">🚚 Free</span>
                           )}
                           {product.custom_delivery_fee_enabled && product.custom_delivery_fee && (
-                            <span className="text-xs bg-blue-100 text-blue-800 px-1 rounded">🚚 ₹{product.custom_delivery_fee}</span>
+                            <span className="text-xs bg-blue-100 text-blue-800 px-1 rounded">🚚 Rs {product.custom_delivery_fee}</span>
                           )}
                         </div>
                       </div>
@@ -747,7 +747,7 @@ const ProductManagement: React.FC = () => {
                             <p className="text-sm text-gray-600">{pkg.duration_days} days</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-lg font-bold text-green-600">₹{pkg.amount}</p>
+                            <p className="text-lg font-bold text-green-600">Rs {pkg.amount}</p>
                             <p className="text-xs text-gray-500 capitalize">{pkg.package_type}</p>
                           </div>
                         </div>
@@ -772,7 +772,7 @@ const ProductManagement: React.FC = () => {
                 <div className="space-y-4">
                   <div className="border rounded-lg p-4 bg-blue-50">
                     <h3 className="font-semibold text-blue-900">{selectedPackage.name}</h3>
-                    <p className="text-sm text-blue-700">{selectedPackage.duration_days} days - ₹{selectedPackage.amount}</p>
+                    <p className="text-sm text-blue-700">{selectedPackage.duration_days} days - Rs {selectedPackage.amount}</p>
                   </div>
                   
                   <div>
@@ -809,7 +809,7 @@ const ProductManagement: React.FC = () => {
                           Processing...
                         </>
                       ) : (
-                        `Pay ₹${selectedPackage.amount}`
+                        `Pay Rs ${selectedPackage.amount}`
                       )}
                     </Button>
                   </div>
@@ -1077,7 +1077,7 @@ const ProductManagement: React.FC = () => {
                           onChange={(e) => setEditData({...editData, price: Number(e.target.value)})}
                         />
                       ) : (
-                        <p className="text-sm font-medium">₹{selectedProduct.price}</p>
+                        <p className="text-sm font-medium">Rs {selectedProduct.price}</p>
                       )}
                     </div>
                     
@@ -1157,7 +1157,7 @@ const ProductManagement: React.FC = () => {
                           onChange={(e) => setEditData({...editData, cost_price: Number(e.target.value) || undefined})}
                         />
                       ) : (
-                        <p className="text-sm font-medium">{selectedProduct.cost_price ? `₹${selectedProduct.cost_price}` : 'N/A'}</p>
+                        <p className="text-sm font-medium">{selectedProduct.cost_price ? `Rs ${selectedProduct.cost_price}` : 'N/A'}</p>
                       )}
                     </div>
                     
@@ -1398,7 +1398,7 @@ const ProductManagement: React.FC = () => {
                     {!editMode && selectedProduct.custom_delivery_fee_enabled && selectedProduct.custom_delivery_fee && !selectedProduct.free_delivery && (
                       <div>
                         <Label>Delivery Fee Amount</Label>
-                        <p className="text-sm font-medium">₹{selectedProduct.custom_delivery_fee}</p>
+                        <p className="text-sm font-medium">Rs {selectedProduct.custom_delivery_fee}</p>
                       </div>
                     )}
                   </div>
