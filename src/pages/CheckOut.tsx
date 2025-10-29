@@ -413,8 +413,8 @@ export default function CheckOut() {
         const firstOrder = orders[0];
         new Notification('New Order Placed!', {
           body: orderCount > 1
-            ? `${orderCount} orders created for ₹${orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0).toFixed(2)}`
-            : `Order #${firstOrder.order_number} for ₹${firstOrder.total_amount}`,
+            ? `${orderCount} orders created for Rs ${orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0).toFixed(2)}`
+            : `Order #${firstOrder.order_number} for Rs ${firstOrder.total_amount}`,
           icon: '/favicon.ico',
           tag: `order-${firstOrder.id}`,
           requireInteraction: true
@@ -770,18 +770,18 @@ export default function CheckOut() {
                       <p className="font-semibold text-lg text-gray-800">{item.product.name}</p>
                       <p className="text-sm text-gray-500">{item.product.vendor_name}</p>
                       <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                      <p className="text-sm text-gray-500">Price: ₹{parseFloat(item.product.price || item.total_price || 0).toFixed(2)} each</p>
+                      <p className="text-sm text-gray-500">Price: Rs {parseFloat(item.product.price || item.total_price || 0).toFixed(2)} each</p>
                       {item.product.free_delivery === true && (
                         <p className="text-xs text-green-600 font-medium">✓ Free Delivery</p>
                       )}
                       {item.product.custom_delivery_fee_enabled === true && item.product.custom_delivery_fee !== null && item.product.custom_delivery_fee !== undefined && item.product.free_delivery !== true && (
-                        <p className="text-xs text-orange-600">Delivery: ₹{parseFloat(item.product.custom_delivery_fee.toString()).toFixed(2)}</p>
+                        <p className="text-xs text-orange-600">Delivery: Rs {parseFloat(item.product.custom_delivery_fee.toString()).toFixed(2)}</p>
                       )}
                       {item.product.free_delivery !== true && (item.product.custom_delivery_fee_enabled !== true || item.product.custom_delivery_fee === null || item.product.custom_delivery_fee === undefined) && (
                         <p className="text-xs text-orange-600">Delivery: To be determined</p>
                       )}
                     </div>
-                    <p className="font-semibold text-lg text-gray-800">₹{(parseFloat(item.product.price || item.total_price || 0) * item.quantity).toFixed(2)}</p>
+                    <p className="font-semibold text-lg text-gray-800">Rs {(parseFloat(item.product.price || item.total_price || 0) * item.quantity).toFixed(2)}</p>
                   </div>
                 ))}
                 <Separator className="my-4 bg-gray-200" />
@@ -791,7 +791,7 @@ export default function CheckOut() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-base text-gray-700">
                         <span>Subtotal ({cartItems.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
-                        <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+                        <span className="font-semibold">Rs {subtotal.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-base text-gray-700">
                         <span>Delivery Fee</span>
@@ -801,7 +801,7 @@ export default function CheckOut() {
                           ) : hasUndeterminedDelivery ? (
                             <span className="text-orange-600">To be determined</span>
                           ) : (
-                            `₹${deliveryFee.toFixed(2)}`
+                            `Rs ${deliveryFee.toFixed(2)}`
                           )}
                         </span>
                       </div>
@@ -819,7 +819,7 @@ export default function CheckOut() {
                   <Separator className="my-2 bg-gray-200" />
                   <div className="flex justify-between text-lg font-bold text-gray-800">
                     <span>Total Amount</span>
-                    <span>₹{total.toFixed(2)}</span>
+                    <span>Rs {total.toFixed(2)}</span>
                   </div>
                 </div>
                 
@@ -846,7 +846,7 @@ export default function CheckOut() {
           <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
             <div className="flex flex-col">
               <p className="text-sm text-gray-500">Total Amount</p>
-              <p className="text-2xl font-bold text-gray-800">₹{total.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-800">Rs {total.toFixed(2)}</p>
             </div>
             <Button
               onClick={handlePlaceOrder}

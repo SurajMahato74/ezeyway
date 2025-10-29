@@ -258,7 +258,7 @@ const WishlistPage = () => {
                 <div className="ml-6 flex-1">
                   <h3 className="font-semibold text-xl text-gray-900 truncate">{favorite.product.name}</h3>
                   <p className="text-sm text-gray-500 truncate">{favorite.product.vendor_name}</p>
-                  <p className="font-bold text-2xl text-emerald-600 mt-1">₹{parseFloat(favorite.product.price).toFixed(2)}</p>
+                  <p className="font-bold text-2xl text-emerald-600 mt-1">Rs {parseFloat(favorite.product.price).toFixed(2)}</p>
                   <div className="flex items-center mt-2">
                     {favorite.product.quantity > 0 ? (
                       <span className="text-green-600 text-sm font-medium bg-green-50 px-2 py-1 rounded-full">In Stock</span>
@@ -339,7 +339,7 @@ const WishlistPage = () => {
                       <MapPin className="h-3 w-3" />
                       <span>{product.distance}</span>
                     </div>
-                    <p className="font-semibold text-emerald-600 text-sm mb-2">₹{product.price}</p>
+                    <p className="font-semibold text-emerald-600 text-sm mb-2">Rs {product.price}</p>
                     <div className="flex gap-1">
                       <Button 
                         variant="outline" 

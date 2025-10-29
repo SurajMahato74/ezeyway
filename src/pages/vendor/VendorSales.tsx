@@ -217,7 +217,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
   };
 
   const shareReport = () => {
-    const summary = `Sales Report\n\nTotal Sales: Rs${salesStats.totalSales.toFixed(2)}\nTotal Refunds: Rs${salesStats.totalRefunds.toFixed(2)}\nNet Earnings: Rs${salesStats.netEarnings.toFixed(2)}\n\nTransactions: ${transactions.length}`;
+    const summary = `Sales Report\n\nTotal Sales: Rs ${salesStats.totalSales.toFixed(2)}\nTotal Refunds: Rs ${salesStats.totalRefunds.toFixed(2)}\nNet Earnings: Rs ${salesStats.netEarnings.toFixed(2)}\n\nTransactions: ${transactions.length}`;
     
     if (navigator.share) {
       navigator.share({

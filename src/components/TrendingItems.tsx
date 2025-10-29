@@ -175,7 +175,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         distance,
         distanceValue,
         rating: 4.5, // Default rating since API might not have it
-        price: `₹${product.price}`,
+        price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
         inStock: product.quantity > 0,
@@ -218,7 +218,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         product: {
           id: product.id,
           name: product.name,
-          price: product.price.replace('₹', ''),
+          price: product.price.replace('Rs ', ''),
           quantity: 1,
           vendor_name: product.vendor,
           vendor_id: originalProduct?.vendor_id,
@@ -339,7 +339,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
                           ? 'Free' 
                           : item.deliveryInfo.deliveryFee === null 
                           ? 'TBD' 
-                          : `₹${item.deliveryInfo.deliveryFee}`}
+                          : `Rs ${item.deliveryInfo.deliveryFee}`}
                       </span>
                     </div>
                   </TooltipTrigger>
@@ -348,7 +348,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
                       ? 'Free Delivery' 
                       : item.deliveryInfo.deliveryFee === null 
                       ? 'Delivery fee determined at checkout' 
-                      : `Delivery: ₹${item.deliveryInfo.deliveryFee}`}
+                      : `Delivery: Rs ${item.deliveryInfo.deliveryFee}`}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -402,7 +402,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
                         data: {
                           id: item.id,
                           name: item.name,
-                          price: item.price.replace('₹', ''),
+                          price: item.price.replace('Rs ', ''),
                           quantity: 1,
                           vendor_name: item.vendor,
                           vendor_id: item.vendor_id,

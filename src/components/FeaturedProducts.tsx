@@ -152,7 +152,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
         distance,
         distanceValue,
         rating: 4.5, // Default rating since API might not have it
-        price: `₹${product.price}`,
+        price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
         inStock: product.quantity > 0,
@@ -292,7 +292,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
                         ? 'Free' 
                         : product.deliveryInfo.deliveryFee === null 
                         ? 'TBD' 
-                        : `₹${product.deliveryInfo.deliveryFee}`}
+                        : `Rs ${product.deliveryInfo.deliveryFee}`}
                     </span>
                   </div>
                 </div>

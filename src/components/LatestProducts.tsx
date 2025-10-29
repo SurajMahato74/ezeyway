@@ -132,7 +132,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
         distance,
         distanceValue,
         rating: 4.5,
-        price: `₹${product.price}`,
+        price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
         inStock: product.quantity > 0,
@@ -254,7 +254,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
                         ? 'Free' 
                         : product.deliveryInfo.deliveryFee === null 
                         ? 'TBD' 
-                        : `₹${product.deliveryInfo.deliveryFee}`}
+                        : `Rs ${product.deliveryInfo.deliveryFee}`}
                     </span>
                   </div>
                 </div>
@@ -281,7 +281,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
                           product: {
                             id: product.id,
                             name: product.name,
-                            price: product.price.replace('₹', ''),
+                            price: product.price.replace('Rs ', ''),
                             quantity: 1,
                             vendor_name: product.vendor,
                             vendor_id: product.vendor_id,

@@ -247,14 +247,14 @@ Period: ${dateFilter === 'custom' ? `${customDateFrom} to ${customDateTo}` : dat
 
 BALANCE OVERVIEW
 -------------------------------------------
-Current Balance: Rs${walletData?.balance || '0.00'}
-Total Credit: Rs${getTotalCredit().toFixed(2)}
-Total Debit: Rs${getTotalDebit().toFixed(2)}
-Net Amount: Rs${(getTotalCredit() - getTotalDebit()).toFixed(2)}
+Current Balance: Rs ${walletData?.balance || '0.00'}
+Total Credit: Rs ${getTotalCredit().toFixed(2)}
+Total Debit: Rs ${getTotalDebit().toFixed(2)}
+Net Amount: Rs ${(getTotalCredit() - getTotalDebit()).toFixed(2)}
 
 TRANSACTION DETAILS (${transactions.length} transactions)
 -------------------------------------------
-${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)} | ${t.transaction_type.toUpperCase().padEnd(6)} | Rs${parseFloat(t.amount).toFixed(2).padStart(8)} | ${t.description}`).join('\n')}
+${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)} | ${t.transaction_type.toUpperCase().padEnd(6)} | Rs ${parseFloat(t.amount).toFixed(2).padStart(8)} | ${t.description}`).join('\n')}
 
 ===========================================
     `;
@@ -315,7 +315,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
           <div className="text-center">
             <p className="text-gray-600 text-sm mb-1">Available Balance</p>
             <p className="text-2xl font-bold text-gray-900 mb-3">
-              {showBalance ? `₹${walletData?.balance || '0.00'}` : '₹****.**'}
+              {showBalance ? `Rs ${walletData?.balance || '0.00'}` : 'Rs ****.**'}
             </p>
             <Button 
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
@@ -339,7 +339,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
                   </div>
                   <div>
                     <p className="text-xs text-gray-600">This Month</p>
-                    <p className="text-sm font-bold text-green-600">+₹{walletData?.total_earned || '0.00'}</p>
+                    <p className="text-sm font-bold text-green-600">+Rs {walletData?.total_earned || '0.00'}</p>
                   </div>
                 </div>
               </CardContent>
@@ -352,7 +352,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
                   </div>
                   <div>
                     <p className="text-xs text-gray-600">Expenses</p>
-                    <p className="text-sm font-bold text-red-600">-₹{walletData?.total_spent || '0.00'}</p>
+                    <p className="text-sm font-bold text-red-600">-Rs {walletData?.total_spent || '0.00'}</p>
                   </div>
                 </div>
               </CardContent>
@@ -436,7 +436,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
                       <p className={`text-sm font-bold ${
                         transaction.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {transaction.transaction_type === 'credit' ? '+' : '-'}₹{parseFloat(transaction.amount).toFixed(2)}
+                        {transaction.transaction_type === 'credit' ? '+' : '-'}Rs {parseFloat(transaction.amount).toFixed(2)}
                       </p>
                       <p className="text-xs text-gray-500">{transaction.payment_method || 'N/A'}</p>
                     </div>
@@ -513,7 +513,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
                 <Label className="text-sm font-medium">Enter Amount</Label>
                 <Input
                   type="number"
-                  placeholder="₹ 0.00"
+                  placeholder="Rs 0.00"
                   value={rechargeAmount}
                   onChange={(e) => setRechargeAmount(e.target.value)}
                   className="h-12 text-lg text-center"
@@ -526,7 +526,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
                       onClick={() => setRechargeAmount(amount.toString())}
                       className="h-10"
                     >
-                      ₹{amount}
+                      Rs {amount}
                     </Button>
                   ))}
                 </div>
@@ -566,7 +566,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
                       Processing...
                     </>
                   ) : (
-                    `Add ₹${rechargeAmount || '0'}`
+                    `Add Rs ${rechargeAmount || '0'}`
                   )}
                 </Button>
               </div>
@@ -644,9 +644,9 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
               <div className="pt-4 border-t">
                 <div className="text-sm text-gray-600 space-y-1">
                   <p>Total Transactions: {totalTransactions}</p>
-                  <p>Total Credit: ₹{getTotalCredit().toFixed(2)}</p>
-                  <p>Total Debit: ₹{getTotalDebit().toFixed(2)}</p>
-                  <p className="font-medium">Net: ₹{(getTotalCredit() - getTotalDebit()).toFixed(2)}</p>
+                  <p>Total Credit: Rs {getTotalCredit().toFixed(2)}</p>
+                  <p>Total Debit: Rs {getTotalDebit().toFixed(2)}</p>
+                  <p className="font-medium">Net: Rs {(getTotalCredit() - getTotalDebit()).toFixed(2)}</p>
                 </div>
               </div>
             </div>
@@ -677,7 +677,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
                       <p className={`text-xl font-bold ${
                         selectedTransaction.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {selectedTransaction.transaction_type === 'credit' ? '+' : '-'}₹{parseFloat(selectedTransaction.amount).toFixed(2)}
+                        {selectedTransaction.transaction_type === 'credit' ? '+' : '-'}Rs {parseFloat(selectedTransaction.amount).toFixed(2)}
                       </p>
                     </div>
                   </div>
@@ -714,7 +714,7 @@ ${transactions.map(t => `${formatDate(t.created_at)} ${formatTime(t.created_at)}
                       {selectedTransaction.order_amount && (
                         <div className="flex justify-between">
                           <span className="text-gray-600">Order Amount:</span>
-                          <span className="font-medium">₹{parseFloat(selectedTransaction.order_amount).toFixed(2)}</span>
+                          <span className="font-medium">Rs {parseFloat(selectedTransaction.order_amount).toFixed(2)}</span>
                         </div>
                       )}
                       {selectedTransaction.reference_id && (

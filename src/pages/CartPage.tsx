@@ -140,7 +140,7 @@ const RecommendedProducts = () => {
                 <MapPin className="h-2 w-2" />
                 <span>{product.distance}</span>
               </div>
-              <p className="text-xs font-bold text-[#856043]">₹{product.price}</p>
+              <p className="text-xs font-bold text-[#856043]">Rs {product.price}</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -353,7 +353,7 @@ function CartPage() {
                         <h3 className="text-xs font-medium text-gray-900 truncate">{item.product.name}</h3>
                         <p className="text-[10px] text-gray-500 truncate">Sold by {item.product.vendor_name}</p>
                         <div className="flex items-center gap-1 mt-1">
-                          <p className="text-xs font-bold text-[#856043]">₹{item.product.price}</p>
+                          <p className="text-xs font-bold text-[#856043]">Rs {item.product.price}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
@@ -462,20 +462,20 @@ function CartPage() {
                     <div className="space-y-2 text-xs mb-4 md:mb-0">
                       <div className="flex justify-between text-gray-700">
                         <span>Subtotal ({selectedItems.length} items)</span>
-                        <span className="font-medium">₹{subtotal.toFixed(2)}</span>
+                        <span className="font-medium">Rs {subtotal.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-gray-700">
                         <span>Taxes (5%)</span>
-                        <span className="font-medium">₹{tax.toFixed(2)}</span>
+                        <span className="font-medium">Rs {tax.toFixed(2)}</span>
                       </div>
                       <hr className="border-gray-300 my-2" />
                       <div className="flex justify-between font-bold text-sm text-gray-900">
                         <span>Total</span>
-                        <span>₹{grandTotal.toFixed(2)}</span>
+                        <span>Rs {grandTotal.toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-center gap-1 text-gray-600 mt-2">
                         <Truck className="w-3 h-3" />
-                        <span className="text-xs font-semibold">Estimated delivery: ₹50-60</span>
+                        <span className="text-xs font-semibold">Estimated delivery: Rs 50-60</span>
                       </div>
                     </div>
                   </div>

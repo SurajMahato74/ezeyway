@@ -146,7 +146,7 @@ export default function OrderConfirmation() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Amount:</span>
-                    <span className="font-bold text-emerald-600">₹{parseFloat(order.total_amount).toFixed(2)}</span>
+                    <span className="font-bold text-emerald-600">Rs {parseFloat(order.total_amount).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -197,8 +197,8 @@ export default function OrderConfirmation() {
                     <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-800">₹{parseFloat(item.total_price).toFixed(2)}</p>
-                    <p className="text-sm text-gray-600">₹{parseFloat(item.unit_price).toFixed(2)} each</p>
+                    <p className="font-semibold text-gray-800">Rs {parseFloat(item.total_price).toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">Rs {parseFloat(item.unit_price).toFixed(2)} each</p>
                   </div>
                 </div>
               ))}
@@ -212,16 +212,16 @@ export default function OrderConfirmation() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal:</span>
-                    <span className="font-medium">₹{parseFloat(order.subtotal).toFixed(2)}</span>
+                    <span className="font-medium">Rs {parseFloat(order.subtotal).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Tax:</span>
-                    <span className="font-medium">₹{parseFloat(order.tax_amount).toFixed(2)}</span>
+                    <span className="font-medium">Rs {parseFloat(order.tax_amount).toFixed(2)}</span>
                   </div>
                   <Separator className="my-2" />
                   <div className="flex justify-between text-base font-bold">
                     <span>Bill Total (Paid):</span>
-                    <span className="text-emerald-600">₹{(parseFloat(order.subtotal) + parseFloat(order.tax_amount)).toFixed(2)}</span>
+                    <span className="text-emerald-600">Rs {(parseFloat(order.subtotal) + parseFloat(order.tax_amount)).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -232,14 +232,14 @@ export default function OrderConfirmation() {
                     <h4 className="font-bold text-orange-800 text-lg">Delivery Fee</h4>
                     <p className="text-sm text-orange-700">Pay on delivery</p>
                   </div>
-                  <span className="font-bold text-xl text-orange-600">₹{parseFloat(order.delivery_fee).toFixed(2)}</span>
+                  <span className="font-bold text-xl text-orange-600">Rs {parseFloat(order.delivery_fee).toFixed(2)}</span>
                 </div>
               </div>
               
               <Separator className="my-2" />
               <div className="flex justify-between text-lg font-bold">
                 <span>Grand Total:</span>
-                <span className="text-gray-800">₹{parseFloat(order.total_amount).toFixed(2)}</span>
+                <span className="text-gray-800">Rs {parseFloat(order.total_amount).toFixed(2)}</span>
               </div>
             </div>
           </CardContent>

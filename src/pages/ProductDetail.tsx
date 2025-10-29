@@ -115,7 +115,7 @@ export default function ProductDetail() {
           id: product.id,
           name: product.name,
           vendor_name: product.vendor_name,
-          price: `₹${product.price}`,
+          price: `Rs ${product.price}`,
           image: primaryImage?.image_url || "/placeholder-product.jpg",
           inStock: product.quantity > 0,
           totalSold: product.total_sold || 0,
@@ -316,7 +316,7 @@ export default function ProductDetail() {
     
     const shareData = {
       title: product.name,
-      text: `Check out ${product.name} - ₹${product.price}`,
+      text: `Check out ${product.name} - Rs ${product.price}`,
       url: window.location.href,
     };
     
@@ -483,7 +483,7 @@ export default function ProductDetail() {
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">{product.name}</h1>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl md:text-4xl font-bold text-green-600">₹{product.price}</span>
+              <span className="text-3xl md:text-4xl font-bold text-green-600">Rs {product.price}</span>
             </div>
 
           </div>

@@ -438,7 +438,7 @@ const VendorCompany = () => {
                   />
                 </div>
                 <div>
-                  <Label>Minimum Order Amount (₹) *</Label>
+                  <Label>Minimum Order Amount (Rs) *</Label>
                   <Input
                     value={companyData.deliverySettings.minOrderAmount}
                     onChange={(e) => updateNestedData("deliverySettings", "minOrderAmount", e.target.value)}

@@ -406,7 +406,7 @@ export default function Orders() {
                 <p><span className="font-medium">Driver Phone:</span> {order.delivery_boy_phone || 'TBA'}</p>
                 <p><span className="font-medium">ETA:</span> {order.estimated_delivery_time || 'TBA'}</p>
                 {order.delivery_fee > 0 && (
-                  <p><span className="font-medium">Delivery Fee:</span> ₹{parseFloat(order.delivery_fee).toFixed(2)}</p>
+                  <p><span className="font-medium">Delivery Fee:</span> Rs {parseFloat(order.delivery_fee).toFixed(2)}</p>
                 )}
               </div>
             </div>
@@ -431,7 +431,7 @@ export default function Orders() {
           {/* Total Amount */}
           <div className="flex justify-between items-center pt-2 border-t">
             <span className="font-semibold text-lg text-emerald-600">
-              ₹{parseFloat(order.total_amount).toFixed(2)}
+              Rs {parseFloat(order.total_amount).toFixed(2)}
             </span>
             <div className="flex gap-2">
 
@@ -831,7 +831,7 @@ export default function Orders() {
                               <p className="text-xs text-gray-600">"{refund.customer_notes}"</p>
                             )}
                             <div className="text-xs text-gray-600">
-                              <span className="font-medium">Amount:</span> ₹{refund.requested_amount}
+                              <span className="font-medium">Amount:</span> Rs {refund.requested_amount}
                             </div>
                             <div className="text-xs text-gray-600">
                               <span className="font-medium">Method:</span> {refund.refund_method}
@@ -936,7 +936,7 @@ export default function Orders() {
 
                         <div className="flex justify-between items-center pt-2 border-t">
                           <span className="font-semibold text-lg text-emerald-600">
-                            ₹{parseFloat(order.total_amount).toFixed(2)}
+                            Rs {parseFloat(order.total_amount).toFixed(2)}
                           </span>
                           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => {
                             e.stopPropagation();
@@ -1038,7 +1038,7 @@ export default function Orders() {
                       {/* Total Amount */}
                       <div className="flex justify-between items-center pt-3 border-t mt-3">
                         <span className="font-semibold text-lg text-emerald-600">
-                          ₹{parseFloat(order.total_amount).toFixed(2)}
+                          Rs {parseFloat(order.total_amount).toFixed(2)}
                         </span>
                         <Button
                           variant="outline"
@@ -1496,7 +1496,7 @@ export default function Orders() {
                           <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                         </div>
                       </div>
-                      <p className="text-sm font-semibold">₹{item.total_price}</p>
+                      <p className="text-sm font-semibold">Rs {item.total_price}</p>
                     </div>
                   )) || []}
                 </div>
@@ -1521,16 +1521,16 @@ export default function Orders() {
                   <div className="space-y-1 text-xs">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
-                      <span>₹{selectedOrderDetail.subtotal}</span>
+                      <span>Rs {selectedOrderDetail.subtotal}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Tax:</span>
-                      <span>₹{selectedOrderDetail.tax_amount}</span>
+                      <span>Rs {selectedOrderDetail.tax_amount}</span>
                     </div>
                     <hr className="my-1" />
                     <div className="flex justify-between font-semibold">
                       <span>Bill Total (Paid):</span>
-                      <span className="text-emerald-600">₹{(parseFloat(selectedOrderDetail.subtotal) + parseFloat(selectedOrderDetail.tax_amount)).toFixed(2)}</span>
+                      <span className="text-emerald-600">Rs {(parseFloat(selectedOrderDetail.subtotal) + parseFloat(selectedOrderDetail.tax_amount)).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -1541,14 +1541,14 @@ export default function Orders() {
                       <h4 className="font-bold text-orange-800 text-base">Delivery Fee</h4>
                       <p className="text-xs text-orange-700">{selectedOrderDetail.status === 'delivered' ? 'Paid on delivery' : 'Pay on delivery'}</p>
                     </div>
-                    <span className="font-bold text-lg text-orange-600">₹{parseFloat(selectedOrderDetail.delivery_fee).toFixed(2)}</span>
+                    <span className="font-bold text-lg text-orange-600">Rs {parseFloat(selectedOrderDetail.delivery_fee).toFixed(2)}</span>
                   </div>
                 </div>
                 
                 <hr className="my-2" />
                 <div className="flex justify-between font-semibold text-sm">
                   <span>Grand Total:</span>
-                  <span>₹{selectedOrderDetail.total_amount}</span>
+                  <span>Rs {selectedOrderDetail.total_amount}</span>
                 </div>
                 
                 <div className="mt-3 pt-2 border-t space-y-1 text-xs">
@@ -1597,12 +1597,12 @@ export default function Orders() {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <p className="font-medium text-gray-700">Requested Amount:</p>
-                        <p className="text-gray-600">₹{refund.requested_amount}</p>
+                        <p className="text-gray-600">Rs {refund.requested_amount}</p>
                       </div>
                       {refund.approved_amount && (
                         <div>
                           <p className="font-medium text-gray-700">Approved Amount:</p>
-                          <p className="text-gray-600">₹{refund.approved_amount}</p>
+                          <p className="text-gray-600">Rs {refund.approved_amount}</p>
                         </div>
                       )}
                     </div>

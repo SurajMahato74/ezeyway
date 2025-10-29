@@ -116,7 +116,7 @@ const ProductCard = memo(({ product, onProductClick, onToggleFavorite, onAddToCa
                   ? 'Free' 
                   : product.deliveryInfo?.deliveryFee === null 
                   ? 'TBD' 
-                  : `₹${product.deliveryInfo?.deliveryFee}`}
+                  : `Rs ${product.deliveryInfo?.deliveryFee}`}
               </span>
             </div>
           </div>
@@ -520,7 +520,7 @@ export default function Search() {
           name: product.name,
           vendor: product.vendor_name || "Unknown Vendor",
           vendor_id: product.vendor_id,
-          price: `₹${product.price}`,
+          price: `Rs ${product.price}`,
           priceValue: parseFloat(product.price),
           image: primaryImage?.image_url || "/placeholder-product.jpg",
           rating: 4.5,

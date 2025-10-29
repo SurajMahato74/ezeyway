@@ -294,18 +294,18 @@ export default function VendorAnalytics() {
       ['Period:', data.summary.dateRange],
       [''],
       ['SUMMARY'],
-      ['Total Revenue', `Rs${data.summary.totalRevenue.toFixed(2)}`],
+      ['Total Revenue', `Rs ${data.summary.totalRevenue.toFixed(2)}`],
       ['Total Orders', data.summary.totalOrders],
-      ['Average Order Value', `Rs${data.summary.avgOrderValue.toFixed(2)}`],
+      ['Average Order Value', `Rs ${data.summary.avgOrderValue.toFixed(2)}`],
       ['Total Customers', data.summary.totalCustomers],
       [''],
       ['TOP PRODUCTS'],
       ['Product Name', 'Units Sold', 'Revenue', 'Orders'],
-      ...data.products.slice(0, 10).map(p => [p.name, p.totalSold, `Rs${p.totalRevenue.toFixed(2)}`, p.orders]),
+      ...data.products.slice(0, 10).map(p => [p.name, p.totalSold, `Rs ${p.totalRevenue.toFixed(2)}`, p.orders]),
       [''],
       ['DAILY REVENUE'],
       ['Date', 'Revenue', 'Orders'],
-      ...data.revenueChart.map(d => [d.date, `Rs${d.revenue.toFixed(2)}`, d.orders])
+      ...data.revenueChart.map(d => [d.date, `Rs ${d.revenue.toFixed(2)}`, d.orders])
     ].map(row => row.join(',')).join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -337,18 +337,18 @@ Period: ${data.summary.dateRange}
 
 SUMMARY
 -------------------------------------------
-Total Revenue: Rs${data.summary.totalRevenue.toFixed(2)}
+Total Revenue: Rs ${data.summary.totalRevenue.toFixed(2)}
 Total Orders: ${data.summary.totalOrders}
-Average Order Value: Rs${data.summary.avgOrderValue.toFixed(2)}
+Average Order Value: Rs ${data.summary.avgOrderValue.toFixed(2)}
 Total Customers: ${data.summary.totalCustomers}
 
 TOP PRODUCTS
 -------------------------------------------
-${data.products.slice(0, 10).map((p, i) => `${i+1}. ${p.name} - ${p.totalSold} units - Rs${p.totalRevenue.toFixed(2)}`).join('\n')}
+${data.products.slice(0, 10).map((p, i) => `${i+1}. ${p.name} - ${p.totalSold} units - Rs ${p.totalRevenue.toFixed(2)}`).join('\n')}
 
 DAILY REVENUE TREND
 -------------------------------------------
-${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} (${d.orders} orders)`).join('\n')}
+${data.revenueChart.slice(-14).map(d => `${d.date}: Rs ${d.revenue.toFixed(2)} (${d.orders} orders)`).join('\n')}
 
 ===========================================
     `;
@@ -359,7 +359,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
   };
 
   const shareReport = () => {
-    const summary = `Business Analytics Report\n\nTotal Revenue: Rs${analytics.totalRevenue.toFixed(2)}\nTotal Orders: ${analytics.totalOrders}\nAverage Order Value: Rs${analytics.avgOrderValue.toFixed(2)}\nTotal Customers: ${analytics.customerInsights.totalCustomers}\n\nTop Product: ${analytics.topProducts[0]?.name || 'N/A'}`;
+    const summary = `Business Analytics Report\n\nTotal Revenue: Rs ${analytics.totalRevenue.toFixed(2)}\nTotal Orders: ${analytics.totalOrders}\nAverage Order Value: Rs ${analytics.avgOrderValue.toFixed(2)}\nTotal Customers: ${analytics.customerInsights.totalCustomers}\n\nTop Product: ${analytics.topProducts[0]?.name || 'N/A'}`;
     
     if (navigator.share) {
       navigator.share({
@@ -510,7 +510,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-green-600">₹{analytics.totalRevenue.toFixed(0)}</div>
+                    <div className="text-2xl font-bold text-green-600">Rs {analytics.totalRevenue.toFixed(0)}</div>
                     <div className="text-sm text-gray-600">Total Revenue</div>
                   </CardContent>
                 </Card>
@@ -522,7 +522,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-purple-600">₹{analytics.avgOrderValue.toFixed(0)}</div>
+                    <div className="text-2xl font-bold text-purple-600">Rs {analytics.avgOrderValue.toFixed(0)}</div>
                     <div className="text-sm text-gray-600">Avg Order Value</div>
                   </CardContent>
                 </Card>
@@ -552,7 +552,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                           <div
                             className="bg-green-500 rounded-t w-full min-h-[4px] hover:bg-green-600 transition-colors cursor-pointer"
                             style={{ height: `${height}px` }}
-                            title={`${day.date}: ₹${day.revenue.toFixed(0)}`}
+                            title={`${day.date}: Rs ${day.revenue.toFixed(0)}`}
                           />
                           <div className="text-xs text-gray-600 mt-1 transform -rotate-45 origin-left">
                             {day.date}
@@ -586,7 +586,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold text-green-600">₹{product.totalRevenue.toFixed(0)}</div>
+                          <div className="font-bold text-green-600">Rs {product.totalRevenue.toFixed(0)}</div>
                           <div className="text-sm text-gray-600">{product.orders} orders</div>
                         </div>
                       </div>
@@ -638,7 +638,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                         <div key={index} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded">
                           <span className="text-sm">{day.date}</span>
                           <div className="text-right">
-                            <div className="font-medium">₹{day.revenue.toFixed(0)}</div>
+                            <div className="font-medium">Rs {day.revenue.toFixed(0)}</div>
                             <div className="text-xs text-gray-600">{day.orders} orders</div>
                           </div>
                         </div>
@@ -671,9 +671,9 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold text-green-600">₹{product.totalRevenue.toFixed(0)}</div>
+                          <div className="font-bold text-green-600">Rs {product.totalRevenue.toFixed(0)}</div>
                           <div className="text-sm text-gray-600">
-                            ₹{(product.totalRevenue / product.totalSold).toFixed(0)} per unit
+                            Rs {(product.totalRevenue / product.totalSold).toFixed(0)} per unit
                           </div>
                         </div>
                       </div>
@@ -731,7 +731,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                     <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
                       <span className="text-sm font-medium">Average Revenue per Customer</span>
                       <span className="font-bold text-purple-600">
-                        ₹{analytics.customerInsights.totalCustomers > 0 
+                        Rs {analytics.customerInsights.totalCustomers > 0 
                           ? (analytics.totalRevenue / analytics.customerInsights.totalCustomers).toFixed(0)
                           : 0}
                       </span>
@@ -759,7 +759,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                     <div className="space-y-4">
                       <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                         <span className="text-sm font-medium">Total Sales</span>
-                        <span className="font-bold text-green-600">₹{analytics.totalRevenue.toFixed(2)}</span>
+                        <span className="font-bold text-green-600">Rs {analytics.totalRevenue.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                         <span className="text-sm font-medium">Total Orders</span>
@@ -767,7 +767,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                       </div>
                       <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
                         <span className="text-sm font-medium">Average Order Value</span>
-                        <span className="font-bold text-purple-600">₹{analytics.avgOrderValue.toFixed(2)}</span>
+                        <span className="font-bold text-purple-600">Rs {analytics.avgOrderValue.toFixed(2)}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -839,7 +839,7 @@ ${data.revenueChart.slice(-14).map(d => `${d.date}: Rs${d.revenue.toFixed(2)} ($
                           <div className={`font-bold text-sm ${
                             transaction.type === 'sale' ? 'text-green-600' : 'text-red-600'
                           }`}>
-                            {transaction.type === 'sale' ? '+' : ''}₹{Math.abs(transaction.amount).toFixed(2)}
+                            {transaction.type === 'sale' ? '+' : ''}Rs {Math.abs(transaction.amount).toFixed(2)}
                           </div>
                           <div className="text-xs text-gray-500">{transaction.items} items</div>
                         </div>

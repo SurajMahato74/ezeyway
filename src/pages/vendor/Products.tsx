@@ -270,7 +270,7 @@ const Products: React.FC = () => {
             />
           </div>
           <div>
-            <Label htmlFor="price">Price (₹)</Label>
+            <Label htmlFor="price">Price (Rs)</Label>
             <Input
               id="price"
               type="number"
@@ -280,7 +280,7 @@ const Products: React.FC = () => {
             />
           </div>
           <div>
-            <Label htmlFor="cost_price">Cost Price (₹)</Label>
+            <Label htmlFor="cost_price">Cost Price (Rs)</Label>
             <Input
               id="cost_price"
               type="number"
@@ -542,9 +542,9 @@ const Products: React.FC = () => {
                         <Badge variant="outline">{product.category}</Badge>
                       </td>
                       <td className="p-4">
-                        <p className="font-medium">₹{product.price.toLocaleString()}</p>
+                        <p className="font-medium">Rs {product.price.toLocaleString()}</p>
                         {product.cost_price && (
-                          <p className="text-xs text-gray-500">Cost: ₹{product.cost_price}</p>
+                          <p className="text-xs text-gray-500">Cost: Rs {product.cost_price}</p>
                         )}
                       </td>
                       <td className="p-4">
@@ -601,7 +601,7 @@ const Products: React.FC = () => {
                                     )}
                                     <div>
                                       <Label>Price</Label>
-                                      <p className="font-medium">₹{viewingProduct.price}</p>
+                                      <p className="font-medium">Rs {viewingProduct.price}</p>
                                     </div>
                                     <div>
                                       <Label>Stock</Label>
