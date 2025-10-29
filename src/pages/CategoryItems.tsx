@@ -576,11 +576,11 @@ export default function CategoryItems() {
         
         {/* Subcategories */}
         <div className="px-3 pb-3">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide no-scrollbar">
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             <Button
               variant={selectedSubCategory === '' ? 'default' : 'outline'}
               size="sm"
-              className="whitespace-nowrap h-8 text-xs"
+              className="whitespace-nowrap h-8 text-xs flex-shrink-0 min-w-fit px-3"
               onClick={() => setSelectedSubCategory('')}
             >
               All
@@ -591,7 +591,7 @@ export default function CategoryItems() {
                 key={subCat.id || subCat.name || index}
                 variant={selectedSubCategory === (subCat.name || subCat) ? 'default' : 'outline'}
                 size="sm"
-                className="whitespace-nowrap h-8 text-xs"
+                className="whitespace-nowrap h-8 text-xs flex-shrink-0 min-w-fit px-3"
                 onClick={() => setSelectedSubCategory(subCat.name || subCat)}
               >
                 {subCat.name || subCat}

@@ -164,6 +164,23 @@ const VendorMyProfile = () => {
 
       if (data && data.results && data.results.length > 0) {
         const profile = data.results[0];
+        let referralCode = profile.user_info?.referral_code || null;
+        
+        // Auto-generate referral code if missing
+        if (!referralCode) {
+          try {
+            const { response: refResponse, data: refData } = await apiRequest('/generate-referral-code/', {
+              method: 'POST'
+            });
+            
+            if (refResponse.ok && refData.success) {
+              referralCode = refData.referral_code;
+              console.log('Auto-generated referral code:', referralCode);
+            }
+          } catch (refError) {
+            console.error('Failed to auto-generate referral code:', refError);
+          }
+        }
 
         setVendorData({
           businessName: profile.business_name || "",
@@ -193,7 +210,7 @@ const VendorMyProfile = () => {
           deliveryRadius: profile.delivery_radius?.toString() || "",
           minOrderAmount: profile.min_order_amount || "",
           profileImage: profile.user_info?.profile_picture || null,
-          referralCode: profile.user_info?.referral_code || null
+          referralCode: referralCode
         });
       } else {
         // No vendor profile found, create one
@@ -206,6 +223,24 @@ const VendorMyProfile = () => {
             const retryResult = await apiRequest('/vendor-profiles/');
             if (retryResult.response.ok && retryResult.data?.results?.length > 0) {
               const profile = retryResult.data.results[0];
+              let referralCode = profile.user_info?.referral_code || null;
+              
+              // Auto-generate referral code if missing
+              if (!referralCode) {
+                try {
+                  const { response: refResponse, data: refData } = await apiRequest('/generate-referral-code/', {
+                    method: 'POST'
+                  });
+                  
+                  if (refResponse.ok && refData.success) {
+                    referralCode = refData.referral_code;
+                    console.log('Auto-generated referral code for new profile:', referralCode);
+                  }
+                } catch (refError) {
+                  console.error('Failed to auto-generate referral code for new profile:', refError);
+                }
+              }
+              
               setVendorData({
                 businessName: profile.business_name || "",
                 ownerName: profile.owner_name || "",
@@ -234,7 +269,7 @@ const VendorMyProfile = () => {
                 deliveryRadius: profile.delivery_radius?.toString() || "",
                 minOrderAmount: profile.min_order_amount || "",
                 profileImage: profile.user_info?.profile_picture || null,
-                referralCode: profile.user_info?.referral_code || null
+                referralCode: referralCode
               });
             } else {
               // Set default values if creation failed
@@ -826,27 +861,60 @@ const VendorMyProfile = () => {
                   <div className="flex gap-2">
                     <Input
                       id="referralCode"
-                      value={vendorData.referralCode || 'Loading...'}
+                      value={vendorData.referralCode || (loading ? 'Generating...' : 'Not available')}
                       disabled={true}
                       className="bg-gray-50 font-mono text-center text-lg font-semibold text-blue-600"
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (vendorData.referralCode) {
+                    {vendorData.referralCode ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
                           navigator.clipboard.writeText(vendorData.referralCode);
                           toast({
                             title: "Copied!",
                             description: "Referral code copied to clipboard",
                           });
-                        }
-                      }}
-                      disabled={!vendorData.referralCode}
-                    >
-                      Copy
-                    </Button>
+                        }}
+                        disabled={loading}
+                      >
+                        Copy
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const { response, data } = await apiRequest('/generate-referral-code/', {
+                              method: 'POST'
+                            });
+                            
+                            if (response.ok && data.success) {
+                              setVendorData(prev => ({ ...prev, referralCode: data.referral_code }));
+                              toast({
+                                title: "Success!",
+                                description: "Referral code generated successfully",
+                              });
+                            } else {
+                              throw new Error(data.message || 'Failed to generate referral code');
+                            }
+                          } catch (error) {
+                            console.error('Failed to generate referral code:', error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to generate referral code. Please try again.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        disabled={loading}
+                      >
+                        Generate
+                      </Button>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Share this code with customers to earn referral rewards</p>
                 </div>
