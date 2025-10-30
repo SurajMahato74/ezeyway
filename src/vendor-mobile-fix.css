@@ -327,6 +327,21 @@ p, span, div {
   min-width: 0 !important;
 }
 
+/* Fix for subcategory buttons overlapping on mobile */
+@media (max-width: 640px) {
+  .flex.gap-3 > button {
+    flex-shrink: 0 !important;
+    min-width: fit-content !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  
+  /* Ensure subcategory scroll container has proper spacing */
+  .overflow-x-auto {
+    padding-right: 1rem;
+  }
+}
+
 /* Fix for specific Tailwind classes that might cause issues */
 @media (max-width: 640px) {
   .sm\\:w-80 {
