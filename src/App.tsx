@@ -41,6 +41,7 @@ import Messages from "./pages/Messages";
 import CategoryItems from "./pages/CategoryItems";
 import FeaturedItems from "./pages/FeaturedItems";
 import TrendingItemsPage from "./pages/TrendingItemsPage"; // New import
+import LatestProductsPage from "./pages/LatestProductsPage";
 
 // Vendor Dashboard Pages
 import VendorLogin from "./pages/vendor/VendorLogin";
@@ -269,7 +270,8 @@ const RoutesWithAnalytics = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/category/:categoryName" element={<CategoryItems />} />
       <Route path="/featured-items" element={<FeaturedItems />} />
-       <Route path="/trending-items" element={<TrendingItemsPage />} /> 
+       <Route path="/trending-items" element={<TrendingItemsPage />} />
+       <Route path="/latest-products" element={<LatestProductsPage />} />
       {/* Vendor Dashboard Routes */}
       <Route path="/vendor/login" element={<VendorLogin />} />
       <Route path="/vendor/signup" element={<VendorSignup />} />

@@ -12,6 +12,7 @@ import { getDeliveryInfo, getDeliveryRadius } from "@/utils/deliveryUtils";
 
 import { API_BASE } from '@/config/api';
 import { filterOwnProducts } from '@/utils/productFilter';
+import { reviewService } from '@/services/reviewService';
 
 // Google Maps precision Haversine formula with higher precision
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -49,6 +50,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
+  const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
@@ -113,6 +115,10 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
       const filteredProducts = await filterOwnProducts(productsData.results || []);
       const processedProducts = processProducts(filteredProducts);
       setFeaturedProducts(processedProducts);
+
+      // After setting products, load reviews for visible products
+      const ids = processedProducts.map(p => p.id);
+      loadReviewsForProducts(ids);
     } catch (error) {
       console.error('Error fetching featured products:', error);
     } finally {
@@ -198,6 +204,23 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
 
   const handleProductClick = (productId: number) => {
     navigate(`/product/${productId}`);
+  };
+
+  const loadReviewsForProducts = async (productIds: number[]) => {
+    try {
+      const promises = productIds.map((id) => reviewService.getProductReviews(id));
+      const results = await Promise.all(promises);
+      const mapped = results.reduce((acc, r) => {
+        acc[r.product_id] = {
+          rating: r.aggregate?.average_rating || 0,
+          total: r.aggregate?.total_reviews || 0
+        };
+        return acc;
+      }, {} as Record<number, { rating: number; total: number }>);
+      setProductReviews(prev => ({ ...prev, ...mapped }));
+    } catch (err) {
+      console.error('Failed to load product reviews:', err);
+    }
   };
 
   const handleBuyNow = async (product: any, e?: React.MouseEvent) => {
@@ -317,7 +340,13 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
                 <div className="flex items-center justify-between mb-2 text-xs">
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                    <span className="font-medium">{product.rating.toFixed(1)}</span>
+                    <span className="font-medium">
+                      {(productReviews[product.id]?.rating ?? product.rating ?? 0).toFixed(1)}
+                    </span>
+                    {/* Optional total reviews count */}
+                    {productReviews[product.id]?.total !== undefined && productReviews[product.id]?.total > 0 && (
+                      <span className="text-xs text-muted-foreground">({productReviews[product.id]?.total})</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <Truck className="h-3.5 w-3.5" />

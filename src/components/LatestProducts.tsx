@@ -9,6 +9,7 @@ import { locationService } from "@/services/locationService";
 import { getDeliveryInfo, getDeliveryRadius } from "@/utils/deliveryUtils";
 import { API_BASE } from '@/config/api';
 import { filterOwnProducts } from '@/utils/productFilter';
+import { reviewService } from '@/services/reviewService';
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const lat1Num = parseFloat(lat1);
@@ -44,6 +45,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
   const [latestProducts, setLatestProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
+  const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
@@ -96,6 +98,10 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
       const filteredProducts = await filterOwnProducts(productsData.results || []);
       const processedProducts = processProducts(filteredProducts);
       setLatestProducts(processedProducts);
+
+      // After setting products, load reviews for visible products
+      const ids = processedProducts.map(p => p.id);
+      loadReviewsForProducts(ids);
     } catch (error) {
       console.error('Error fetching latest products:', error);
     } finally {
@@ -177,6 +183,23 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
     navigate(`/product/${productId}`);
   };
 
+  const loadReviewsForProducts = async (productIds: number[]) => {
+    try {
+      const promises = productIds.map((id) => reviewService.getProductReviews(id));
+      const results = await Promise.all(promises);
+      const mapped = results.reduce((acc, r) => {
+        acc[r.product_id] = {
+          rating: r.aggregate?.average_rating || 0,
+          total: r.aggregate?.total_reviews || 0
+        };
+        return acc;
+      }, {} as Record<number, { rating: number; total: number }>);
+      setProductReviews(prev => ({ ...prev, ...mapped }));
+    } catch (err) {
+      console.error('Failed to load product reviews:', err);
+    }
+  };
+
   const handleAddToCart = async (product, e) => {
     e.stopPropagation();
     try {
@@ -243,7 +266,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 text-yellow-600">
                     <Star className="h-2 w-2 fill-yellow-400 text-yellow-400" />
-                    <span>{product.rating}</span>
+                    <span>{(productReviews[product.id]?.rating ?? product.rating ?? 0).toFixed(1)}</span>
                   </div>
                   <span className="text-green-600 font-medium">{product.totalSold} sold</span>
                 </div>

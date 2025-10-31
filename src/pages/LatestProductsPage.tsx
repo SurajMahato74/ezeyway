@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Filter, MapPin, Star, Clock, Loader2, ShoppingCart, Plus, Heart, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,25 +12,6 @@ import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
 import { getDeliveryInfo, getDeliveryRadius } from '@/utils/deliveryUtils';
 import { API_BASE } from '@/config/api';
-import { reviewService } from '@/services/reviewService';
-
-// CSS for hiding scrollbar
-const scrollbarHideStyles = `
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-`;
-
-// Inject styles
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = scrollbarHideStyles;
-  document.head.appendChild(styleSheet);
-}
 
 // Google Maps precision Haversine formula with higher precision
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -56,30 +37,8 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return (R * c) / 1000; // Convert back to km
 };
 
-// Test function - compare with Google Maps
-const testDistance = () => {
-  // Test with your exact coordinates
-  const userLat = 27.6398805;
-  const userLon = 85.3303725;
-  const vendorLat = 27.66424179701499;
-  const vendorLon = 85.3465231243003;
-
-  const calculated = calculateDistance(userLat, userLon, vendorLat, vendorLon);
-  console.log(`🧪 Your coordinates test: ${calculated.toFixed(3)} km (Google shows: 5.1 km)`);
-
-  // Test coordinates: New York to Los Angeles
-  const nyc = { lat: 40.7128, lon: -74.0060 };
-  const la = { lat: 34.0522, lon: -118.2437 };
-  const calculated2 = calculateDistance(nyc.lat, nyc.lon, la.lat, la.lon);
-  console.log(`Test: NYC to LA = ${calculated2.toFixed(2)} km (Google: ~3944 km)`);
-
-  // Google Maps URL for verification
-  console.log(`🔗 Verify on Google Maps: https://www.google.com/maps/dir/${userLat},${userLon}/${vendorLat},${vendorLon}`);
-};
-
-export default function CategoryItems() {
+export default function LatestProductsPage() {
   const navigate = useNavigate();
-  const { categoryName } = useParams();
   const [searchResults, setSearchResults] = useState({ products: [] });
   const [loading, setLoading] = useState(false);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
@@ -87,75 +46,35 @@ export default function CategoryItems() {
   const [favorites, setFavorites] = useState(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('');
-  const [subCategories, setSubCategories] = useState([]);
-  const [selectedSubCategory, setSelectedSubCategory] = useState('');
-  const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
   const { addToCart } = useCart();
   const { toast } = useToast();
 
   const sortOptions = [
-    { value: '', label: 'Default' },
+    { value: '', label: 'Default (Newest)' },
     { value: 'price_low', label: 'Price: Low to High' },
     { value: 'price_high', label: 'Price: High to Low' }
   ];
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
-    // Force location update immediately
-    locationService.startTracking();
-    // Test distance calculation accuracy
-    testDistance();
-    fetchData();
+    fetchLatestProducts();
     fetchFavorites();
-    fetchSubCategories();
     return unsubscribe;
-  }, [categoryName]);
+  }, []);
 
   useEffect(() => {
-    fetchData(1);
-  }, [sortBy, categoryName, selectedSubCategory]);
+    fetchLatestProducts(1);
+  }, [sortBy]);
 
   // Refetch when location changes
   useEffect(() => {
     if (userLocation) {
       console.log('📍 Location updated, refetching data:', userLocation);
-      fetchData(1);
+      fetchLatestProducts(1);
     }
   }, [userLocation]);
 
-  const fetchSubCategories = async () => {
-    try {
-      console.log('🔍 Fetching subcategories for:', categoryName);
-      const response = await fetch(`${API_BASE}categories/`);
-      const data = await response.json();
-      console.log('📊 Categories API response:', data);
-      
-      // Fix: Check for both data.categories and data.results
-      const categories = data.categories || data.results || [];
-      const category = categories.find(cat => 
-        cat.name.toLowerCase() === categoryName.toLowerCase()
-      );
-      console.log('🎯 Found category:', category);
-      
-      if (category?.subcategories) {
-        console.log('✅ Setting subcategories:', category.subcategories);
-        setSubCategories(category.subcategories);
-      } else {
-        console.log('❌ No subcategories found for category, trying alternative endpoint');
-        // Try the correct API endpoint from URL patterns
-        const subCatResponse = await fetch(`${API_BASE}categories/${categoryName}/subcategories/`);
-        if (subCatResponse.ok) {
-          const subCatData = await subCatResponse.json();
-          console.log('📊 Subcategories API response:', subCatData);
-          setSubCategories(subCatData.subcategories || subCatData.results || subCatData || []);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch subcategories:', error);
-    }
-  };
-
-  const fetchData = async (page = 1) => {
+  const fetchLatestProducts = async (page = 1) => {
     setLoading(true);
 
     try {
@@ -189,27 +108,15 @@ export default function CategoryItems() {
 
       if (page === 1) {
         setSearchResults({ products: processedProducts });
-        // After setting products, load reviews for visible products
-        const ids = processedProducts.map(p => p.id);
-        loadReviewsForProducts(ids);
       } else {
         setSearchResults(prev => ({
           products: [...prev.products, ...processedProducts]
         }));
       }
 
-      // Since we're filtering on frontend, check if we have enough filtered products
-      const allProducts = productsData.results || [];
-      const filteredCount = allProducts.filter(product => {
-        const categoryMatch = product.category && product.category.toLowerCase() === categoryName.toLowerCase();
-        const subCategoryMatch = !selectedSubCategory || 
-          (product.subcategory && product.subcategory.toLowerCase() === selectedSubCategory.toLowerCase());
-        return categoryMatch && subCategoryMatch;
-      }).length;
-
       setPagination({
         page,
-        hasMore: productsData.next !== null && filteredCount >= 10 // Continue if API has more and we got enough filtered results
+        hasMore: productsData.next !== null
       });
     } catch (error) {
       console.error('Fetch error:', error);
@@ -237,15 +144,7 @@ export default function CategoryItems() {
       return 0;
     };
 
-    // Filter products by category and subcategory
-    let filteredProducts = products.filter(product => {
-      const categoryMatch = product.category && product.category.toLowerCase() === categoryName.toLowerCase();
-      const subCategoryMatch = !selectedSubCategory || 
-        (product.subcategory && product.subcategory.toLowerCase() === selectedSubCategory.toLowerCase());
-      return categoryMatch && subCategoryMatch;
-    });
-
-    let processedProducts = filteredProducts.map(product => {
+    let processedProducts = products.map(product => {
       const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
 
       // Calculate distance if location is available
@@ -261,16 +160,16 @@ export default function CategoryItems() {
       }
 
       const deliveryInfo = getDeliveryInfo(product, product.vendor_delivery_fee);
-      
+
       return {
         id: product.id,
         name: product.name,
         vendor: product.vendor_name || "Unknown Vendor",
         vendor_id: product.vendor_id,
-        price: `₹${product.price}`,
+        price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
-  rating: computeAggregateRating(product),
+        rating: computeAggregateRating(product),
         distance,
         distanceValue,
         deliveryTime: "30-45 mins",
@@ -278,12 +177,13 @@ export default function CategoryItems() {
         category: product.category,
         totalSold: product.total_sold || 0,
         deliveryInfo,
-        vendorOnline: product.vendor_online !== false, // Assume online if not specified
-  deliveryRadius: getDeliveryRadius(product) ?? Infinity,
+        vendorOnline: product.vendor_online !== false,
+        deliveryRadius: getDeliveryRadius(product) ?? Infinity,
         // Include delivery properties
         free_delivery: product.free_delivery,
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
-        custom_delivery_fee: product.custom_delivery_fee
+        custom_delivery_fee: product.custom_delivery_fee,
+        createdAt: product.created_at
       };
     })
     .filter(product => {
@@ -292,29 +192,24 @@ export default function CategoryItems() {
         console.log(`🚫 Excluding product ${product.name} - out of stock`);
         return false;
       }
-      
+
       // Filter out products from offline vendors
       if (!product.vendorOnline) {
         console.log(`🚫 Excluding product ${product.name} - vendor offline`);
         return false;
       }
-      
-      // Filter out products outside delivery radius
-      if (product.distanceValue !== Infinity && product.distanceValue > product.deliveryRadius) {
-        console.log(`🚫 Excluding product ${product.name} - outside delivery radius (${product.distanceValue.toFixed(1)}km > ${product.deliveryRadius}km)`);
-        return false;
-      }
-      
+
       return true;
     });
 
-    // Apply sorting
+    // Apply sorting - default is by creation date (newest first)
     if (sortBy === 'price_low') {
       processedProducts.sort((a, b) => a.priceValue - b.priceValue);
     } else if (sortBy === 'price_high') {
       processedProducts.sort((a, b) => b.priceValue - a.priceValue);
     } else {
-      processedProducts.sort((a, b) => a.distanceValue - b.distanceValue);
+      // Default: sort by creation date (newest first)
+      processedProducts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
 
     return processedProducts;
@@ -322,11 +217,11 @@ export default function CategoryItems() {
 
   const loadMore = () => {
     if (!loading && pagination.hasMore) {
-      fetchData(pagination.page + 1);
+      fetchLatestProducts(pagination.page + 1);
     }
   };
 
-  const handleProductClick = (productId) => {
+  const handleProductClick = (productId: number) => {
     navigate(`/product/${productId}`);
   };
 
@@ -346,23 +241,6 @@ export default function CategoryItems() {
       }
     } catch (error) {
       console.error('Failed to fetch favorites:', error);
-    }
-  };
-
-  const loadReviewsForProducts = async (productIds: number[]) => {
-    try {
-      const promises = productIds.map((id) => reviewService.getProductReviews(id));
-      const results = await Promise.all(promises);
-      const mapped = results.reduce((acc, r) => {
-        acc[r.product_id] = {
-          rating: r.aggregate?.average_rating || 0,
-          total: r.aggregate?.total_reviews || 0
-        };
-        return acc;
-      }, {} as Record<number, { rating: number; total: number }>);
-      setProductReviews(prev => ({ ...prev, ...mapped }));
-    } catch (err) {
-      console.error('Failed to load product reviews:', err);
     }
   };
 
@@ -448,7 +326,7 @@ export default function CategoryItems() {
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                   <div className="flex items-center gap-1">
                     <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                    <span>{(productReviews[product.id]?.rating ?? product.rating ?? 0).toFixed(1)}</span>
+                    <span>{product.rating}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
@@ -463,17 +341,17 @@ export default function CategoryItems() {
                   <div className="flex items-center gap-1">
                     <Truck className="h-3 w-3 text-muted-foreground" />
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                      product.deliveryInfo?.isFreeDelivery 
-                        ? 'bg-green-100 text-green-700' 
+                      product.deliveryInfo?.isFreeDelivery
+                        ? 'bg-green-100 text-green-700'
                         : product.deliveryInfo?.deliveryFee === null
                         ? 'bg-orange-100 text-orange-700'
                         : 'bg-blue-100 text-blue-700'
                     }`}>
-                      {product.deliveryInfo?.isFreeDelivery 
-                        ? 'Free' 
-                        : product.deliveryInfo?.deliveryFee === null 
-                        ? 'TBD' 
-                        : `₹${product.deliveryInfo?.deliveryFee}`}
+                      {product.deliveryInfo?.isFreeDelivery
+                        ? 'Free'
+                        : product.deliveryInfo?.deliveryFee === null
+                        ? 'TBD'
+                        : `Rs ${product.deliveryInfo?.deliveryFee}`}
                     </span>
                   </div>
                 </div>
@@ -527,7 +405,7 @@ export default function CategoryItems() {
                     const productData = {
                       id: product.id,
                       name: product.name,
-                      price: product.price.replace('₹', ''),
+                      price: product.price.replace('Rs ', ''),
                       quantity: 1,
                       vendor_name: product.vendor,
                       vendor_id: product.vendor_id,
@@ -552,7 +430,7 @@ export default function CategoryItems() {
                       product: {
                         id: product.id,
                         name: product.name,
-                        price: product.price.replace('₹', ''),
+                        price: product.price.replace('Rs ', ''),
                         quantity: 1,
                         vendor_name: product.vendor,
                         vendor_id: product.vendor_id,
@@ -587,7 +465,7 @@ export default function CategoryItems() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border/50">
+      <div className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center gap-3 p-3">
           <Button
             variant="ghost"
@@ -598,7 +476,7 @@ export default function CategoryItems() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">
-            <h1 className="text-lg font-semibold">{categoryName}</h1>
+            <h1 className="text-lg font-semibold">Latest Products</h1>
             <p className="text-xs text-muted-foreground">{searchResults.products.length} products found</p>
           </div>
           <Button
@@ -610,37 +488,10 @@ export default function CategoryItems() {
             <Filter className="h-5 w-5" />
           </Button>
         </div>
-        
-        {/* Subcategories */}
-        <div className="px-3 pb-3">
-          <div className="flex gap-3 overflow-x-auto scrollbar-hide no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <Button
-              variant={selectedSubCategory === '' ? 'default' : 'outline'}
-              size="sm"
-              className="whitespace-nowrap h-8 text-xs flex-shrink-0 min-w-fit px-3"
-              onClick={() => setSelectedSubCategory('')}
-            >
-              All
-            </Button>
-            {/* Dynamic subcategories from API */}
-            {Array.isArray(subCategories) && subCategories.map((subCat, index) => (
-              <Button
-                key={subCat.id || subCat.name || index}
-                variant={selectedSubCategory === (subCat.name || subCat) ? 'default' : 'outline'}
-                size="sm"
-                className="whitespace-nowrap h-8 text-xs flex-shrink-0 min-w-fit px-3"
-                onClick={() => setSelectedSubCategory(subCat.name || subCat)}
-              >
-                {subCat.name || subCat}
-              </Button>
-            ))}
-          </div>
-
-        </div>
       </div>
 
       {/* Search Results */}
-      <div className="p-4 pb-20 pt-32">
+      <div className="p-4 pb-20">
         {searchResults.products.length > 0 && (
           <div className="mb-6">
             {renderProducts()}
@@ -652,7 +503,7 @@ export default function CategoryItems() {
             <div className="text-6xl mb-4">📦</div>
             <h3 className="font-semibold text-lg mb-2">No products found</h3>
             <p className="text-muted-foreground">
-              No products available in {categoryName} category
+              Latest products will appear here when available
             </p>
           </div>
         )}

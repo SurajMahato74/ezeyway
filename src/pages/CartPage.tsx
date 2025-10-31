@@ -12,6 +12,8 @@ import { CartItem } from "@/services/cartService";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
 import { API_BASE } from '@/config/api';
+import { reviewService } from '@/services/reviewService';
+import { getDeliveryInfo } from '@/utils/deliveryUtils';
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const lat1Num = parseFloat(lat1);
@@ -38,6 +40,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 const RecommendedProducts = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
   const { addToCart } = useCart();
   const navigate = useNavigate();
 
@@ -45,27 +48,44 @@ const RecommendedProducts = () => {
     fetchProducts();
   }, []);
 
+  const loadReviewsForProducts = async (productIds: number[]) => {
+    try {
+      const promises = productIds.map((id) => reviewService.getProductReviews(id));
+      const results = await Promise.all(promises);
+      const mapped = results.reduce((acc, r) => {
+        acc[r.product_id] = {
+          rating: r.aggregate?.average_rating || 0,
+          total: r.aggregate?.total_reviews || 0
+        };
+        return acc;
+      }, {} as Record<number, { rating: number; total: number }>);
+      setProductReviews(prev => ({ ...prev, ...mapped }));
+    } catch (err) {
+      console.error('Failed to load product reviews:', err);
+    }
+  };
+
   const fetchProducts = async () => {
     try {
       const headers = {
         'ngrok-skip-browser-warning': 'true'
       };
-      
+
       const currentLocation = locationService.getLocation();
       const params = new URLSearchParams({ page_size: '6' });
-      
+
       if (currentLocation) {
         params.append('latitude', currentLocation.latitude.toString());
         params.append('longitude', currentLocation.longitude.toString());
       }
-      
+
       const response = await fetch(`${API_BASE}search/products/?${params}`, { headers });
       const data = await response.json();
-      
+
       const processedProducts = (data.results || []).map(product => {
         const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
         const DELIVERY_RADIUS_KM = 10;
-        
+
         let distance = "N/A";
         let distanceValue = Infinity;
         if (currentLocation && product.vendor_latitude && product.vendor_longitude) {
@@ -75,7 +95,9 @@ const RecommendedProducts = () => {
           );
           distance = `${distanceValue.toFixed(1)} km`;
         }
-        
+
+        const deliveryInfo = getDeliveryInfo(product, product.vendor_delivery_fee);
+
         return {
           id: product.id,
           name: product.name,
@@ -86,15 +108,22 @@ const RecommendedProducts = () => {
           distanceValue,
           inStock: product.quantity > 0,
           vendorOnline: product.vendor_online !== false,
-          deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM
+          deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM,
+          totalSold: product.total_sold || 0,
+          deliveryInfo
         };
       })
       .filter(product => {
-        return product.vendorOnline && 
+        return product.vendorOnline &&
                (product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius);
       });
-      
-      setProducts(processedProducts.slice(0, 6));
+
+      const finalProducts = processedProducts.slice(0, 6);
+      setProducts(finalProducts);
+
+      // Load reviews for recommended products
+      const ids = finalProducts.map(p => p.id);
+      loadReviewsForProducts(ids);
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {
@@ -122,9 +151,9 @@ const RecommendedProducts = () => {
   return (
     <div>
       <h3 className="text-base font-semibold text-gray-900 mb-3 px-2">Products Near You</h3>
-      <div className="grid grid-cols-2 gap-2 px-2 md:grid-cols-3 md:gap-3">
+      <div className="grid grid-cols-2 gap-2 px-2 md:grid-cols-3 md:gap-3 lg:flex lg:flex-row lg:overflow-x-auto lg:gap-3 lg:px-2">
         {products.map((product) => (
-          <div key={product.id} className="bg-white rounded-lg border border-gray-200 hover:border-[#856043]/30 overflow-hidden shadow-sm">
+          <div key={product.id} className="bg-white rounded-lg border border-gray-200 hover:border-[#856043]/30 overflow-hidden shadow-sm flex-shrink-0 w-36 md:w-40 lg:w-36">
             <div className="relative h-24 overflow-hidden bg-gray-100 cursor-pointer" onClick={() => navigate(`/product/${product.id}`)}>
               <img 
                 src={product.image} 
@@ -136,11 +165,36 @@ const RecommendedProducts = () => {
             <div className="p-2 space-y-1">
               <h4 className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight">{product.name}</h4>
               <p className="text-[10px] text-gray-500">{product.vendor}</p>
-              <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                <MapPin className="h-2 w-2" />
-                <span>{product.distance}</span>
+              <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                <div className="flex items-center gap-1">
+                  <Star className="h-2 w-2 fill-yellow-400 text-yellow-400" />
+                  <span>{(productReviews[product.id]?.rating ?? 0).toFixed(1)}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-2 w-2" />
+                  <span>{product.distance}</span>
+                </div>
               </div>
-              <p className="text-xs font-bold text-[#856043]">Rs {product.price}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-[#856043]">Rs {product.price}</p>
+                <div className="flex items-center gap-1">
+                  <Truck className="h-2 w-2 text-muted-foreground" />
+                  <span className={`text-[8px] px-1 py-0.5 rounded-full ${
+                    product.deliveryInfo?.isFreeDelivery
+                      ? 'bg-green-100 text-green-700'
+                      : product.deliveryInfo?.deliveryFee === null
+                      ? 'bg-orange-100 text-orange-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {product.deliveryInfo?.isFreeDelivery
+                      ? 'Free'
+                      : product.deliveryInfo?.deliveryFee === null
+                      ? 'TBD'
+                      : `Rs ${product.deliveryInfo?.deliveryFee}`}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[8px] text-gray-500">{product.totalSold || 0} sold</p>
               <Button
                 variant="outline"
                 size="sm"

@@ -15,6 +15,7 @@ import { performanceMonitor, debounce, imagePreloader } from "@/utils/performanc
 import { getDeliveryInfo, getDeliveryRadius } from '@/utils/deliveryUtils';
 import { FloatingChat } from "@/components/FloatingChat";
 import { API_BASE } from '@/config/api';
+import { reviewService } from '@/services/reviewService';
 
 // Lazy load heavy components
 const LazyImage = lazy(() => import('@/components/LazyImage'));
@@ -57,8 +58,8 @@ const testDistance = () => {
 };
 
 // Memoized Product Card Component
-interface ProductCardProps { product: any; onProductClick: (id: any) => void; onToggleFavorite: (id: any, e?: any) => void; onAddToCart: (id: any, qty?: number) => void; onBuyNow: (e: any, product: any) => void; isFavorite: boolean; }
-const ProductCard = memo<ProductCardProps>(({ product, onProductClick, onToggleFavorite, onAddToCart, onBuyNow, isFavorite }) => {
+interface ProductCardProps { product: any; onProductClick: (id: any) => void; onToggleFavorite: (id: any, e?: any) => void; onAddToCart: (id: any, qty?: number) => void; onBuyNow: (e: any, product: any) => void; isFavorite: boolean; productReviews?: Record<number, { rating: number, total: number }>; }
+const ProductCard = memo<ProductCardProps>(({ product, onProductClick, onToggleFavorite, onAddToCart, onBuyNow, isFavorite, productReviews }) => {
   return (
     <Card className="overflow-hidden">
       <div className="cursor-pointer" onClick={() => onProductClick(product.id)}>
@@ -92,7 +93,7 @@ const ProductCard = memo<ProductCardProps>(({ product, onProductClick, onToggleF
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <div className="flex items-center gap-1">
               <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-              <span>{product.rating}</span>
+              <span>{(productReviews[product.id]?.rating ?? product.rating ?? 0).toFixed(1)}</span>
             </div>
             <div className="flex items-center gap-1">
               <MapPin className="h-3 w-3" />
@@ -213,6 +214,7 @@ export default function Search() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
   const { toast } = useToast();
   const { addToCart } = useCart();
 
@@ -378,6 +380,12 @@ export default function Search() {
             ...prev,
             products: resultPage === 1 ? processedProducts : [...prev.products, ...processedProducts]
           }));
+
+          // After setting products, load reviews for visible products
+          if (resultPage === 1) {
+            const ids = processedProducts.map(p => p.id);
+            loadReviewsForProducts(ids);
+          }
           
           setPagination(prev => ({
             ...prev,
@@ -762,18 +770,35 @@ export default function Search() {
     });
   }, [navigate]);
 
+  const loadReviewsForProducts = async (productIds: number[]) => {
+    try {
+      const promises = productIds.map((id) => reviewService.getProductReviews(id));
+      const results = await Promise.all(promises);
+      const mapped = results.reduce((acc, r) => {
+        acc[r.product_id] = {
+          rating: r.aggregate?.average_rating || 0,
+          total: r.aggregate?.total_reviews || 0
+        };
+        return acc;
+      }, {} as Record<number, { rating: number; total: number }>);
+      setProductReviews(prev => ({ ...prev, ...mapped }));
+    } catch (err) {
+      console.error('Failed to load product reviews:', err);
+    }
+  };
+
   const fetchFavorites = async () => {
     const token = await authService.getToken();
     if (!token) return;
-    
+
     try {
       const response = await fetch(`${API_BASE}favorites/`, {
-        headers: { 
+        headers: {
           Authorization: `Token ${token}`,
           'ngrok-skip-browser-warning': 'true'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const favoriteIds = new Set(data.results?.map(fav => fav.product.id) || []);
@@ -853,6 +878,7 @@ export default function Search() {
               onAddToCart={handleAddToCart}
               onBuyNow={handleBuyNow}
               isFavorite={favorites.has(product.id)}
+              productReviews={productReviews}
             />
           ))}
         </div>

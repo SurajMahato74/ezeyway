@@ -265,7 +265,7 @@ export default function TrendingItemsPage() {
 
   const renderProducts = () => (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {searchResults.products.map((product) => (
           <Card key={product.id} className="overflow-hidden">
             <div className="cursor-pointer" onClick={() => handleProductClick(product.id)}>
