@@ -11,6 +11,7 @@ import { BottomNavigation } from "@/components/BottomNavigation";
 import { Footer } from "@/components/Footer";
 import { FloatingChat } from "@/components/FloatingChat";
 import { useAppLoading } from "@/contexts/AppLoadingContext";
+import { CapacitorUtils } from "@/utils/capacitorUtils";
 
 const Index = () => {
   const { setHomeDataLoaded } = useAppLoading();
@@ -33,7 +34,7 @@ const Index = () => {
       <TrendingItems onDataLoaded={() => setTrendingLoaded(true)} />
       <FeaturedProducts onDataLoaded={() => setFeaturedLoaded(true)} />
       <LatestProducts onDataLoaded={() => setLatestLoaded(true)} />
-      <Footer />
+      {!CapacitorUtils.isNative() && <Footer />}
       <FloatingChat />
       <BottomNavigation />
     </div>
