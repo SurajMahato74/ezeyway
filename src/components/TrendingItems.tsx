@@ -102,9 +102,9 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
       // Get current location from service
       const currentLocation = locationService.getLocation();
 
-      // Build query parameters
+      // Build query parameters - get more products to find trending ones
       const params = new URLSearchParams({
-        page_size: '20' // Get more products for trending
+        page_size: '50' // Get more products to find trending ones
       });
 
       if (currentLocation) {
@@ -114,14 +114,56 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
 
       // Fetch products
       const productsResponse = await fetch(`${API_BASE}search/products/?${params}`, { headers });
-      
+
       if (!productsResponse.ok) {
         throw new Error(`HTTP ${productsResponse.status}`);
       }
-      
+
   const productsData = await productsResponse.json();
+  console.log('Trending API response:', productsData);
   const filteredProducts = await filterOwnProducts(productsData.results || []);
+  console.log('Filtered products:', filteredProducts);
   const processedProducts = processProducts(filteredProducts);
+  console.log('Processed products:', processedProducts);
+
+  // If no products after processing, try without location filter
+  if (processedProducts.length === 0 && currentLocation) {
+    console.log('No products found with location filter, trying without location...');
+    const paramsWithoutLocation = new URLSearchParams({
+      page_size: '50'
+    });
+    const responseWithoutLocation = await fetch(`${API_BASE}search/products/?${paramsWithoutLocation}`, { headers });
+    if (responseWithoutLocation.ok) {
+      const dataWithoutLocation = await responseWithoutLocation.json();
+      const filteredWithoutLocation = await filterOwnProducts(dataWithoutLocation.results || []);
+      const processedWithoutLocation = processProducts(filteredWithoutLocation);
+      console.log('Products without location filter:', processedWithoutLocation);
+      setTrendingItems(processedWithoutLocation);
+      const ids = processedWithoutLocation.map(p => p.id);
+      loadReviewsForProducts(ids);
+      return;
+    }
+  }
+
+  // If still no products, just show the first 6 products regardless of trending criteria
+  if (processedProducts.length === 0) {
+    console.log('No trending products found, showing first 6 products...');
+    const fallbackParams = new URLSearchParams({
+      page_size: '6'
+    });
+    const fallbackResponse = await fetch(`${API_BASE}search/products/?${fallbackParams}`, { headers });
+    if (fallbackResponse.ok) {
+      const fallbackData = await fallbackResponse.json();
+      const fallbackFiltered = await filterOwnProducts(fallbackData.results || []);
+      const fallbackProcessed = processProducts(fallbackFiltered);
+      console.log('Fallback products:', fallbackProcessed);
+      setTrendingItems(fallbackProcessed);
+      const ids = fallbackProcessed.map(p => p.id);
+      loadReviewsForProducts(ids);
+      return;
+    }
+  }
+
   setTrendingItems(processedProducts);
 
   // After setting products, load reviews for visible products
@@ -183,7 +225,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
       // Calculate distance if location is available
       let distance = "N/A";
       let distanceValue = Infinity;
-      
+
       if (currentLocation && product.vendor_latitude && product.vendor_longitude) {
         distanceValue = calculateDistance(
           currentLocation.latitude, currentLocation.longitude,
@@ -218,12 +260,16 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
       };
     })
     .filter(product => {
-      return product.vendorOnline && 
-             (product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius);
+      return product.vendorOnline;
     });
 
-    // Sort by rating (highest first) to simulate trending/popular items
-    processedProducts.sort((a, b) => b.rating - a.rating);
+    // Sort by totalSold (highest first) to show trending/popular items
+    processedProducts.sort((a, b) => b.totalSold - a.totalSold);
+
+    // If no products have totalSold > 0, fallback to rating
+    if (processedProducts.length > 0 && processedProducts[0].totalSold === 0) {
+      processedProducts.sort((a, b) => b.rating - a.rating);
+    }
 
     // Return top 6 items for trending
     return processedProducts.slice(0, 6);
