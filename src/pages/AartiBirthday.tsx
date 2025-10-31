@@ -15,15 +15,7 @@ const AartiBirthday: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8">
-      {/* Birthday Message */}
-      <div className="text-center mb-8">
-        <h1 className="text-6xl md:text-8xl font-bold text-white mb-4" style={{ fontFamily: 'cursive' }}>
-          Happy Birthday
-        </h1>
-        <h2 className="text-4xl md:text-6xl font-bold text-pink-300" style={{ fontFamily: 'cursive' }}>
-          Baby
-        </h2>
-      </div>
+    
 
       {/* Take Tour Button */}
       <button
