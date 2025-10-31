@@ -7,9 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { locationService } from "@/services/locationService";
+import { authService } from "@/services/authService";
 import { useCart } from "@/contexts/CartContext";
-import { API_CONFIG } from '@/config/api';
-import { apiRequest } from '@/utils/apiUtils';
+import { API_BASE } from '@/config/api';
 import { getImageUrl } from '@/utils/imageUtils';
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -65,8 +65,19 @@ export default function VendorProfile() {
       setError(null);
       
       // Fetch vendor profile first
-      const { response: vendorResponse, data: vendorData } = await apiRequest(`vendor-profiles/${vendorId}/`);
-      
+      const token = await authService.getToken();
+      const headers: any = {
+        'ngrok-skip-browser-warning': 'true'
+      };
+
+      if (token) {
+        headers['Authorization'] = `Token ${token}`;
+      }
+
+      const vendorResponse = await fetch(`${API_BASE}vendor-profiles/${vendorId}/`, {
+        headers
+      });
+
       if (!vendorResponse.ok) {
         if (vendorResponse.status === 404) {
           throw new Error('Vendor not found');
@@ -75,7 +86,9 @@ export default function VendorProfile() {
         }
         throw new Error('Failed to fetch vendor profile');
       }
-      
+
+      const vendorData = await vendorResponse.json();
+
       if (!vendorData) {
         throw new Error('No vendor data received');
       }
@@ -93,11 +106,16 @@ export default function VendorProfile() {
       
       // Fetch products for this vendor using search API with vendor name
       try {
-        const { response: productsResponse, data: productsData } = await apiRequest(`search/products/?search=${encodeURIComponent(vendorData.business_name)}`);
-        
-        if (productsResponse.ok && productsData) {
+        const productsResponse = await fetch(`${API_BASE}search/products/?search=${encodeURIComponent(vendorData.business_name)}`, {
+          headers: {
+            'ngrok-skip-browser-warning': 'true'
+          }
+        });
+
+        if (productsResponse.ok) {
+          const productsData = await productsResponse.json();
           // Filter products to only show ones from this specific vendor
-          const vendorProducts = productsData.results?.filter(product => 
+          const vendorProducts = productsData.results?.filter(product =>
             product.vendor_name === vendorData.business_name
           ) || [];
           setProducts(vendorProducts);
@@ -207,12 +225,19 @@ export default function VendorProfile() {
       <div className="p-4 bg-gradient-subtle">
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
-            {vendor.user_info?.profile_picture ? (
-              <img 
-                src={getImageUrl(vendor.user_info.profile_picture)} 
+            {vendor.shop_images?.length > 0 ? (
+              <img
+                src={getImageUrl(vendor.shop_images[0].image_url)}
                 alt={vendor.business_name}
                 className="w-full h-full object-cover"
-                onError={(e) => { e.target.src = '/placeholder-vendor.jpg'; }}
+                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-vendor.jpg'; }}
+              />
+            ) : vendor.user_info?.profile_picture ? (
+              <img
+                src={getImageUrl(vendor.user_info.profile_picture)}
+                alt={vendor.business_name}
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-vendor.jpg'; }}
               />
             ) : (
               <Store className="h-8 w-8 text-gray-400" />
@@ -319,11 +344,11 @@ export default function VendorProfile() {
                     <Card key={product.id} className="p-3 cursor-pointer hover:shadow-md transition-smooth" onClick={() => navigate(`/product/${product.id}`)}>
                       <div className="text-center">
                         <div className="aspect-square mb-2 bg-gray-100 rounded-lg overflow-hidden">
-                          <img 
-                            src={getImageUrl(primaryImage?.image_url)} 
+                          <img
+                            src={getImageUrl(primaryImage?.image_url)}
                             alt={product.name}
                             className="w-full h-full object-cover"
-                            onError={(e) => { e.target.src = '/placeholder-product.jpg'; }}
+                            onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
                           />
                         </div>
                         <h3 className="font-medium text-sm mb-1 line-clamp-2">{product.name}</h3>

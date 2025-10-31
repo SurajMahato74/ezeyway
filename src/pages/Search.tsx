@@ -590,7 +590,10 @@ export default function Search() {
         return {
           id: vendor.id,
           name: vendor.business_name,
-          image: vendor.user_info?.profile_picture || "/placeholder-vendor.jpg",
+          image: vendor.shop_images?.find(img => img.is_primary)?.image_url ||
+                 vendor.shop_images?.[0]?.image_url ||
+                 vendor.user_info?.profile_picture ||
+                 "/placeholder-vendor.jpg",
           rating: computeAggregateRating(vendor),
           distance,
           distanceValue,
@@ -635,45 +638,7 @@ export default function Search() {
     threshold: 300
   });
 
-  // Auto-load more when scrolling (fallback for infinite scroll)
-  useEffect(() => {
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-      const threshold = 200;
-      
-      if (scrollTop + clientHeight >= scrollHeight - threshold) {
-        if (activeTab === 'products' || activeTab === 'all') {
-          if (pagination.products.hasMore && !loadingMore) {
-            loadMoreProducts();
-          }
-        }
-        if (activeTab === 'vendors' || activeTab === 'all') {
-          if (pagination.vendors.hasMore && !loadingMore) {
-            loadMoreVendors();
-          }
-        }
-      }
-    };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [activeTab, pagination.products.hasMore, pagination.vendors.hasMore, loadingMore, loadMoreProducts, loadMoreVendors]);
-
-  // Preload next page when user is near the end
-  useEffect(() => {
-    const preloadThreshold = Math.max(5, Math.floor(searchResults.products.length * 0.8));
-    
-    if (searchResults.products.length >= preloadThreshold && 
-        pagination.products.hasMore && 
-        !loadingMore && 
-        (activeTab === 'products' || activeTab === 'all')) {
-      const timeoutId = setTimeout(() => {
-        loadMoreProducts();
-      }, 1000);
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [searchResults.products.length, pagination.products.hasMore, loadingMore, activeTab, loadMoreProducts]);
 
   // Memoized event handlers
   const handleProductClick = useCallback((productId) => {

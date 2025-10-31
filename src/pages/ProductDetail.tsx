@@ -13,6 +13,7 @@ import { getImageUrl } from '@/utils/imageUtils';
 import { getDeliveryInfo } from '@/utils/deliveryUtils';
 import { locationService } from '@/services/locationService';
 import { filterOwnProducts } from '@/utils/productFilter';
+import { reviewService } from '@/services/reviewService';
 
 interface ProductImage {
   id: number;
@@ -35,6 +36,11 @@ interface Product {
   vendor_name: string;
   vendor_id: number;
   created_at: string;
+  total_sold?: number;
+  vendor_delivery_fee?: number;
+  free_delivery?: boolean;
+  custom_delivery_fee_enabled?: boolean;
+  custom_delivery_fee?: number;
   dynamic_fields?: Record<string, any>;
 }
 
@@ -52,6 +58,9 @@ export default function ProductDetail() {
   const [error, setError] = useState("");
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [relatedProducts, setRelatedProducts] = useState([]);
+  const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
+  const [reviews, setReviews] = useState([]);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -143,6 +152,52 @@ export default function ProductDetail() {
     return R * c;
   };
 
+  const loadReviewsForProduct = async (productId: number) => {
+    try {
+      const reviewData = await reviewService.getProductReviews(productId);
+      setProductReviews(prev => ({
+        ...prev,
+        [productId]: {
+          rating: reviewData.aggregate?.average_rating || 0,
+          total: reviewData.aggregate?.total_reviews || 0
+        }
+      }));
+      // Set the reviews from the API response
+      setReviews(reviewData.recent_reviews || []);
+    } catch (err) {
+      console.error('Failed to load product reviews:', err);
+      setReviews([]);
+    }
+  };
+
+  const updateMetaTags = (product: Product) => {
+    const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
+    const imageUrl = primaryImage ? getImageUrl(primaryImage.image_url) : '/ezy-icon.svg';
+
+    // Update Open Graph meta tags
+    const ogTitle = document.getElementById('og-title') as HTMLMetaElement;
+    const ogDescription = document.getElementById('og-description') as HTMLMetaElement;
+    const ogImage = document.getElementById('og-image') as HTMLMetaElement;
+    const ogUrl = document.getElementById('og-url') as HTMLMetaElement;
+
+    if (ogTitle) ogTitle.content = `${product.name} - Rs ${product.price} | ezeyway`;
+    if (ogDescription) ogDescription.content = `${product.short_description || product.description?.substring(0, 150) + '...'} | ${product.quantity > 0 ? `In Stock (${product.quantity} available)` : 'Out of Stock'} | Same day delivery in Kathmandu Valley`;
+    if (ogImage) ogImage.content = imageUrl;
+    if (ogUrl) ogUrl.content = window.location.href;
+
+    // Update Twitter meta tags
+    const twitterTitle = document.getElementById('twitter-title') as HTMLMetaElement;
+    const twitterDescription = document.getElementById('twitter-description') as HTMLMetaElement;
+    const twitterImage = document.getElementById('twitter-image') as HTMLMetaElement;
+
+    if (twitterTitle) twitterTitle.content = `${product.name} - Rs ${product.price} | ezeyway`;
+    if (twitterDescription) twitterDescription.content = `${product.short_description || product.description?.substring(0, 150) + '...'} | ${product.quantity > 0 ? `In Stock (${product.quantity} available)` : 'Out of Stock'}`;
+    if (twitterImage) twitterImage.content = imageUrl;
+
+    // Update document title
+    document.title = `${product.name} - Rs ${product.price} | ezeyway`;
+  };
+
   const handleRelatedProductClick = (productId) => {
     navigate(`/product/${productId}`);
   };
@@ -179,7 +234,13 @@ export default function ProductDetail() {
       }
       
       setProduct(foundProduct);
-      
+
+      // Update meta tags for rich previews
+      updateMetaTags(foundProduct);
+
+      // Load reviews for this product
+      loadReviewsForProduct(foundProduct.id);
+
       // Check if product is in favorites (if user is logged in)
       const token = await authService.getToken();
       if (token) {
@@ -190,7 +251,7 @@ export default function ProductDetail() {
               'ngrok-skip-browser-warning': 'true'
             },
           });
-          
+
           if (favResponse.ok) {
             const favData = await favResponse.json();
             const isFav = favData.results?.some(fav => fav.product.id === foundProduct.id);
@@ -313,30 +374,54 @@ export default function ProductDetail() {
   
   const handleShare = async () => {
     if (!product) return;
-    
+
+    const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
+    const imageUrl = primaryImage ? getImageUrl(primaryImage.image_url) : '';
+
+    // Create rich preview text for social sharing
+    const shareText = `${product.name}
+
+Price: Rs ${product.price}
+${product.quantity > 0 ? `✅ In Stock (${product.quantity} available)` : '❌ Out of Stock'}
+
+${product.short_description || product.description?.substring(0, 150) + '...'}
+
+Shop now at ezeyway - Same day delivery in Kathmandu Valley!`;
+
     const shareData = {
-      title: product.name,
-      text: `Check out ${product.name} - Rs ${product.price}`,
+      title: `${product.name} - Rs ${product.price} | ezeyway`,
+      text: shareText,
       url: window.location.href,
     };
-    
+
     try {
       if (navigator.share) {
         await navigator.share(shareData);
       } else {
+        // For browsers without native share, copy rich text to clipboard
+        const richText = `${shareText}\n\n${window.location.href}`;
+        await navigator.clipboard.writeText(richText);
+        toast({
+          title: "Link Copied",
+          description: "Product details copied to clipboard for sharing",
+        });
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
+      // Fallback: copy just the URL
+      try {
         await navigator.clipboard.writeText(window.location.href);
         toast({
           title: "Link Copied",
           description: "Product link copied to clipboard",
         });
+      } catch (clipboardError) {
+        toast({
+          title: "Error",
+          description: "Failed to share product",
+          variant: "destructive",
+        });
       }
-    } catch (error) {
-      console.error('Error sharing:', error);
-      toast({
-        title: "Error",
-        description: "Failed to share product",
-        variant: "destructive",
-      });
     }
   };
 
@@ -485,7 +570,19 @@ export default function ProductDetail() {
             <div className="flex items-baseline gap-2">
               <span className="text-3xl md:text-4xl font-bold text-green-600">Rs {product.price}</span>
             </div>
-
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                <span className="text-lg font-semibold text-gray-900">
+                  {(productReviews[product.id]?.rating ?? 0).toFixed(1)}
+                </span>
+                {productReviews[product.id]?.total !== undefined && productReviews[product.id]?.total > 0 && (
+                  <span className="text-sm text-gray-600 cursor-pointer hover:text-blue-600" onClick={() => setShowAllReviews(true)}>
+                    ({productReviews[product.id]?.total} review{productReviews[product.id]?.total !== 1 ? 's' : ''})
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="secondary" className="bg-blue-100 text-blue-800 capitalize text-sm px-3 py-1">
@@ -684,6 +781,49 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      {/* Reviews Modal */}
+      {showAllReviews && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Product Reviews</h2>
+                <Button variant="ghost" size="sm" onClick={() => setShowAllReviews(false)}>
+                  ✕
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {reviews.length > 0 ? (
+                  reviews.map((review, index) => (
+                    <div key={index} className="border-b border-gray-200 pb-4 last:border-b-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`h-4 w-4 ${i < (review.rating || review.stars || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-sm font-medium">{review.rating || review.stars || 0}/5</span>
+                      </div>
+                      <p className="text-gray-700 text-sm">{review.comment || review.review || 'No comment'}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        By {review.customer_name || review.user_name || 'Anonymous'} • {new Date(review.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No reviews yet for this product.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Actions */}
       <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-200 p-4">
