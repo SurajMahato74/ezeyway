@@ -353,7 +353,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
             transition={{ duration: 0.4, delay: index * 0.08, ease: "easeOut" }}
             whileHover={{ scale: 1.03, boxShadow: "0 12px 24px rgba(0,0,0,0.15)" }}
             whileTap={{ scale: 0.97 }}
-            className="relative min-w-[130px] sm:min-w-[150px] md:min-w-[130px] bg-gradient-to-br from-card/90 to-card rounded-xl p-3 shadow-lg border border-border/20 hover:shadow-xl hover:border-primary/40 transition-all duration-300 cursor-pointer group snap-start"
+            className="relative min-w-[180px] sm:min-w-[150px] md:min-w-[130px] bg-gradient-to-br from-card/90 to-card rounded-xl p-3 shadow-lg border border-border/20 hover:shadow-xl hover:border-primary/40 transition-all duration-300 cursor-pointer group snap-start"
             onClick={() => handleItemClick(item.id)}
             aria-label={`View ${item.name} from ${item.vendor}`}
           >
@@ -377,17 +377,13 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
               {item.name}
             </h3>
             <p className="text-xs text-muted-foreground mb-1 truncate">{item.vendor}</p>
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2 mb-1">
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 {/* Single star symbol and numeric aggregate rating */}
                 <Star className="h-3 w-3 text-yellow-400" />
                 <span>
                   {(productReviews[item.id]?.rating ?? item.rating ?? 0).toFixed(1)}
                 </span>
-                {/* Optional total reviews count */}
-                {productReviews[item.id]?.total !== undefined && (
-                  <span className="text-xs text-muted-foreground">({productReviews[item.id]?.total})</span>
-                )}
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
