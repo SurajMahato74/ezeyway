@@ -397,9 +397,9 @@ export default function CheckOut() {
       
       const result = await orderService.createOrder(orderData);
       
-      // Handle multiple orders response
-      const orders = result.orders || [result.order];
-      const orderCount = result.total_orders || orders.length;
+      // Handle order response
+      const orders = result.order ? [result.order] : [];
+      const orderCount = orders.length;
       
       toast({
         title: "Order Placed Successfully!",
@@ -408,16 +408,21 @@ export default function CheckOut() {
           : `Order #${orders[0].order_number} has been placed.`,
       });
       
-      // Show immediate browser notification for testing
-      if ('Notification' in window && Notification.permission === 'granted') {
+      // Show immediate browser notification for testing (only on desktop browsers)
+      if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
         const firstOrder = orders[0];
-        new Notification('New Order Placed!', {
-          body: orderCount > 1
-            ? `${orderCount} orders created for Rs ${orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0).toFixed(2)}`
-            : `Order #${firstOrder.order_number} for Rs ${firstOrder.total_amount}`,
-          icon: '/favicon.ico',
-          tag: `order-${firstOrder.id}`,
-          requireInteraction: true
+        // Use service worker for notifications instead of direct constructor
+        navigator.serviceWorker.getRegistration().then(registration => {
+          if (registration) {
+            registration.showNotification('New Order Placed!', {
+              body: orderCount > 1
+                ? `${orderCount} orders created for Rs ${orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0).toFixed(2)}`
+                : `Order #${firstOrder.order_number} for Rs ${firstOrder.total_amount}`,
+              icon: '/favicon.ico',
+              tag: `order-${firstOrder.id}`,
+              requireInteraction: true
+            });
+          }
         });
       }
       
