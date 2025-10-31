@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { PermissionService } from "./services/permissions";
 import { useSessionManager } from "./hooks/useSessionManager";
 import { AppProvider } from "./contexts/AppContext";
@@ -241,7 +242,13 @@ const queryClient = new QueryClient();
 
 const RoutesWithAnalytics = () => {
   useAnalytics(); // Now inside Router context
-  
+  const location = useLocation();
+
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   return (
     <Routes>
       <Route path="/" element={<Index />} />
