@@ -35,3 +35,20 @@ export const getDeliveryInfo = (product: any, vendorDeliveryFee?: number): Deliv
   };
 };
 
+/**
+ * Return the delivery radius (in km) for a product when available.
+ * Priority:
+ *  - product.delivery_radius
+ *  - product.vendor?.delivery_radius
+ *  - null when not available
+ */
+export const getDeliveryRadius = (product: any): number | null => {
+  if (!product) return null;
+  if (product.delivery_radius != null) return Number(product.delivery_radius);
+  // Some endpoints may include a nested vendor object
+  if (product.vendor && product.vendor.delivery_radius != null) return Number(product.vendor.delivery_radius);
+  // In some places vendor delivery radius may be present on vendor fields with different keys
+  if (product.vendor_delivery_radius != null) return Number(product.vendor_delivery_radius);
+  return null;
+};
+

@@ -12,7 +12,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { performanceMonitor, debounce, imagePreloader } from "@/utils/performance";
-import { getDeliveryInfo } from '@/utils/deliveryUtils';
+import { getDeliveryInfo, getDeliveryRadius } from '@/utils/deliveryUtils';
 import { FloatingChat } from "@/components/FloatingChat";
 import { API_BASE } from '@/config/api';
 
@@ -57,7 +57,8 @@ const testDistance = () => {
 };
 
 // Memoized Product Card Component
-const ProductCard = memo(({ product, onProductClick, onToggleFavorite, onAddToCart, onBuyNow, isFavorite }) => {
+interface ProductCardProps { product: any; onProductClick: (id: any) => void; onToggleFavorite: (id: any, e?: any) => void; onAddToCart: (id: any, qty?: number) => void; onBuyNow: (e: any, product: any) => void; isFavorite: boolean; }
+const ProductCard = memo<ProductCardProps>(({ product, onProductClick, onToggleFavorite, onAddToCart, onBuyNow, isFavorite }) => {
   return (
     <Card className="overflow-hidden">
       <div className="cursor-pointer" onClick={() => onProductClick(product.id)}>
@@ -151,7 +152,8 @@ const ProductCard = memo(({ product, onProductClick, onToggleFavorite, onAddToCa
 });
 
 // Memoized Vendor Card Component
-const VendorCard = memo(({ vendor, onVendorClick }) => {
+interface VendorCardProps { vendor: any; onVendorClick: (vendor: any) => void; }
+const VendorCard = memo<VendorCardProps>(({ vendor, onVendorClick }) => {
   return (
     <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onVendorClick(vendor)}>
       <CardContent className="p-4">
@@ -494,10 +496,25 @@ export default function Search() {
   }, [userLocation]);
 
   // Memoized and optimized product processing
+  const computeAggregateRating = (product) => {
+    if (!product) return 0;
+    if (product.reviews && Array.isArray(product.reviews) && product.reviews.length > 0) {
+      const values = product.reviews
+        .map(r => Number(r.rating ?? r.stars ?? r.score ?? 0))
+        .filter(n => !isNaN(n));
+      if (values.length > 0) {
+        const sum = values.reduce((a, b) => a + b, 0);
+        return Math.max(0, Math.min(5, sum / values.length));
+      }
+    }
+    if (product.average_rating != null) return Number(product.average_rating);
+    if (product.rating != null) return Number(product.rating);
+    return 0;
+  };
+
   const processProducts = useCallback((products) => {
     const currentLocation = locationService.getLocation();
-    const DELIVERY_RADIUS_KM = 10;
-    
+
     return products
       .map(product => {
         const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
@@ -523,7 +540,7 @@ export default function Search() {
           price: `Rs ${product.price}`,
           priceValue: parseFloat(product.price),
           image: primaryImage?.image_url || "/placeholder-product.jpg",
-          rating: 4.5,
+          rating: computeAggregateRating(product),
           distance,
           distanceValue,
           deliveryTime: "30-45 mins",
@@ -532,7 +549,7 @@ export default function Search() {
           totalSold: product.total_sold || 0,
           deliveryInfo,
           vendorOnline: product.vendor_online !== false,
-          deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM,
+          deliveryRadius: getDeliveryRadius(product) ?? Infinity,
           // Include delivery properties
           free_delivery: product.free_delivery,
           custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
@@ -548,7 +565,6 @@ export default function Search() {
   // Memoized vendor processing
   const processVendors = useCallback((vendors) => {
     const currentLocation = locationService.getLocation();
-    const DELIVERY_RADIUS_KM = 10;
     
     return vendors
       .map(vendor => {
@@ -567,13 +583,13 @@ export default function Search() {
           id: vendor.id,
           name: vendor.business_name,
           image: vendor.user_info?.profile_picture || "/placeholder-vendor.jpg",
-          rating: 4.5,
+          rating: computeAggregateRating(vendor),
           distance,
           distanceValue,
           deliveryTime: "30-45 mins",
           categories: vendor.categories || [],
           isOnline: vendor.is_online !== false,
-          deliveryRadius: vendor.delivery_radius || DELIVERY_RADIUS_KM
+          deliveryRadius: getDeliveryRadius(vendor) ?? Infinity
         };
       })
       .filter(vendor => {

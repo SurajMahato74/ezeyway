@@ -10,7 +10,7 @@ import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
 import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
-import { getDeliveryInfo } from '@/utils/deliveryUtils';
+import { getDeliveryInfo, getDeliveryRadius } from '@/utils/deliveryUtils';
 import { API_BASE } from '@/config/api';
 
 // CSS for hiding scrollbar
@@ -215,7 +215,22 @@ export default function CategoryItems() {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
-    const DELIVERY_RADIUS_KM = 10; // Default delivery radius in km
+
+    const computeAggregateRating = (product) => {
+      if (!product) return 0;
+      if (product.reviews && Array.isArray(product.reviews) && product.reviews.length > 0) {
+        const values = product.reviews
+          .map(r => Number(r.rating ?? r.stars ?? r.score ?? 0))
+          .filter(n => !isNaN(n));
+        if (values.length > 0) {
+          const sum = values.reduce((a, b) => a + b, 0);
+          return Math.max(0, Math.min(5, sum / values.length));
+        }
+      }
+      if (product.average_rating != null) return Number(product.average_rating);
+      if (product.rating != null) return Number(product.rating);
+      return 0;
+    };
 
     // Filter products by category and subcategory
     let filteredProducts = products.filter(product => {
@@ -250,7 +265,7 @@ export default function CategoryItems() {
         price: `₹${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
-        rating: 4.5,
+  rating: computeAggregateRating(product),
         distance,
         distanceValue,
         deliveryTime: "30-45 mins",
@@ -259,7 +274,7 @@ export default function CategoryItems() {
         totalSold: product.total_sold || 0,
         deliveryInfo,
         vendorOnline: product.vendor_online !== false, // Assume online if not specified
-        deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM,
+  deliveryRadius: getDeliveryRadius(product) ?? Infinity,
         // Include delivery properties
         free_delivery: product.free_delivery,
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,

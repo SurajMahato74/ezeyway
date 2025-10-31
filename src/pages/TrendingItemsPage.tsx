@@ -128,6 +128,21 @@ export default function TrendingItemsPage() {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
+    const computeAggregateRating = (product) => {
+      if (!product) return 0;
+      if (product.reviews && Array.isArray(product.reviews) && product.reviews.length > 0) {
+        const values = product.reviews
+          .map(r => Number(r.rating ?? r.stars ?? r.score ?? 0))
+          .filter(n => !isNaN(n));
+        if (values.length > 0) {
+          const sum = values.reduce((a, b) => a + b, 0);
+          return Math.max(0, Math.min(5, sum / values.length));
+        }
+      }
+      if (product.average_rating != null) return Number(product.average_rating);
+      if (product.rating != null) return Number(product.rating);
+      return 0;
+    };
 
     let processedProducts = products.map(product => {
       const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
@@ -150,7 +165,7 @@ export default function TrendingItemsPage() {
         vendor: product.vendor_name || "Unknown Vendor",
         distance,
         distanceValue,
-        rating: 4.5, // Default rating since API might not have it
+        rating: computeAggregateRating(product),
         price: `₹${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",

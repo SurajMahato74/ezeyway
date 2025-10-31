@@ -47,6 +47,8 @@ export function CategoryScroll() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  // Derive API host from API_BASE (remove trailing /api or /api/)
+  const API_HOST = API_BASE.replace(/\/api\/?$/i, '');
 
   // Fetch real categories from API
   useEffect(() => {
@@ -60,12 +62,17 @@ export function CategoryScroll() {
         
         const data = await response.json();
         if (data.categories) {
-          const formattedCategories = data.categories.map((cat, index) => ({
-            id: cat.id || index + 1,
-            name: cat.name,
-            icon: cat.icon_url || fallbackCategoryIcons[cat.name] || "📦", // Use API icon or fallback
-            hasImage: !!cat.icon_url // Track if category has an image
-          }));
+          const formattedCategories = data.categories.map((cat, index) => {
+            const rawIcon = cat.icon || cat.icon_url || '';
+            // If icon is a relative path (starts with '/'), prefix with API host
+            const iconFull = rawIcon && rawIcon.startsWith('/') ? `${API_HOST}${rawIcon}` : rawIcon;
+            return {
+              id: cat.id || index + 1,
+              name: cat.name,
+              icon: iconFull || fallbackCategoryIcons[cat.name] || "📦",
+              hasImage: !!rawIcon // Track if category originally had an image
+            };
+          });
           setCategories(formattedCategories);
         } else {
           setCategories([]);
@@ -132,8 +139,12 @@ export function CategoryScroll() {
                   className="w-8 h-8 object-contain"
                   onError={(e) => {
                     // Fallback to emoji if image fails to load
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'block';
+                    const img = e.target as HTMLImageElement;
+                    if (img) {
+                      img.style.display = 'none';
+                      const next = img.nextSibling as HTMLElement | null;
+                      if (next) next.style.display = 'block';
+                    }
                   }}
                 />
               ) : (

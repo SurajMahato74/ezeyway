@@ -9,9 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
-import { getDeliveryInfo } from "@/utils/deliveryUtils";
+import { getDeliveryInfo, getDeliveryRadius } from "@/utils/deliveryUtils";
 
 import { API_BASE } from '@/config/api';
+import { reviewService } from '@/services/reviewService';
 import { filterOwnProducts } from '@/utils/productFilter';
 
 // Google Maps precision Haversine formula with higher precision
@@ -38,23 +39,8 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return (R * c) / 1000; // Convert back to km
 };
 
-function renderStars(rating: number) {
-  const fullStars = Math.floor(rating);
-  const halfStar = rating % 1 >= 0.5;
-  const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
-
-  return (
-    <>
-      {Array.from({ length: fullStars }).map((_, i) => (
-        <Star key={`full-${i}`} className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
-      ))}
-      {halfStar && <Star key="half" className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" style={{ clipPath: 'inset(0 50% 0 0)' }} />}
-      {Array.from({ length: emptyStars }).map((_, i) => (
-        <Star key={`empty-${i}`} className="h-2.5 w-2.5 stroke-yellow-400 text-transparent" />
-      ))}
-    </>
-  );
-}
+// Import the ReviewStars component
+import { ReviewStars } from "@/components/ReviewStars";
 
 interface TrendingItemsProps {
   onDataLoaded?: () => void;
@@ -68,6 +54,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
   const [trendingItems, setTrendingItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
+  const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
@@ -132,10 +119,14 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         throw new Error(`HTTP ${productsResponse.status}`);
       }
       
-      const productsData = await productsResponse.json();
-      const filteredProducts = await filterOwnProducts(productsData.results || []);
-      const processedProducts = processProducts(filteredProducts);
-      setTrendingItems(processedProducts);
+  const productsData = await productsResponse.json();
+  const filteredProducts = await filterOwnProducts(productsData.results || []);
+  const processedProducts = processProducts(filteredProducts);
+  setTrendingItems(processedProducts);
+
+  // After setting products, load reviews for visible products
+  const ids = processedProducts.map(p => p.id);
+  loadReviewsForProducts(ids);
     } catch (error) {
       console.error('Error fetching trending items:', error);
       // Set empty array on error to prevent UI issues
@@ -146,9 +137,45 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
     }
   };
 
+  const loadReviewsForProducts = async (productIds: number[]) => {
+    try {
+      const promises = productIds.map((id) => reviewService.getProductReviews(id));
+      const results = await Promise.all(promises);
+      const mapped = results.reduce((acc, r) => {
+        acc[r.product_id] = {
+          rating: r.aggregate?.average_rating || 0,
+          total: r.aggregate?.total_reviews || 0
+        };
+        return acc;
+      }, {} as Record<number, { rating: number; total: number }>);
+      setProductReviews(prev => ({ ...prev, ...mapped }));
+    } catch (err) {
+      console.error('Failed to load product reviews:', err);
+    }
+  };
+
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
-    const DELIVERY_RADIUS_KM = 10;
+  // Use delivery radius from product/vendor when available. If not provided,
+  // treat as no client-side limit (Infinity) and rely on the backend to filter by vendor radius.
+
+    const computeAggregateRating = (product) => {
+      // Prefer explicit reviews array if present
+      if (product.reviews && Array.isArray(product.reviews) && product.reviews.length > 0) {
+        const values = product.reviews
+          .map(r => Number(r.rating ?? r.stars ?? r.score ?? 0))
+          .filter(n => !isNaN(n));
+        if (values.length > 0) {
+          const sum = values.reduce((a, b) => a + b, 0);
+          return Math.max(0, Math.min(5, sum / values.length));
+        }
+      }
+
+      // Fallbacks: average_rating, rating, or default 0
+      if (product.average_rating != null) return Number(product.average_rating);
+      if (product.rating != null) return Number(product.rating);
+      return 0;
+    };
 
     let processedProducts = products.map(product => {
       const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
@@ -174,7 +201,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         vendor_id: product.vendor_id,
         distance,
         distanceValue,
-        rating: 4.5, // Default rating since API might not have it
+  rating: computeAggregateRating(product),
         price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
@@ -183,7 +210,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         totalSold: product.total_sold || 0,
         deliveryInfo,
         vendorOnline: product.vendor_online !== false,
-        deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM,
+  deliveryRadius: getDeliveryRadius(product) ?? 5,
         // Include delivery properties for checkout
         free_delivery: product.free_delivery,
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
@@ -305,8 +332,16 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
             </h3>
             <p className="text-xs text-muted-foreground mb-1 truncate">{item.vendor}</p>
             <div className="flex items-center justify-between mb-1">
-              <div className="flex gap-0.5">
-                {renderStars(item.rating)}
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                {/* Single star symbol and numeric aggregate rating */}
+                <Star className="h-3 w-3 text-yellow-400" />
+                <span>
+                  {(productReviews[item.id]?.rating ?? item.rating ?? 0).toFixed(1)}
+                </span>
+                {/* Optional total reviews count */}
+                {productReviews[item.id]?.total !== undefined && (
+                  <span className="text-xs text-muted-foreground">({productReviews[item.id]?.total})</span>
+                )}
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -326,9 +361,9 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1">
+                    <div className="flex flex-col items-center gap-0.5">
                       <Truck className="h-3 w-3 text-muted-foreground" />
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      <span className={`text-xs px-1 py-0.5 rounded-full ${
                         item.deliveryInfo.isFreeDelivery 
                           ? 'bg-green-100 text-green-700' 
                           : item.deliveryInfo.deliveryFee === null

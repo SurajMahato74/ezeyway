@@ -6,7 +6,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
-import { getDeliveryInfo } from "@/utils/deliveryUtils";
+import { getDeliveryInfo, getDeliveryRadius } from "@/utils/deliveryUtils";
 import { API_BASE } from '@/config/api';
 import { filterOwnProducts } from '@/utils/productFilter';
 
@@ -106,8 +106,23 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
-    const DELIVERY_RADIUS_KM = 10;
-    
+  // Use delivery radius from product/vendor when available. If not provided,
+  // treat as no client-side limit (Infinity) and rely on the backend to filter by vendor radius.
+    const computeAggregateRating = (product) => {
+      if (product.reviews && Array.isArray(product.reviews) && product.reviews.length > 0) {
+        const values = product.reviews
+          .map(r => Number(r.rating ?? r.stars ?? r.score ?? 0))
+          .filter(n => !isNaN(n));
+        if (values.length > 0) {
+          const sum = values.reduce((a, b) => a + b, 0);
+          return Math.max(0, Math.min(5, sum / values.length));
+        }
+      }
+      if (product.average_rating != null) return Number(product.average_rating);
+      if (product.rating != null) return Number(product.rating);
+      return 0;
+    };
+
     let processedProducts = products.map(product => {
       const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
       
@@ -131,7 +146,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
         vendor_id: product.vendor_id,
         distance,
         distanceValue,
-        rating: 4.5,
+        rating: computeAggregateRating(product),
         price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
@@ -141,7 +156,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
         deliveryInfo,
         createdAt: product.created_at,
         vendorOnline: product.vendor_online !== false,
-        deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM,
+  deliveryRadius: getDeliveryRadius(product) ?? Infinity,
         // Include delivery properties for checkout
         free_delivery: product.free_delivery,
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
@@ -154,7 +169,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
     });
 
     // Sort by creation date (newest first)
-    processedProducts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    processedProducts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return processedProducts.slice(0, 40);
   };
 
@@ -214,7 +229,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
                 src={product.image}
                 alt={product.name}
                 className="w-full h-full object-cover"
-                onError={(e) => { e.target.src = '/placeholder-product.jpg'; }}
+                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
               />
             </div>
             
@@ -232,7 +247,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
                   </div>
                   <span className="text-green-600 font-medium">{product.totalSold} sold</span>
                 </div>
-                <div className="flex items-center gap-1 text-blue-600">
+                  <div className="flex items-center gap-1 text-blue-600">
                   <MapPin className="h-2 w-2" />
                   <span className="font-medium">{product.distance}</span>
                 </div>
@@ -241,8 +256,8 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-xs text-green-600">{product.price}</span>
-                  <div className="flex items-center gap-1">
-                    <Truck className="h-2 w-2 text-gray-400" />
+                  <div className="flex flex-col items-center gap-0.5">
+                    <Truck className="h-3 w-3 text-gray-400" />
                     <span className={`text-[10px] px-1 py-0.5 rounded-full ${
                       product.deliveryInfo.isFreeDelivery 
                         ? 'bg-green-100 text-green-700' 

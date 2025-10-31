@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Heart, ShoppingCart, Loader2, Truck, MapPin } from "lucide-react";
+import { Heart, ShoppingCart, Loader2, Truck, MapPin, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
-import { getDeliveryInfo } from "@/utils/deliveryUtils";
+import { getDeliveryInfo, getDeliveryRadius } from "@/utils/deliveryUtils";
 
 import { API_BASE } from '@/config/api';
 import { filterOwnProducts } from '@/utils/productFilter';
@@ -123,10 +123,26 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
-    const DELIVERY_RADIUS_KM = 10;
+  // Use delivery radius from product/vendor when available. If not provided,
+  // treat as no client-side limit (Infinity) and rely on the backend to filter by vendor radius.
 
     // Filter for featured products only
     let featuredProducts = products.filter(product => product.featured === true);
+
+    const computeAggregateRating = (product) => {
+      if (product.reviews && Array.isArray(product.reviews) && product.reviews.length > 0) {
+        const values = product.reviews
+          .map(r => Number(r.rating ?? r.stars ?? r.score ?? 0))
+          .filter(n => !isNaN(n));
+        if (values.length > 0) {
+          const sum = values.reduce((a, b) => a + b, 0);
+          return Math.max(0, Math.min(5, sum / values.length));
+        }
+      }
+      if (product.average_rating != null) return Number(product.average_rating);
+      if (product.rating != null) return Number(product.rating);
+      return 0;
+    };
 
     let processedProducts = featuredProducts.map(product => {
       const primaryImage = product.images?.find(img => img.is_primary) || product.images?.[0];
@@ -149,9 +165,10 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
         id: product.id,
         name: product.name,
         vendor: product.vendor_name || "Unknown Vendor",
+        vendor_id: product.vendor_id,
         distance,
         distanceValue,
-        rating: 4.5, // Default rating since API might not have it
+        rating: computeAggregateRating(product),
         price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
@@ -160,8 +177,11 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
         featured: product.featured,
         totalSold: product.total_sold || 0,
         deliveryInfo,
+        free_delivery: product.free_delivery,
+        custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+        custom_delivery_fee: product.custom_delivery_fee,
         vendorOnline: product.vendor_online !== false,
-        deliveryRadius: product.delivery_radius || DELIVERY_RADIUS_KM
+  deliveryRadius: getDeliveryRadius(product) ?? Infinity
       };
     })
     .filter(product => {
@@ -180,17 +200,29 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
     navigate(`/product/${productId}`);
   };
 
-  const handleBuyNow = async (product: any) => {
-    try {
-      await addToCartWithAuth(product.id.toString(), 1);
-      toast({
-        title: "Added to Cart",
-        description: `${product.name} added to your cart`,
-      });
-      navigate("/cart");
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-    }
+  const handleBuyNow = async (product: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+
+    // Find the original product data to get delivery properties
+    const originalProduct = featuredProducts.find(p => p.id === product.id);
+
+    navigate("/checkout", {
+      state: {
+        directBuy: true,
+        product: {
+          id: product.id,
+          name: product.name,
+          price: product.price.replace('Rs ', ''),
+          quantity: 1,
+          vendor_name: product.vendor,
+          vendor_id: originalProduct?.vendor_id,
+          images: [{ image_url: product.image }],
+          free_delivery: originalProduct?.free_delivery,
+          custom_delivery_fee_enabled: originalProduct?.custom_delivery_fee_enabled,
+          custom_delivery_fee: originalProduct?.custom_delivery_fee
+        }
+      }
+    });
   };
 
   if (loading) {
@@ -234,7 +266,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1, duration: 0.3 }}
             whileHover={{ scale: 1.02, rotate: 0.5 }}
-            className="relative flex-shrink-0 w-36 md:w-auto rounded-lg bg-white border border-gray-200 hover:border-[#856043] shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-300 overflow-hidden group cursor-pointer"
+            className="relative flex-shrink-0 w-36 md:w-40 rounded-lg bg-white border border-gray-200 hover:border-[#856043] shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-300 overflow-visible group cursor-pointer"
             onClick={() => handleProductClick(product.id)}
           >
             {/* Featured Badge */}
@@ -248,7 +280,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
             </motion.span>
 
             {/* Product Image */}
-            <div className="w-full h-28 overflow-hidden">
+            <div className="w-full h-32 overflow-hidden">
               <img
                 src={product.image}
                 alt={product.name}
@@ -258,7 +290,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
             </div>
 
             {/* Content */}
-            <div className="p-3 flex flex-col justify-between h-36">
+            <div className="p-3 flex flex-col justify-between min-h-[11rem]">
               <div>
                 <h3 className="font-medium text-sm text-gray-800 mb-1 line-clamp-2 leading-tight">
                   {product.name}
@@ -267,7 +299,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
               </div>
 
               <div>
-                {/* Price and Delivery */}
+                {/* Price and Distance */}
                 <div className="space-y-1 mb-2">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm text-[#856043]">
@@ -279,9 +311,17 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
                     <MapPin className="h-3 w-3" />
                     <span className="font-medium">{product.distance}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Truck className="h-3 w-3 text-muted-foreground" />
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                </div>
+
+                {/* Rating - single star + numeric */}
+                <div className="flex items-center justify-between mb-2 text-xs">
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                    <span className="font-medium">{product.rating.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Truck className="h-3.5 w-3.5" />
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                       product.deliveryInfo.isFreeDelivery 
                         ? 'bg-green-100 text-green-700' 
                         : product.deliveryInfo.deliveryFee === null
@@ -297,54 +337,73 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
                   </div>
                 </div>
 
-                {/* Rating */}
-                <div className="flex items-center gap-1 mb-1">
-                  {Array.from({ length: 5 }).map((_, idx) => (
-                    <span
-                      key={idx}
-                      className={`text-xs ${
-                        idx < Math.floor(product.rating)
-                          ? "text-amber-400"
-                          : "text-gray-300"
-                      }`}
-                    >
-                      ★
-                    </span>
-                  ))}
-                  <span className="text-xs text-gray-500 ml-1">
-                    {product.rating.toFixed(1)}
-                  </span>
-                </div>
-
                 {/* Buttons */}
-                <div className="flex gap-1">
+                <div className="flex gap-2">
                   {product.inStock ? (
                     <>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="w-7 h-7 p-0 border-[#856043] text-[#856043] hover:bg-[#856043] hover:text-white"
+                        className="w-8 h-7 p-0 text-muted-foreground hover:text-[#856043] hover:bg-transparent"
                         onClick={async (e) => {
                           e.stopPropagation();
+                          const token = await authService.getToken();
+                          if (!token) {
+                            localStorage.setItem('pendingAction', JSON.stringify({
+                              type: 'add_to_cart',
+                              data: {
+                                productId: product.id,
+                                quantity: 1
+                              },
+                              path: '/cart',
+                              timestamp: Date.now()
+                            }));
+                            navigate('/login');
+                            return;
+                          }
                           try {
                             await addToCartWithAuth(product.id.toString(), 1);
                             toast({
                               title: "Added to Cart",
                               description: `${product.name} added to your cart`,
                             });
+                            navigate('/cart');
                           } catch (error) {
                             console.error('Error adding to cart:', error);
                           }
                         }}
                       >
-                        <ShoppingCart className="h-3 w-3" />
+                        <ShoppingCart className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="default"
                         className="flex-1 text-xs py-1.5 shadow-sm h-7 bg-green-600 hover:bg-green-700 text-white"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          handleBuyNow(product);
+                          const token = await authService.getToken();
+                          if (!token) {
+                            localStorage.setItem('pendingAction', JSON.stringify({
+                              type: 'buy_now',
+                              data: {
+                                id: product.id,
+                                name: product.name,
+                                price: product.price.replace('Rs ', ''),
+                                quantity: 1,
+                                vendor_name: product.vendor,
+                                vendor_id: product.vendor_id,
+                                images: [{ image_url: product.image }],
+                                // Include delivery properties if available
+                                free_delivery: product.free_delivery,
+                                custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
+                                custom_delivery_fee: product.custom_delivery_fee
+                              },
+                              path: '/checkout',
+                              timestamp: Date.now()
+                            }));
+                            navigate('/login');
+                            return;
+                          }
+                          handleBuyNow(product, e as any);
                         }}
                       >
                         Buy
