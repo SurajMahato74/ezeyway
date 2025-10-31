@@ -135,10 +135,9 @@ export default function VendorProfile() {
       {/* Content Tabs */}
       <div className="flex-1">
         <Tabs defaultValue="products" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mx-4">
+          <TabsList className="grid w-full grid-cols-2 mx-4">
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="about">About</TabsTrigger>
-            <TabsTrigger value="reviews">Reviews</TabsTrigger>
           </TabsList>
           
           <TabsContent value="products" className="p-4 space-y-3">
@@ -185,12 +184,6 @@ export default function VendorProfile() {
             </div>
           </TabsContent>
           
-          <TabsContent value="reviews" className="p-4">
-            <div className="text-center py-8">
-              <Star className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">Reviews coming soon</p>
-            </div>
-          </TabsContent>
         </Tabs>
       </div>
     </div>

@@ -256,11 +256,6 @@ export default function VendorProfile() {
             
             <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
               <div className="flex items-center gap-1">
-                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                <span className="font-medium">4.5</span>
-                <span>(Reviews coming soon)</span>
-              </div>
-              <div className="flex items-center gap-1">
                 <MapPin className="h-4 w-4" />
                 <span>{distance}</span>
               </div>
@@ -332,7 +327,7 @@ export default function VendorProfile() {
           <TabsList className="grid w-full grid-cols-3 mx-4">
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="about">About</TabsTrigger>
-            <TabsTrigger value="reviews">Reviews</TabsTrigger>
+            <TabsTrigger value="gallery">Gallery</TabsTrigger>
           </TabsList>
           
           <TabsContent value="products" className="p-4 space-y-3">
@@ -475,13 +470,77 @@ export default function VendorProfile() {
                 {vendor.loyalty_program && <Badge variant="secondary">Loyalty Program</Badge>}
               </div>
             </div>
+
+            {vendor.established_year && (
+              <div>
+                <h3 className="font-semibold mb-2">Established</h3>
+                <p className="text-sm text-muted-foreground">{vendor.established_year}</p>
+              </div>
+            )}
+
+            {vendor.employee_count && (
+              <div>
+                <h3 className="font-semibold mb-2">Team Size</h3>
+                <p className="text-sm text-muted-foreground">{vendor.employee_count} employees</p>
+              </div>
+            )}
+
+            {vendor.website && (
+              <div>
+                <h3 className="font-semibold mb-2">Website</h3>
+                <a href={vendor.website} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+                  {vendor.website}
+                </a>
+              </div>
+            )}
+
+            {(vendor.facebook || vendor.instagram || vendor.twitter) && (
+              <div>
+                <h3 className="font-semibold mb-2">Social Media</h3>
+                <div className="flex gap-3">
+                  {vendor.facebook && (
+                    <a href={vendor.facebook} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+                      Facebook
+                    </a>
+                  )}
+                  {vendor.instagram && (
+                    <a href={vendor.instagram} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+                      Instagram
+                    </a>
+                  )}
+                  {vendor.twitter && (
+                    <a href={vendor.twitter} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+                      Twitter
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </TabsContent>
           
-          <TabsContent value="reviews" className="p-4">
-            <div className="text-center py-8">
-              <Star className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">Reviews coming soon</p>
-            </div>
+          <TabsContent value="gallery" className="p-4">
+            {vendor.shop_images && vendor.shop_images.length > 0 ? (
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg mb-4">Shop Gallery</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {vendor.shop_images.map((image, index) => (
+                    <div key={image.id || index} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                      <img
+                        src={getImageUrl(image.image_url)}
+                        alt={`${vendor.business_name} shop image ${index + 1}`}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
+                        onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-vendor.jpg'; }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Store className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">No gallery images available</p>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
