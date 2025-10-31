@@ -403,9 +403,9 @@ export default function CheckOut() {
       
       toast({
         title: "Order Placed Successfully!",
-        description: orderCount > 1 
+        description: orderCount > 1
           ? `${orderCount} orders created for different vendors`
-          : `Order #${orders[0].order_number} has been placed.`,
+          : `Order has been placed successfully.`,
       });
       
       // Show immediate browser notification for testing (only on desktop browsers)
@@ -417,7 +417,7 @@ export default function CheckOut() {
             registration.showNotification('New Order Placed!', {
               body: orderCount > 1
                 ? `${orderCount} orders created for Rs ${orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0).toFixed(2)}`
-                : `Order #${firstOrder.order_number} for Rs ${firstOrder.total_amount}`,
+                : `Order #${firstOrder?.order_number || firstOrder?.id} for Rs ${firstOrder.total_amount}`,
               icon: '/favicon.ico',
               tag: `order-${firstOrder.id}`,
               requireInteraction: true
@@ -461,12 +461,12 @@ export default function CheckOut() {
       
       // Navigate to order confirmation - use first order for single order, or orders page for multiple
       if (orderCount === 1) {
-        navigate(`/order-confirmation/${orders[0].id}`, {
+        navigate(`/order-confirmation/${orders[0]?.id}`, {
           state: { order: orders[0] }
         });
       } else {
         navigate('/orders', {
-          state: { 
+          state: {
             message: `${orderCount} orders created successfully`,
             newOrders: orders
           }
