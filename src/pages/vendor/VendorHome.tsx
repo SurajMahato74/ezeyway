@@ -107,7 +107,7 @@ const VendorHome: React.FC = () => {
     // Simple fast loading
     setIsApproved(true);
     setIsLoading(false);
-    
+
     // Initialize FCM service for push notifications
     if (Capacitor.isNativePlatform()) {
       fcmService.initialize().then(() => {
@@ -120,10 +120,22 @@ const VendorHome: React.FC = () => {
         console.error('❌ FCM Service initialization failed:', error);
       });
     }
-    
+
     // Fetch data immediately
     fetchDashboardData();
     fetchSliders();
+
+    // Listen for order acceptance events to refresh dashboard
+    const handleOrderAccepted = () => {
+      console.log('Order accepted - refreshing dashboard data');
+      fetchDashboardData();
+    };
+
+    window.addEventListener('orderAccepted', handleOrderAccepted);
+
+    return () => {
+      window.removeEventListener('orderAccepted', handleOrderAccepted);
+    };
   }, []);
   
   const fetchDashboardData = async () => {
@@ -142,59 +154,59 @@ const VendorHome: React.FC = () => {
         setWalletBalance(parseFloat(walletData.balance) || 0);
       }
       
-      // Fetch orders data
-      const { response: ordersResponse, data: ordersData } = await apiRequest('/orders/');
-      console.log('Orders response:', ordersResponse.ok, ordersData);
+      // Fetch orders data - use vendor-specific endpoint
+      const { response: ordersResponse, data: ordersData } = await apiRequest('/vendor/orders/');
+      console.log('Vendor orders response:', ordersResponse.ok, ordersData);
       if (ordersResponse.ok && ordersData) {
-        const orders = ordersData.results || ordersData || [];
-        console.log('Orders found:', orders.length, orders);
-        const totalOrders = orders.length;
+        const vendorOrders = ordersData.results || ordersData || [];
+        console.log('Vendor orders found:', vendorOrders.length, vendorOrders);
+        const totalOrders = vendorOrders.length;
         
-        // Calculate total revenue from all delivered orders
-        const deliveredOrders = orders.filter(o => o.status === 'delivered');
-        console.log('Delivered orders:', deliveredOrders.length, deliveredOrders);
-        const totalRevenue = deliveredOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
-        
+        // Calculate total revenue from confirmed and delivered orders
+        const confirmedAndDeliveredOrders = vendorOrders.filter(o => o.status === 'confirmed' || o.status === 'delivered');
+        console.log('Confirmed and delivered orders:', confirmedAndDeliveredOrders.length, confirmedAndDeliveredOrders);
+        const totalRevenue = confirmedAndDeliveredOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+
         const today = new Date().toDateString();
-        const todaysOrders = orders.filter(o => new Date(o.created_at).toDateString() === today);
-        
-        // Calculate today's earnings from delivered orders
-        const todaysDeliveredOrders = orders.filter(o => {
+        const todaysOrders = vendorOrders.filter(o => new Date(o.created_at).toDateString() === today);
+
+        // Calculate today's earnings from confirmed and delivered orders
+        const todaysConfirmedAndDeliveredOrders = vendorOrders.filter(o => {
           const orderDate = new Date(o.created_at).toDateString();
-          return orderDate === today && o.status === 'delivered';
+          return orderDate === today && (o.status === 'confirmed' || o.status === 'delivered');
         });
-        const todaysEarnings = todaysDeliveredOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+        const todaysEarnings = todaysConfirmedAndDeliveredOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
         console.log('Today earnings:', todaysEarnings, 'Total revenue:', totalRevenue);
-        
-        // Calculate this month's earnings
+
+        // Calculate this month's earnings from confirmed and delivered orders
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
-        const thisMonthOrders = orders.filter(o => {
+        const thisMonthOrders = vendorOrders.filter(o => {
           const orderDate = new Date(o.created_at);
-          return orderDate.getMonth() === currentMonth && 
-                 orderDate.getFullYear() === currentYear && 
-                 o.status === 'delivered';
+          return orderDate.getMonth() === currentMonth &&
+                 orderDate.getFullYear() === currentYear &&
+                 (o.status === 'confirmed' || o.status === 'delivered');
         });
         const monthlyEarnings = thisMonthOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
-        
-        // Generate chart data for last 6 months
+
+        // Generate chart data for last 6 months from confirmed and delivered orders
         const chartData = [];
         for (let i = 5; i >= 0; i--) {
           const monthDate = new Date();
           monthDate.setMonth(monthDate.getMonth() - i);
-          const monthOrders = orders.filter(o => {
+          const monthOrders = vendorOrders.filter(o => {
             const orderDate = new Date(o.created_at);
-            return orderDate.getMonth() === monthDate.getMonth() && 
-                   orderDate.getFullYear() === monthDate.getFullYear() && 
-                   o.status === 'delivered';
+            return orderDate.getMonth() === monthDate.getMonth() &&
+                   orderDate.getFullYear() === monthDate.getFullYear() &&
+                   (o.status === 'confirmed' || o.status === 'delivered');
           });
           const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
           chartData.push(monthRevenue);
         }
-        
+
         // Calculate unique customers
         const uniqueCustomers = new Set();
-        orders.forEach(order => {
+        vendorOrders.forEach(order => {
           if (order.customer_details?.id) {
             uniqueCustomers.add(order.customer_details.id);
           } else if (order.delivery_phone) {
@@ -217,9 +229,9 @@ const VendorHome: React.FC = () => {
         
         setTodayOrders(todaysOrders.slice(0, 5));
         
-        // Calculate best selling products from delivered orders
+        // Calculate best selling products from confirmed and delivered orders
         const productSales = {};
-        deliveredOrders.forEach(order => {
+        confirmedAndDeliveredOrders.forEach(order => {
           order.items?.forEach(item => {
             const productId = item.product_details?.id || item.product_name;
             if (!productSales[productId]) {
@@ -229,7 +241,8 @@ const VendorHome: React.FC = () => {
                 price: item.unit_price,
                 sold: 0,
                 rating: 4.5,
-                images: item.product_details?.images || []
+                images: item.product_details?.images || [],
+                quantity: item.product_details?.quantity || 0
               };
             }
             productSales[productId].sold += parseInt(item.quantity) || 0;
@@ -242,15 +255,20 @@ const VendorHome: React.FC = () => {
         setBestSellingProducts(bestSelling);
       }
       
-      // Fetch products
+      // Fetch products - use general products endpoint (vendor-specific filtering will be done on backend)
       const { response: productsResponse, data: productsData } = await apiRequest('products/');
       if (productsResponse.ok && productsData) {
         const products = productsData.results || productsData || [];
-        setMyProducts(products.slice(0, 6));
-        setDashboardStats(prev => ({ ...prev, totalProducts: products.length }));
-        
+        // Filter products to only show those belonging to this vendor
+        const vendorProducts = products.filter(product =>
+          product.vendor_details?.id === vendorProfile?.id ||
+          product.vendor_id === vendorProfile?.id
+        );
+        setMyProducts(vendorProducts.slice(0, 6));
+        setDashboardStats(prev => ({ ...prev, totalProducts: vendorProducts.length }));
+
         // Filter featured products
-        const featured = products.filter(product => product.featured).slice(0, 6);
+        const featured = vendorProducts.filter(product => product.featured).slice(0, 6);
         setFeaturedProducts(featured);
       }
     } catch (error) {
@@ -399,7 +417,7 @@ const VendorHome: React.FC = () => {
                     <TrendingUp className="h-2.5 w-2.5 text-blue-600" />
                   </div>
                   <p className="text-[9px] font-medium text-gray-600">Revenue</p>
-                  <p className="text-xs font-bold text-gray-900">Rs{dashboardStats.totalRevenue.toFixed(0)}</p>
+                  <p className="text-xs font-bold text-gray-900">Rs{dashboardStats.totalRevenue.toFixed(2)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -474,8 +492,11 @@ const VendorHome: React.FC = () => {
                             alt={slider.title}
                             className="w-full h-full object-cover md:object-contain"
                             onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.parentElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              if (target.parentElement) {
+                                target.parentElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                              }
                             }}
                           />
                         ) : (

@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { apiRequest } from '@/utils/apiUtils';
 
 interface SalesTransaction {
-  id: number;
+  id: number | string;
   order_number: string;
   customer_name: string;
   amount: number;
@@ -70,16 +70,16 @@ const VendorSales: React.FC = () => {
         const salesTransactions: SalesTransaction[] = [];
         
         orders.forEach(order => {
-          // Add sale transaction for delivered orders
-          if (order.status === 'delivered') {
+          // Add sale transaction for confirmed and delivered orders
+          if (order.status === 'confirmed' || order.status === 'delivered') {
             salesTransactions.push({
               id: order.id,
               order_number: order.order_number,
               customer_name: order.customer_details?.username || order.delivery_name,
               amount: parseFloat(order.total_amount),
               type: 'sale',
-              status: 'completed',
-              created_at: order.created_at,
+              status: order.status === 'delivered' ? 'completed' : 'confirmed',
+              created_at: order.confirmed_at || order.created_at,
               items_count: order.items?.length || 0
             });
           }

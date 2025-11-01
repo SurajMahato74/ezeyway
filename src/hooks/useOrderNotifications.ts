@@ -180,14 +180,18 @@ export function useOrderNotifications() {
         // Clear persistent notification
         const { simpleNotificationService } = await import('@/services/simpleNotificationService');
         simpleNotificationService.clearNotification(orderId);
-        
+
         // Remove from notified orders tracking
         notifiedOrdersRef.current.delete(orderId);
-        
+
         setPendingOrders(prev => prev.filter(order => order.id !== orderId));
         if (pendingOrders.length <= 1) {
           setIsModalOpen(false);
         }
+
+        // Dispatch event to refresh dashboard data
+        window.dispatchEvent(new CustomEvent('orderAccepted', { detail: { orderId } }));
+
         return true;
       }
     } catch (error) {

@@ -102,22 +102,22 @@ const VendorSummary: React.FC = () => {
         const { response, data: ordersData } = await apiRequest('/vendor/orders/');
         if (response.ok && ordersData) {
           let orders = ordersData.results || ordersData || [];
-          const deliveredOrders = orders.filter(o => o.status === 'delivered');
-          
+          const confirmedAndDeliveredOrders = orders.filter(o => o.status === 'confirmed' || o.status === 'delivered');
+
           // Apply date filter
           if (dateFrom && dateTo) {
             const fromDate = new Date(dateFrom);
             const toDate = new Date(dateTo);
             toDate.setHours(23, 59, 59, 999);
-            
-            orders = deliveredOrders.filter(order => {
+
+            orders = confirmedAndDeliveredOrders.filter(order => {
               const orderDate = new Date(order.created_at);
               return orderDate >= fromDate && orderDate <= toDate;
             });
           } else {
-            orders = deliveredOrders;
+            orders = confirmedAndDeliveredOrders;
           }
-          
+
           setData(orders);
           const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
           setStats({
