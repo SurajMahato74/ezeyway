@@ -123,6 +123,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
       console.error('Error fetching featured products:', error);
     } finally {
       setLoading(false);
+      console.log('FeaturedProducts fetch completed, calling onDataLoaded');
       onDataLoaded?.();
     }
   };

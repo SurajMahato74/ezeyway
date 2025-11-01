@@ -451,9 +451,119 @@ Shop now at ezeyway - Same day delivery in Kathmandu Valley!`;
   const currentImage = product.images?.[currentImageIndex] || primaryImage;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="sticky top-0 z-50 bg-white shadow-md">
+    <>
+      {/* Temporarily removed Helmet to fix the error */}
+        <title>{product.name} - Rs {product.price} | ezeyway Kathmandu Valley</title>
+        <meta name="description" content={`${product.name} - Rs ${product.price}. ${product.short_description || product.description?.substring(0, 150) + '...'} ${product.quantity > 0 ? `In Stock (${product.quantity} available)` : 'Out of Stock'}. Same day delivery in Kathmandu Valley. Shop at ${product.vendor_name}.`} />
+        <meta name="keywords" content={`${product.name}, ${product.category}, ${product.vendor_name}, Kathmandu delivery, same day delivery Nepal, ${product.tags?.join(', ') || ''}, buy ${product.name} online, ${product.name} price Nepal, ${product.name} Kathmandu`} />
+
+        {/* Canonical URL */}
+        <link rel="canonical" href={`https://ezeyway.com/product/${product.id}`} />
+
+        {/* Open Graph */}
+        <meta property="og:title" content={`${product.name} - Rs ${product.price} | ezeyway`} />
+        <meta property="og:description" content={`${product.short_description || product.description?.substring(0, 150) + '...'}. ${product.quantity > 0 ? `In Stock (${product.quantity} available)` : 'Out of Stock'}. Same day delivery in Kathmandu Valley.`} />
+        <meta property="og:image" content={primaryImage ? getImageUrl(primaryImage.image_url) : 'https://ezeyway.com/ezy-icon.svg'} />
+        <meta property="og:url" content={`https://ezeyway.com/product/${product.id}`} />
+        <meta property="og:type" content="product" />
+        <meta property="og:site_name" content="ezeyway" />
+        <meta property="product:price:amount" content={product.price} />
+        <meta property="product:price:currency" content="NPR" />
+        <meta property="product:availability" content={product.quantity > 0 ? "in stock" : "out of stock"} />
+        <meta property="product:category" content={product.category} />
+        <meta property="product:brand" content={product.vendor_name} />
+
+        {/* Twitter */}
+        <meta name="twitter:title" content={`${product.name} - Rs ${product.price} | ezeyway`} />
+        <meta name="twitter:description" content={`${product.short_description || product.description?.substring(0, 150) + '...'}. Same day delivery in Kathmandu Valley.`} />
+        <meta name="twitter:image" content={primaryImage ? getImageUrl(primaryImage.image_url) : 'https://ezeyway.com/ezy-icon.svg'} />
+
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+        <meta name="geo.region" content="NP" />
+        <meta name="geo.placename" content="Kathmandu Valley" />
+
+        {/* Product Structured Data */}
+        <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": product.name,
+          "description": product.short_description || product.description,
+          "image": product.images?.map(img => getImageUrl(img.image_url)) || [],
+          "sku": product.id.toString(),
+          "brand": {
+            "@type": "Brand",
+            "name": product.vendor_name
+          },
+          "category": product.category,
+          "offers": {
+            "@type": "Offer",
+            "price": product.price,
+            "priceCurrency": "NPR",
+            "availability": product.quantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            "seller": {
+              "@type": "Organization",
+              "name": product.vendor_name
+            },
+            "priceValidUntil": new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          },
+          "aggregateRating": productReviews[product.id]?.total > 0 ? {
+            "@type": "AggregateRating",
+            "ratingValue": productReviews[product.id]?.rating || 0,
+            "reviewCount": productReviews[product.id]?.total || 0,
+            "bestRating": 5,
+            "worstRating": 1
+          } : undefined,
+          "additionalProperty": product.dynamic_fields ? Object.entries(product.dynamic_fields).map(([key, value]) => ({
+            "@type": "PropertyValue",
+            "name": key,
+            "value": Array.isArray(value) ? value.join(', ') : String(value)
+          })) : [],
+          "areaServed": {
+            "@type": "GeoCircle",
+            "geoMidpoint": {
+              "@type": "GeoCoordinates",
+              "latitude": "27.7172",
+              "longitude": "85.3240"
+            },
+            "geoRadius": "50000"
+          }
+        })}
+        </script>
+
+        {/* Breadcrumb Structured Data */}
+        <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://ezeyway.com"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": product.category,
+              "item": `https://ezeyway.com/category/${product.category.toLowerCase()}`
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": product.name,
+              "item": `https://ezeyway.com/product/${product.id}`
+            }
+          ]
+        })}
+        </script>
+      {/* Temporarily removed Helmet to fix the error */}
+
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="sticky top-0 z-50 bg-white shadow-md">
         <div className="flex items-center justify-between px-4 py-3">
           <Button
             variant="ghost"
@@ -846,5 +956,6 @@ Shop now at ezeyway - Same day delivery in Kathmandu Valley!`;
         </div>
       </div>
     </div>
+  </>
   );
 }

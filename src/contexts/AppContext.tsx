@@ -60,10 +60,12 @@ interface AppState {
 type AppAction =
   | { type: 'SET_USER'; payload: User | null }
   | { type: 'UPDATE_USER'; payload: Partial<User> }
+  | { type: 'SET_CART'; payload: CartItem[] }
   | { type: 'ADD_TO_CART'; payload: Product }
   | { type: 'REMOVE_FROM_CART'; payload: number }
   | { type: 'UPDATE_CART_QUANTITY'; payload: { id: number; quantity: number } }
   | { type: 'CLEAR_CART' }
+  | { type: 'SET_WISHLIST'; payload: Product[] }
   | { type: 'ADD_TO_WISHLIST'; payload: Product }
   | { type: 'REMOVE_FROM_WISHLIST'; payload: number }
   | { type: 'SET_SEARCH_QUERY'; payload: string }
@@ -91,6 +93,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         user: state.user ? { ...state.user, ...action.payload } : null
       };
+
+    case 'SET_CART':
+      return { ...state, cart: action.payload };
 
     case 'ADD_TO_CART': {
       const existingItem = state.cart.find(item => item.id === action.payload.id);
@@ -128,6 +133,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'CLEAR_CART':
       return { ...state, cart: [] };
+
+    case 'SET_WISHLIST':
+      return { ...state, wishlist: action.payload };
 
     case 'ADD_TO_WISHLIST': {
       const exists = state.wishlist.find(item => item.id === action.payload.id);
@@ -208,9 +216,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         
         // Load cart and wishlist regardless of auth status
-        state.cart = cart;
-        state.wishlist = wishlist;
-        
+        dispatch({ type: 'SET_CART', payload: cart });
+        dispatch({ type: 'SET_WISHLIST', payload: wishlist });
+
         // Force re-render
         dispatch({ type: 'SET_LOADING', payload: false });
       } catch (error) {

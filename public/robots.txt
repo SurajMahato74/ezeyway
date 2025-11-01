@@ -1,14 +1,20 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
 User-agent: *
 Allow: /
+
+# Block access to admin and API endpoints
+Disallow: /admin/
+Disallow: /api/
+Disallow: /backend/
+Disallow: /back/
+
+# Allow crawling of main content
+Allow: /search
+Allow: /category/
+Allow: /product/
+Allow: /vendor/
+
+# Sitemap
+Sitemap: https://ezeyway.com/sitemap.xml
+
+# Crawl delay for respectful crawling
+Crawl-delay: 1

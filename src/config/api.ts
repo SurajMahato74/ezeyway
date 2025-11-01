@@ -5,21 +5,37 @@ const isMobile = () => {
          window.navigator.userAgent.includes('Capacitor');
 };
 
-// Use localhost for debugging CORS issues
+// API URL Configuration - Comment out the one you DON'T want to use
+
+// For localhost development (uncomment this line):
+//const API_BASE_URL = 'http://localhost:8000/api';
+
+// For server/production (uncomment this line):
+const API_BASE_URL = 'https://ezeyway.com/api';
+
 const getBaseUrl = () => {
-  //return 'http://localhost:8000/api';
-  return 'https://ezeyway.com/api';
+  return API_BASE_URL;
 };
 
-// Alternative URLs to try if main ngrok fails
+// Alternative URLs to try if main URL fails
 export const FALLBACK_URLS = [
-  'http://localhost:8000',
-  //'https://ezeyway.com',
-  'http://10.0.2.2:8000', // Android emulator
-  'http://192.168.1.100:8000' // Local network IP (update with your actual IP)
+  // Local development
+  'http://localhost:8000/api',
+  'http://127.0.0.1:8000/api',
+  // Mobile development
+  'http://10.0.2.2:8000/api', // Android emulator
+  'http://192.168.1.100:8000/api', // Local network IP
+  // Production fallback
+  'https://ezeyway.com/api'
 ];
 
 const getWsBaseUrl = () => {
+  // Check if we're in development/localhost
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'ws://localhost:8000';
+  }
+
+  // For production domain
   return 'wss://ezeyway.com';
 };
 
@@ -28,21 +44,29 @@ export const API_CONFIG = {
   WS_BASE_URL: getWsBaseUrl()
 };
 
-// Debug logging
-console.log('API Config Debug:', {
-  isMobile: isMobile(),
-  protocol: window.location.protocol,
-  userAgent: window.navigator.userAgent,
-  baseUrl: API_CONFIG.BASE_URL,
-  wsUrl: API_CONFIG.WS_BASE_URL
-});
+// Debug logging (only in development)
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  console.log('API Config Debug:', {
+    isMobile: isMobile(),
+    protocol: window.location.protocol,
+    hostname: window.location.hostname,
+    userAgent: window.navigator.userAgent.substring(0, 50) + '...',
+    baseUrl: API_CONFIG.BASE_URL,
+    wsUrl: API_CONFIG.WS_BASE_URL
+  });
+}
 
 // Helper functions
 export const getApiUrl = (endpoint: string = '') => {
   const url = `${API_CONFIG.BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-  // Add cache busting parameter
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}_cb=${Date.now()}`;
+
+  // Only add cache busting in development
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}_cb=${Date.now()}`;
+  }
+
+  return url;
 };
 
 export const getWsUrl = (endpoint: string = '') => {
@@ -65,4 +89,4 @@ export const normalizeEndpoint = (endpoint: string): string => {
 
 // Legacy support - can be removed after migration
 export const API_BASE = `${API_CONFIG.BASE_URL}/`;
-export const API_BASE_URL = API_CONFIG.BASE_URL;  
+// export const API_BASE_URL = API_CONFIG.BASE_URL; // Commented out to avoid redeclaration

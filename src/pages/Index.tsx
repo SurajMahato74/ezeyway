@@ -19,25 +19,50 @@ const Index = () => {
   const [featuredLoaded, setFeaturedLoaded] = useState(false);
   const [latestLoaded, setLatestLoaded] = useState(false);
 
+  console.log('Index component rendered');
+
   useEffect(() => {
+    console.log('useEffect triggered - checking loading states:', { trendingLoaded, featuredLoaded, latestLoaded });
     if (trendingLoaded && featuredLoaded && latestLoaded) {
+      console.log('All components loaded, setting home data as loaded');
       setHomeDataLoaded(true);
+    } else {
+      console.log('Not all components loaded yet');
     }
   }, [trendingLoaded, featuredLoaded, latestLoaded, setHomeDataLoaded]);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Index page - Loading states:', { trendingLoaded, featuredLoaded, latestLoaded });
+  }, [trendingLoaded, featuredLoaded, latestLoaded]);
+
+  console.log('Index component about to return JSX');
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <Header />
-      <SearchBar />
-      <CategoryScroll />
-      <BannerCarousel />
-      <TrendingItems onDataLoaded={() => setTrendingLoaded(true)} />
-      <FeaturedProducts onDataLoaded={() => setFeaturedLoaded(true)} />
-      <LatestProducts onDataLoaded={() => setLatestLoaded(true)} />
-      {!CapacitorUtils.isNative() && <Footer />}
-      <FloatingChat />
-      <BottomNavigation />
-    </div>
+    <>
+      {/* Temporarily removed Helmet to fix the error */}
+
+      <div className="min-h-screen bg-background pb-24">
+        <Header />
+        <SearchBar />
+        <CategoryScroll />
+        <BannerCarousel />
+        <TrendingItems onDataLoaded={() => {
+          console.log('TrendingItems onDataLoaded callback called');
+          setTrendingLoaded(true);
+        }} />
+        <FeaturedProducts onDataLoaded={() => {
+          console.log('FeaturedProducts onDataLoaded callback called');
+          setFeaturedLoaded(true);
+        }} />
+        <LatestProducts onDataLoaded={() => {
+          console.log('LatestProducts onDataLoaded callback called');
+          setLatestLoaded(true);
+        }} />
+        {!CapacitorUtils.isNative() && <Footer />}
+        <FloatingChat />
+        <BottomNavigation />
+      </div>
+    </>
   );
 };
 

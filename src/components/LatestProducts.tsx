@@ -106,6 +106,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
       console.error('Error fetching latest products:', error);
     } finally {
       setLoading(false);
+      console.log('LatestProducts fetch completed, calling onDataLoaded');
       onDataLoaded?.();
     }
   };

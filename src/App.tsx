@@ -70,6 +70,9 @@ import VendorSummary from "./pages/vendor/VendorSummary";
 import VendorAnalytics from "./pages/vendor/VendorAnalytics";
 import { Notifications } from "./pages/Notifications";
 import AartiBirthday from "./pages/AartiBirthday";
+import KathmanduDelivery from "./pages/KathmanduDelivery";
+import LalitpurDelivery from "./pages/LalitpurDelivery";
+import BhaktapurDelivery from "./pages/BhaktapurDelivery";
 
 
 // Placeholder components for new routes
@@ -316,6 +319,12 @@ const RoutesWithAnalytics = () => {
       <Route path="/vendor/analytics" element={<VendorAnalytics />} />
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/aarti" element={<AartiBirthday />} />
+
+      {/* Local SEO Pages */}
+      <Route path="/kathmandu-delivery" element={<KathmanduDelivery />} />
+      <Route path="/lalitpur-delivery" element={<LalitpurDelivery />} />
+      <Route path="/bhaktapur-delivery" element={<BhaktapurDelivery />} />
+
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
     </Routes>
@@ -352,13 +361,16 @@ const AppWithSplash = () => {
   const [showSplash, setShowSplash] = useState(true);
 
   const handleSplashComplete = () => {
+    console.log('Splash screen completed, hiding splash');
     setShowSplash(false);
   };
 
   if (showSplash) {
+    console.log('Showing splash screen');
     return <AppSplashScreen onComplete={handleSplashComplete} />;
   }
 
+  console.log('Splash completed, rendering main app');
   return (
     <AppProvider>
       <CartProvider>

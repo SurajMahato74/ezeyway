@@ -11,6 +11,7 @@ export const AppLoadingProvider = ({ children }: { children: ReactNode }) => {
   const [isHomeDataLoaded, setIsHomeDataLoaded] = useState(false);
 
   const setHomeDataLoaded = (loaded: boolean) => {
+    console.log('setHomeDataLoaded called with:', loaded, 'Previous state:', isHomeDataLoaded);
     setIsHomeDataLoaded(loaded);
   };
 

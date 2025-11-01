@@ -175,6 +175,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
       setTrendingItems([]);
     } finally {
       setLoading(false);
+      console.log('TrendingItems fetch completed, calling onDataLoaded');
       onDataLoaded?.();
     }
   };

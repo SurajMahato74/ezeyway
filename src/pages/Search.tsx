@@ -892,9 +892,50 @@ export default function Search() {
   }, [searchResults.vendors, handleVendorClick, pagination.vendors.hasMore, loadingMore, vendorsSentinelRef]);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border/50">
+    <>
+      {/* Temporarily removed Helmet to fix the error */}
+        <title>{searchQuery ? `${searchQuery} - Search Results | ezeyway Kathmandu Valley` : "Search Products & Vendors | ezeyway Kathmandu Valley"}</title>
+        <meta name="description" content={searchQuery ? `Find ${searchQuery} and similar products with same-day delivery in Kathmandu Valley. Shop groceries, electronics, fashion & more at ezeyway.` : "Search and discover products, vendors, and services with same-day delivery in Kathmandu Valley. Find groceries, electronics, fashion, food and more."} />
+        <meta name="keywords" content={`search ${searchQuery || ''}, Kathmandu delivery, same day delivery Nepal, instant shopping Kathmandu, groceries delivery, electronics delivery, fashion delivery, food delivery Kathmandu Valley, online shopping Nepal`} />
+        <link rel="canonical" href={`https://ezeyway.com/search${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ''}`} />
+
+        {/* Open Graph */}
+        <meta property="og:title" content={searchQuery ? `${searchQuery} - Search Results | ezeyway` : "Search Products & Vendors | ezeyway Kathmandu Valley"} />
+        <meta property="og:description" content={searchQuery ? `Find ${searchQuery} and similar products with same-day delivery in Kathmandu Valley` : "Search and discover products, vendors, and services with same-day delivery in Kathmandu Valley"} />
+        <meta property="og:image" content="https://ezeyway.com/ezy-icon.svg" />
+        <meta property="og:url" content={`https://ezeyway.com/search${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ''}`} />
+        <meta property="og:type" content="website" />
+
+        {/* Twitter */}
+        <meta name="twitter:title" content={searchQuery ? `${searchQuery} - Search Results | ezeyway` : "Search Products & Vendors | ezeyway Kathmandu Valley"} />
+        <meta name="twitter:description" content={searchQuery ? `Find ${searchQuery} and similar products with same-day delivery in Kathmandu Valley` : "Search and discover products, vendors, and services with same-day delivery in Kathmandu Valley"} />
+        <meta name="twitter:image" content="https://ezeyway.com/ezy-icon.svg" />
+
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+        <meta name="geo.region" content="NP" />
+        <meta name="geo.placename" content="Kathmandu Valley" />
+
+        {/* Structured Data */}
+        <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SearchResultsPage",
+          "name": searchQuery ? `${searchQuery} Search Results` : "Product Search",
+          "description": searchQuery ? `Search results for ${searchQuery} in Kathmandu Valley` : "Search for products and vendors in Kathmandu Valley",
+          "url": `https://ezeyway.com/search${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ''}`,
+          "mainEntity": {
+            "@type": "ItemList",
+            "name": "Search Results",
+            "description": `Found ${pagination.products.total} products and ${pagination.vendors.total} vendors${searchQuery ? ` for "${searchQuery}"` : ''}`
+          }
+        })}
+        </script>
+      {/* Temporarily removed Helmet to fix the error */}
+
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <div className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center gap-3 p-3">
           <Button
             variant="ghost"
@@ -1084,8 +1125,9 @@ export default function Search() {
         </div>
       )}
 
-      <FloatingChat />
-      <BottomNavigation />
-    </div>
+        <FloatingChat />
+        <BottomNavigation />
+      </div>
+    </>
   );
 }
