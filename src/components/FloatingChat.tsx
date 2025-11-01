@@ -7,14 +7,15 @@ import { authService } from '@/services/authService';
 import { useNavigate } from 'react-router-dom';
 
 export function FloatingChat() {
-  const navigate = useNavigate();
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [conversationId, setConversationId] = useState(null);
-  const messagesEndRef = useRef(null);
+   const navigate = useNavigate();
+   const [isOpen, setIsOpen] = useState(false);
+   const [messages, setMessages] = useState([]);
+   const [newMessage, setNewMessage] = useState('');
+   const [loading, setLoading] = useState(false);
+   const [isAuthenticated, setIsAuthenticated] = useState(false);
+   const [conversationId, setConversationId] = useState(null);
+   const [currentUserId, setCurrentUserId] = useState(null);
+   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,15 +38,30 @@ export function FloatingChat() {
   const checkAuth = async () => {
     const auth = await authService.isAuthenticated();
     setIsAuthenticated(auth);
+
+    // Get current user info
+    if (auth) {
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const { response, data } = await apiRequest('/profile/');
+          if (response.ok && data) {
+            setCurrentUserId(data.id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to get user profile:', error);
+      }
+    }
   };
 
   const loadMessages = async () => {
     try {
       const { response, data } = await apiRequest('/messaging/conversations/');
       if (response.ok && data?.results) {
-        // Find conversation with superuser
-        const superuserConversation = data.results.find(conv => 
-          conv.participants?.some(p => p.user_type === 'superadmin')
+        // Find conversation with ezeywaya admin user
+        const superuserConversation = data.results.find(conv =>
+          conv.participants?.some(p => p.username === 'ezeywaya' || p.email === 'ezeywaya@gmail.com')
         );
         
         if (superuserConversation) {
@@ -75,37 +91,39 @@ export function FloatingChat() {
       
       // If no conversation exists, create one
       if (!targetConversationId) {
-        const { response: createResponse, data: createData } = await apiRequest('/messaging/conversations/', {
+        const { response: createResponse, data: createData } = await apiRequest('/messaging/conversations/create/', {
           method: 'POST',
           body: JSON.stringify({
-            recipient_type: 'superadmin',
             message: newMessage.trim()
           })
         });
-        
+
         if (createResponse.ok && createData) {
           targetConversationId = createData.conversation_id;
           setConversationId(targetConversationId);
         }
       } else {
-        // Send message to existing conversation
-        await apiRequest(`/messaging/conversations/${targetConversationId}/messages/`, {
+        // Send message to existing conversation using the send message API
+        await apiRequest('/messaging/messages/send/', {
           method: 'POST',
           body: JSON.stringify({
-            message: newMessage.trim()
+            conversation_id: targetConversationId,
+            content: newMessage.trim(),
+            message_type: 'text'
           })
         });
       }
 
       // Add message to UI immediately
+      const currentUser = { id: 'current_user', user_type: 'customer' }; // Mock current user for immediate display
       setMessages(prev => [...prev, {
         id: Date.now(),
-        message: newMessage.trim(),
-        sender: { user_type: 'customer' },
+        content: newMessage.trim(),
+        sender: currentUser,
         created_at: new Date().toISOString()
       }]);
       setNewMessage('');
-      
+
       // Refresh messages after a short delay
       setTimeout(() => loadMessages(), 1000);
     } catch (error) {
@@ -169,22 +187,25 @@ export function FloatingChat() {
                 <p>Start a conversation with our support team</p>
               </div>
             ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.sender?.user_type === 'customer' ? 'justify-end' : 'justify-start'}`}
-                >
+              messages.map((message) => {
+                const isCurrentUser = message.sender?.id === currentUserId || message.sender?.id === 'current_user';
+                return (
                   <div
-                    className={`max-w-xs px-3 py-2 rounded-lg text-sm border ${
-                      message.sender?.user_type === 'customer'
-                        ? 'bg-yellow-500 text-black border-black'
-                        : 'bg-gray-100 text-gray-800 border-gray-300'
-                    }`}
+                    key={message.id}
+                    className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                   >
-                    {message.message}
+                    <div
+                      className={`max-w-xs px-3 py-2 rounded-lg text-sm border ${
+                        isCurrentUser
+                          ? 'bg-yellow-500 text-black border-black'
+                          : 'bg-gray-100 text-gray-800 border-gray-300'
+                      }`}
+                    >
+                      {message.content || message.message}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={messagesEndRef} />
           </div>

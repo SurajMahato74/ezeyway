@@ -43,6 +43,7 @@ import CategoryItems from "./pages/CategoryItems";
 import FeaturedItems from "./pages/FeaturedItems";
 import TrendingItemsPage from "./pages/TrendingItemsPage"; // New import
 import LatestProductsPage from "./pages/LatestProductsPage";
+import Support from "./pages/Support";
 
 // Vendor Dashboard Pages
 import VendorLogin from "./pages/vendor/VendorLogin";
@@ -271,6 +272,7 @@ const RoutesWithAnalytics = () => {
       <Route path="/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
 
       <Route path="/help" element={<Help />} />
+      <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
       <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
       <Route path="/order/:orderId/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
       <Route path="/signup" element={<Signup />} />
