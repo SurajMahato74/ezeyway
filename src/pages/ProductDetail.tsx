@@ -311,7 +311,9 @@ export default function ProductDetail() {
       // Include delivery properties
       free_delivery: product.free_delivery,
       custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
-      custom_delivery_fee: product.custom_delivery_fee
+      custom_delivery_fee: product.custom_delivery_fee,
+      // Include dynamic fields
+      dynamic_fields: product.dynamic_fields || {}
     };
     
     console.log('ProductDetail - Prepared product data for buy now:', productData);

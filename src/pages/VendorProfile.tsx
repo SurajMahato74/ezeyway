@@ -64,19 +64,34 @@ export default function VendorProfile() {
       setLoading(true);
       setError(null);
       
-      // Fetch vendor profile first
-      const token = await authService.getToken();
-      const headers: any = {
-        'ngrok-skip-browser-warning': 'true'
-      };
-
-      if (token) {
-        headers['Authorization'] = `Token ${token}`;
-      }
-
-      const vendorResponse = await fetch(`${API_BASE}vendor-profiles/${vendorId}/`, {
-        headers
+      // Try public vendor endpoint first, fallback to vendor-profiles
+      let vendorResponse = await fetch(`${API_BASE}vendors/${vendorId}/`, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
       });
+      
+      // If vendor endpoint fails, try vendor-profiles with/without auth
+      if (!vendorResponse.ok) {
+        vendorResponse = await fetch(`${API_BASE}vendor-profiles/${vendorId}/`, {
+          headers: {
+            'ngrok-skip-browser-warning': 'true'
+          }
+        });
+        
+        // If still 401, try with authentication
+        if (vendorResponse.status === 401) {
+          const token = await authService.getToken();
+          if (token) {
+            vendorResponse = await fetch(`${API_BASE}vendor-profiles/${vendorId}/`, {
+              headers: {
+                'Authorization': `Token ${token}`,
+                'ngrok-skip-browser-warning': 'true'
+              }
+            });
+          }
+        }
+      }
 
       if (!vendorResponse.ok) {
         if (vendorResponse.status === 404) {

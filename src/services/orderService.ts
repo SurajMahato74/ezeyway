@@ -4,6 +4,9 @@ import { authService } from '@/services/authService';
 export interface OrderItem {
   product_id: number;
   quantity: number;
+  price?: number;
+  delivery_fee?: number;
+  product_selections?: any;
 }
 
 export interface CreateOrderData {
@@ -16,6 +19,9 @@ export interface CreateOrderData {
   delivery_instructions?: string;
   payment_method: string;
   notes?: string;
+  subtotal?: number;
+  delivery_fee?: number;
+  total_amount?: number;
 }
 
 export interface Order {

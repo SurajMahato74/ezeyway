@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Package, Clock, MapPin, Phone, Star, RotateCcw, Truck, X, Store, Upload, AlertTriangle, Eye, Share2 } from "lucide-react";
+import { ArrowLeft, Package, Clock, MapPin, Phone, Star, RotateCcw, Truck, X, Store, Upload, AlertTriangle, Eye, Share2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +62,21 @@ export default function Orders() {
   
   // Use notification system
   const { notifications, unreadCount, isConnected } = useNotificationWebSocket();
+  
+  // WebSocket order update handler
+  useEffect(() => {
+    const handleWebSocketOrderUpdate = (event) => {
+      const data = event.detail;
+      if (data.type === 'order_update' || data.type === 'order_status_change' || data.type === 'refund_update') {
+        console.log('WebSocket order update:', data);
+        // Refresh orders immediately
+        fetchOrdersRef.current(1, true);
+      }
+    };
+    
+    window.addEventListener('websocket_message', handleWebSocketOrderUpdate);
+    return () => window.removeEventListener('websocket_message', handleWebSocketOrderUpdate);
+  }, []);
   
   // Debounce timer for notifications
   const notificationDebounceRef = useRef(null);
@@ -157,6 +172,15 @@ export default function Orders() {
       }
     };
 
+    // Listen for real-time order status updates from vendor
+    const handleOrderStatusUpdate = (event: CustomEvent) => {
+      const { orderId, status, type } = event.detail;
+      console.log('Order status update received:', { orderId, status, type });
+      
+      // Immediately refresh orders to show updated status
+      fetchOrdersRef.current(1, true);
+    };
+
     // Handle visibility change to refresh orders when page becomes visible
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -166,10 +190,12 @@ export default function Orders() {
     };
 
     window.addEventListener('newNotification', handleNewNotification as EventListener);
+    window.addEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
+      window.removeEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       
       // Clear debounce timer on cleanup
@@ -358,9 +384,18 @@ export default function Orders() {
                     alt={item.product_name}
                     className="w-12 h-12 object-cover rounded-lg border"
                   />
-                  <div>
-                    <p className="text-xs text-gray-700 font-medium truncate max-w-[80px]">{item.product_name}</p>
-                    <p className="text-xs text-gray-500 truncate max-w-[80px] capitalize">{item.product_details?.category}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-800 font-medium truncate max-w-[100px]">{item.product_name}</p>
+                    <p className="text-xs text-gray-600 truncate max-w-[100px] capitalize">{item.product_details?.category}</p>
+                    {item.product_selections && Object.keys(item.product_selections).length > 0 && (
+                      <div className="text-xs text-blue-600 truncate max-w-[80px]">
+                        {Object.entries(item.product_selections).map(([key, value]) => (
+                          <div key={key} className="capitalize">
+                            {key}: {Array.isArray(value) ? value.join(', ') : value}
+                          </div>
+                        )).slice(0, 2)}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -373,24 +408,24 @@ export default function Orders() {
           </div>
 
           {/* Vendor Info */}
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-            <Store className="h-4 w-4" />
+          <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
+            <Store className="h-4 w-4 flex-shrink-0" />
             <button 
               onClick={(e) => {
                 e.stopPropagation();
                 const vendorId = order.items?.[0]?.product_details?.vendor_id;
                 if (vendorId) navigate(`/vendor/${vendorId}`);
               }}
-              className="text-blue-600 hover:underline text-xs font-medium truncate"
+              className="text-blue-600 hover:underline text-xs font-medium truncate min-w-0"
             >
               {order.items?.[0]?.product_details?.vendor_name || 'Vendor'}
             </button>
           </div>
 
           {/* Delivery Info */}
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <MapPin className="h-4 w-4" />
-            <span className="truncate">{order.delivery_address}</span>
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            <MapPin className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate text-gray-700 min-w-0">{order.delivery_address}</span>
           </div>
 
           {/* Shipping Details for Shipped Orders */}
@@ -428,13 +463,133 @@ export default function Orders() {
             </div>
           )}
 
+          {/* Action Buttons Above Line */}
+          <div className="flex justify-end gap-2 mb-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                const vendorUserId = order.vendor_details?.user;
+                if (vendorUserId) {
+                  console.log('Navigating to vendor user:', vendorUserId, 'for order:', order.id);
+                  navigate(`/messages?vendor=${vendorUserId}&order_id=${order.id}&customer_name=${encodeURIComponent(order.delivery_name || 'Customer')}`);
+                } else {
+                  console.log('No vendor user ID found for order:', order.id);
+                }
+              }}
+              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+            >
+              <MessageSquare className="h-4 w-4" />
+            </Button>
+            
+            {/* Cancel for Pending Orders */}
+            {order.status === 'pending' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedOrderId(order.id);
+                  setShowCancelDialog(true);
+                }}
+                className="text-red-600 border-red-200 hover:bg-red-50 px-3 py-1 text-xs h-8 min-w-[60px]"
+              >
+                Cancel
+              </Button>
+            )}
+            
+            {/* Return for Delivered Orders */}
+            {order.status === 'delivered' && 
+             !order.refunds?.some(r => ['requested', 'approved', 'rejected', 'appeal', 'processed', 'completed'].includes(r.status)) &&
+             (() => {
+               const deliveredDate = new Date(order.delivered_at);
+               const now = new Date();
+               const hoursDiff = (now - deliveredDate) / (1000 * 60 * 60);
+               return hoursDiff <= 24;
+             })() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedOrderForReturn(order);
+                  setShowReturnSheet(true);
+                }}
+                className="text-orange-600 border-orange-200 hover:bg-orange-50 px-3 py-1 text-xs h-8"
+              >
+                Return
+              </Button>
+            )}
+            
+            {/* Review for Delivered Orders */}
+            {order.status === 'delivered' && !order.review && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedOrderForReview(order);
+                  setRating(0);
+                  setReviewText('');
+                  setIsEditingReview(false);
+                  setShowReviewDialog(true);
+                }}
+                className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 px-3 py-1 text-xs h-8"
+              >
+                <Star className="h-3 w-3 mr-1" />
+                Review
+              </Button>
+            )}
+
+            {/* Edit Review for Delivered Orders with existing review */}
+            {order.status === 'delivered' && order.review && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedOrderForReview(order);
+                  setRating(order.review.overall_rating);
+                  setReviewText(order.review.review_text || '');
+                  setIsEditingReview(true);
+                  setShowReviewDialog(true);
+                }}
+                className="text-blue-600 border-blue-200 hover:bg-blue-50 px-3 py-1 text-xs h-8"
+              >
+                <Star className="h-3 w-3 mr-1" />
+                Edit
+              </Button>
+            )}
+          </div>
+
           {/* Total Amount */}
           <div className="flex justify-between items-center pt-2 border-t">
-            <span className="font-semibold text-lg text-emerald-600">
-              Rs {parseFloat(order.total_amount).toFixed(2)}
-            </span>
-            <div className="flex gap-2">
-
+            {(() => {
+              // Calculate total delivery fee from items
+              const itemDeliveryFee = order.items?.reduce((total, item) => {
+                return total + parseFloat(item.delivery_fee || 0);
+              }, 0) || 0;
+              
+              const orderDeliveryFee = parseFloat(order.delivery_fee || 0);
+              const totalDeliveryFee = Math.max(itemDeliveryFee, orderDeliveryFee);
+              const orderTotal = parseFloat(order.total_amount || 0);
+              const grandTotal = orderTotal + totalDeliveryFee;
+              
+              return (
+                <div className="flex flex-col">
+                  <span className="font-semibold text-lg text-emerald-600">
+                    Rs {grandTotal.toFixed(2)}
+                  </span>
+                  {totalDeliveryFee > 0 && (
+                    <span className="text-xs text-gray-500">
+                      (Bill: Rs {orderTotal.toFixed(2)} + Delivery: Rs {totalDeliveryFee.toFixed(2)})
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+            <div className="flex gap-2 flex-wrap">
 
               {/* Mark as Received for Shipped Orders */}
               {order.status === 'out_for_delivery' && (
@@ -460,6 +615,21 @@ export default function Orders() {
                             o.id === order.id ? {...o, status: 'delivered', delivered_at: new Date().toISOString()} : o
                           )
                         );
+                        
+                        // Send WebSocket notification
+                        if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                          window.websocket.send(JSON.stringify({
+                            type: 'order_update',
+                            action: 'order_received',
+                            order_id: order.id,
+                            timestamp: new Date().toISOString()
+                          }));
+                        }
+                        
+                        // Dispatch order status update event
+                        window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+                          detail: { orderId: order.id, status: 'delivered', type: 'customer_received' }
+                        }));
                       }
                     } catch (error) {
                       console.error('Error marking as received:', error);
@@ -487,96 +657,9 @@ export default function Orders() {
                 </Button>
               )}
 
-              {/* Cancel for Pending Orders */}
-              {order.status === 'pending' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedOrderId(order.id);
-                    setShowCancelDialog(true);
-                  }}
-                  className="text-red-600 border-red-200 hover:bg-red-50"
-                >
-                  Cancel
-                </Button>
-              )}
 
-              {/* Return for Delivered Orders - within 24 hours and no existing return */}
-              {order.status === 'delivered' && 
-               !order.refunds?.some(r => ['requested', 'approved', 'rejected', 'appeal', 'processed', 'completed'].includes(r.status)) &&
-               (() => {
-                 const deliveredDate = new Date(order.delivered_at);
-                 const now = new Date();
-                 const hoursDiff = (now - deliveredDate) / (1000 * 60 * 60);
-                 return hoursDiff <= 24;
-               })() && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedOrderForReturn(order);
-                    setShowReturnSheet(true);
-                  }}
-                  className="text-orange-600 border-orange-200 hover:bg-orange-50"
-                >
-                  Return
-                </Button>
-              )}
-              
-              {/* Show return deadline info */}
-              {order.status === 'delivered' && 
-               !order.refunds?.some(r => ['requested', 'approved', 'rejected', 'appeal', 'processed', 'completed'].includes(r.status)) &&
-               (() => {
-                 const deliveredDate = new Date(order.delivered_at);
-                 const now = new Date();
-                 const hoursDiff = (now - deliveredDate) / (1000 * 60 * 60);
-                 return hoursDiff > 24;
-               })() && (
-                <div className="text-xs text-gray-500 mt-1">
-                  Return window expired
-                </div>
-              )}
 
-              {/* Review for Delivered Orders */}
-              {order.status === 'delivered' && !order.review && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedOrderForReview(order);
-                    setRating(0);
-                    setReviewText('');
-                    setIsEditingReview(false);
-                    setShowReviewDialog(true);
-                  }}
-                  className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                >
-                  <Star className="h-4 w-4" />
-                </Button>
-              )}
 
-              {/* Edit Review for Delivered Orders with existing review */}
-              {order.status === 'delivered' && order.review && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedOrderForReview(order);
-                    setRating(order.review.overall_rating);
-                    setReviewText(order.review.review_text || '');
-                    setIsEditingReview(true);
-                    setShowReviewDialog(true);
-                  }}
-                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                >
-                  Edit Review
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -880,13 +963,72 @@ export default function Orders() {
                             
                             {refund.status === 'completed' && (
                               <div className="bg-emerald-50 border border-emerald-200 rounded p-2 mt-2">
-                                <p className="text-xs text-emerald-800 font-medium">✅ Refund Completed</p>
+                                <p className="text-xs text-emerald-800 font-medium mb-2">✅ Refund Completed</p>
+                                <p className="text-xs text-gray-600 mb-2">*Delivery charges are not included in refund amount</p>
+                                
+                                {!refund.customer_received_refund && !refund.support_contacted && (
+                                  <div className="flex flex-col gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="w-full text-orange-600 border-orange-200 hover:bg-orange-50"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const message = `🚨 REFUND ISSUE REPORT\n\nOrder: #${order.order_number}\nRefund ID: ${refund.id}\nAmount: Rs ${refund.requested_amount}\nStatus: ${refund.status}\nMethod: ${refund.refund_method}\n\nIssue: I have not received my refund or there is an issue with the refund process. Please help resolve this matter.`;
+                                        navigate(`/?support_message=${encodeURIComponent(message)}`);
+                                      }}
+                                    >
+                                      Report & Contact Support
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="w-full text-green-600 border-green-200 hover:bg-green-50"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          const { response } = await apiRequest(`/refunds/${refund.id}/mark-received/`, {
+                                            method: 'POST'
+                                          });
+                                          
+                                          if (response.ok) {
+                                            toast({
+                                              title: "Marked as Received",
+                                              description: "Thank you for confirming receipt of your refund.",
+                                            });
+                                            fetchOrders(1, true);
+                                          }
+                                        } catch (error) {
+                                          toast({
+                                            title: "Error",
+                                            description: "Failed to mark refund as received.",
+                                            variant: "destructive",
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      Mark Received
+                                    </Button>
+                                  </div>
+                                )}
+                                
+                                {refund.customer_received_refund && (
+                                  <p className="text-xs text-green-700 font-medium">✓ Marked as received on {new Date(refund.customer_received_at).toLocaleDateString()}</p>
+                                )}
+                                
+                                {refund.support_contacted && (
+                                  <div className="text-xs text-orange-700">
+                                    <p className="font-medium">⚠️ Support contacted on {new Date(refund.support_contacted_at).toLocaleDateString()}</p>
+                                    <p className="mt-1 bg-white p-1 rounded">{refund.support_notes}</p>
+                                  </div>
+                                )}
                               </div>
                             )}
                             
                             {refund.status === 'processed' && (
                               <div className="bg-blue-50 border border-blue-200 rounded p-2 mt-2">
                                 <p className="text-xs text-blue-800 font-medium">💰 Money Transferred</p>
+                                <p className="text-xs text-gray-600">*Delivery charges are not included in refund amount</p>
                               </div>
                             )}
                             
@@ -918,6 +1060,22 @@ export default function Orders() {
                                         description: "Your appeal has been submitted for review.",
                                       });
                                       fetchOrders(1, true);
+                                      
+                                      // Send WebSocket notification
+                                      if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                                        window.websocket.send(JSON.stringify({
+                                          type: 'refund_update',
+                                          action: 'appeal_submitted',
+                                          order_id: order.id,
+                                          refund_id: refund.id,
+                                          timestamp: new Date().toISOString()
+                                        }));
+                                      }
+                                      
+                                      // Dispatch order status update event
+                                      window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+                                        detail: { orderId: order.id, status: 'appeal_submitted', type: 'appeal' }
+                                      }));
                                     }
                                   } catch (error) {
                                     toast({
@@ -935,9 +1093,21 @@ export default function Orders() {
                         ))}
 
                         <div className="flex justify-between items-center pt-2 border-t">
-                          <span className="font-semibold text-lg text-emerald-600">
-                            Rs {parseFloat(order.total_amount).toFixed(2)}
-                          </span>
+                          {(() => {
+                            const itemDeliveryFee = order.items?.reduce((total, item) => {
+                              return total + parseFloat(item.delivery_fee || 0);
+                            }, 0) || 0;
+                            const orderDeliveryFee = parseFloat(order.delivery_fee || 0);
+                            const totalDeliveryFee = Math.max(itemDeliveryFee, orderDeliveryFee);
+                            const orderTotal = parseFloat(order.total_amount || 0);
+                            const grandTotal = orderTotal + totalDeliveryFee;
+                            
+                            return (
+                              <span className="font-semibold text-lg text-emerald-600">
+                                Rs {grandTotal.toFixed(2)}
+                              </span>
+                            );
+                          })()}
                           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => {
                             e.stopPropagation();
                             setSelectedOrderDetail(order);
@@ -1037,9 +1207,21 @@ export default function Orders() {
 
                       {/* Total Amount */}
                       <div className="flex justify-between items-center pt-3 border-t mt-3">
-                        <span className="font-semibold text-lg text-emerald-600">
-                          Rs {parseFloat(order.total_amount).toFixed(2)}
-                        </span>
+                        {(() => {
+                          const itemDeliveryFee = order.items?.reduce((total, item) => {
+                            return total + parseFloat(item.delivery_fee || 0);
+                          }, 0) || 0;
+                          const orderDeliveryFee = parseFloat(order.delivery_fee || 0);
+                          const totalDeliveryFee = Math.max(itemDeliveryFee, orderDeliveryFee);
+                          const orderTotal = parseFloat(order.total_amount || 0);
+                          const grandTotal = orderTotal + totalDeliveryFee;
+                          
+                          return (
+                            <span className="font-semibold text-lg text-emerald-600">
+                              Rs {grandTotal.toFixed(2)}
+                            </span>
+                          );
+                        })()}
                         <Button
                           variant="outline"
                           size="sm"
@@ -1193,11 +1375,19 @@ export default function Orders() {
                     });
                     
                     if (response.ok && reviewData) {
+                      // Update local state immediately
+                      const updatedReview = {
+                        overall_rating: rating,
+                        review_text: reviewText,
+                        created_at: new Date().toISOString()
+                      };
+                      
                       setOrders(prevOrders => 
                         prevOrders.map(o => 
-                          o.id === selectedOrderForReview.id ? {...o, review: reviewData.review} : o
+                          o.id === selectedOrderForReview.id ? {...o, review: updatedReview} : o
                         )
                       );
+                      
                       setShowReviewDialog(false);
                       setRating(0);
                       setReviewText('');
@@ -1206,6 +1396,21 @@ export default function Orders() {
                         title: isEditingReview ? "Review Updated" : "Review Submitted",
                         description: "Thank you for your feedback!",
                       });
+                      
+                      // Send WebSocket notification
+                      if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                        window.websocket.send(JSON.stringify({
+                          type: 'order_update',
+                          action: 'review_submitted',
+                          order_id: selectedOrderForReview.id,
+                          timestamp: new Date().toISOString()
+                        }));
+                      }
+                      
+                      // Dispatch order status update event
+                      window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+                        detail: { orderId: selectedOrderForReview.id, status: 'reviewed', type: 'review' }
+                      }));
                     }
                   } catch (error) {
                     console.error('Error submitting review:', error);
@@ -1381,6 +1586,7 @@ export default function Orders() {
                     <li>• Returns are processed within 3-5 business days</li>
                     <li>• Refund will be processed after vendor approval</li>
                     <li>• You can appeal if your return is rejected</li>
+                    <li>• <strong>Delivery charges are not included in refund amount</strong></li>
                   </ul>
                 </div>
               </div>
@@ -1435,7 +1641,7 @@ export default function Orders() {
                     formData.append(`evidence_${index}`, file);
                   });
                   
-                  const response = await fetch(`${API_CONFIG.BASE_URL}/api/orders/${selectedOrderForReturn.id}/return/`, {
+                  const response = await fetch(`${API_CONFIG.BASE_URL}/orders/${selectedOrderForReturn.id}/return/`, {
                     method: 'POST',
                     headers: {
                       'Authorization': `Token ${token}`,
@@ -1484,19 +1690,47 @@ export default function Orders() {
                 <h3 className="font-semibold text-sm mb-2">Order Items</h3>
                 <div className="space-y-2">
                   {selectedOrderDetail.items?.map((item, index) => (
-                    <div key={index} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
-                      <div className="flex items-center gap-2">
+                    <div key={index} className="py-1 border-b border-gray-100 last:border-0">
+                      <div className="flex items-center gap-2 mb-2">
                         <img
                           src={item.product_details?.images?.[0]?.image_url || '/placeholder-product.jpg'}
                           alt={item.product_name}
                           className="w-8 h-8 object-cover rounded"
                         />
-                        <div>
-                          <p className="text-sm font-medium">{item.product_name}</p>
-                          <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 break-words">{item.product_name}</p>
+                          <p className="text-xs text-gray-600">Qty: {item.quantity}</p>
+                          <p className="text-sm font-semibold text-emerald-600 mt-1">Rs {item.total_price}</p>
                         </div>
                       </div>
-                      <p className="text-sm font-semibold">Rs {item.total_price}</p>
+                      {item.product_selections && Object.keys(item.product_selections).length > 0 && (
+                        <div className="text-xs text-blue-600 mt-2 bg-blue-50 p-2 rounded border border-blue-200">
+                          <div className="font-medium text-blue-800 mb-1">Selected Variants:</div>
+                          {(() => {
+                            const selections = item.product_selections;
+                            const keys = Object.keys(selections);
+                            if (keys.length === 0) return null;
+                            
+                            // Get the first key to determine array length
+                            const firstKey = keys[0];
+                            const firstArray = Array.isArray(selections[firstKey]) ? selections[firstKey] : [selections[firstKey]];
+                            
+                            return firstArray.map((_, index) => (
+                              <div key={index} className="mb-1 p-1 bg-white rounded border">
+                                <span className="font-medium text-blue-900">Item {index + 1}:</span>
+                                {keys.map(key => {
+                                  const values = Array.isArray(selections[key]) ? selections[key] : [selections[key]];
+                                  return (
+                                    <span key={key} className="ml-2 capitalize">
+                                      {key}: <span className="font-medium">{values[index] || values[0]}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ));
+                          })()} 
+                        </div>
+                      )}
                     </div>
                   )) || []}
                 </div>
@@ -1516,40 +1750,60 @@ export default function Orders() {
               <div className="bg-white border rounded-lg p-3">
                 <h3 className="font-semibold text-sm mb-3">Payment Details</h3>
                 
-                <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 mb-3">
-                  <h4 className="font-semibold text-emerald-800 text-sm mb-2">Bill Amount (Paid via {selectedOrderDetail.payment_method})</h4>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span>Subtotal:</span>
-                      <span>Rs {selectedOrderDetail.subtotal}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Tax:</span>
-                      <span>Rs {selectedOrderDetail.tax_amount}</span>
-                    </div>
-                    <hr className="my-1" />
-                    <div className="flex justify-between font-semibold">
-                      <span>Bill Total (Paid):</span>
-                      <span className="text-emerald-600">Rs {(parseFloat(selectedOrderDetail.subtotal) + parseFloat(selectedOrderDetail.tax_amount)).toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mb-3">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h4 className="font-bold text-orange-800 text-base">Delivery Fee</h4>
-                      <p className="text-xs text-orange-700">{selectedOrderDetail.status === 'delivered' ? 'Paid on delivery' : 'Pay on delivery'}</p>
-                    </div>
-                    <span className="font-bold text-lg text-orange-600">Rs {parseFloat(selectedOrderDetail.delivery_fee).toFixed(2)}</span>
-                  </div>
-                </div>
-                
-                <hr className="my-2" />
-                <div className="flex justify-between font-semibold text-sm">
-                  <span>Grand Total:</span>
-                  <span>Rs {selectedOrderDetail.total_amount}</span>
-                </div>
+                {(() => {
+                  // Calculate total delivery fee from items
+                  const itemDeliveryFee = selectedOrderDetail.items?.reduce((total, item) => {
+                    return total + parseFloat(item.delivery_fee || 0);
+                  }, 0) || 0;
+                  
+                  const orderDeliveryFee = parseFloat(selectedOrderDetail.delivery_fee || 0);
+                  const totalDeliveryFee = Math.max(itemDeliveryFee, orderDeliveryFee);
+                  const subtotal = parseFloat(selectedOrderDetail.subtotal || 0);
+                  const taxAmount = parseFloat(selectedOrderDetail.tax_amount || 0);
+                  const billTotal = subtotal + taxAmount;
+                  const grandTotal = billTotal + totalDeliveryFee;
+                  
+                  return (
+                    <>
+                      <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 mb-3">
+                        <h4 className="font-semibold text-emerald-800 text-sm mb-2">Bill Amount (Paid via {selectedOrderDetail.payment_method})</h4>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span>Subtotal:</span>
+                            <span>Rs {subtotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Tax:</span>
+                            <span>Rs {taxAmount.toFixed(2)}</span>
+                          </div>
+                          <hr className="my-1" />
+                          <div className="flex justify-between font-semibold">
+                            <span>Bill Total (Paid):</span>
+                            <span className="text-emerald-600">Rs {billTotal.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {totalDeliveryFee > 0 && (
+                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mb-3">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h4 className="font-bold text-orange-800 text-base">Delivery Fee</h4>
+                              <p className="text-xs text-orange-700">{selectedOrderDetail.status === 'delivered' ? 'Paid on delivery' : 'Pay on delivery'}</p>
+                            </div>
+                            <span className="font-bold text-lg text-orange-600">Rs {totalDeliveryFee.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <hr className="my-2" />
+                      <div className="flex justify-between font-semibold text-sm">
+                        <span>Grand Total:</span>
+                        <span>Rs {grandTotal.toFixed(2)}</span>
+                      </div>
+                    </>
+                  );
+                })()}
                 
                 <div className="mt-3 pt-2 border-t space-y-1 text-xs">
                   <div className="flex justify-between">
@@ -1702,6 +1956,76 @@ export default function Orders() {
                       </div>
                     )}
                     
+                    {refund.status === 'completed' && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded p-2 mt-2">
+                        <p className="text-xs text-emerald-800 font-medium mb-2">✅ Refund Completed</p>
+                        <p className="text-xs text-gray-600 mb-2">*Delivery charges are not included in refund amount</p>
+                        
+                        {!refund.customer_received_refund && !refund.support_contacted && (
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full text-orange-600 border-orange-200 hover:bg-orange-50"
+                              onClick={() => {
+                                const message = `🚨 REFUND ISSUE REPORT\n\nOrder: #${selectedOrderDetail.order_number}\nRefund ID: ${refund.id}\nAmount: Rs ${refund.requested_amount}\nStatus: ${refund.status}\nMethod: ${refund.refund_method}\n\nIssue: I have not received my refund or there is an issue with the refund process. Please help resolve this matter.`;
+                                navigate(`/?support_message=${encodeURIComponent(message)}`);
+                              }}
+                            >
+                              Report & Contact Support
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full text-green-600 border-green-200 hover:bg-green-50"
+                              onClick={async () => {
+                                try {
+                                  const { response } = await apiRequest(`/refunds/${refund.id}/mark-received/`, {
+                                    method: 'POST'
+                                  });
+                                  
+                                  if (response.ok) {
+                                    toast({
+                                      title: "Marked as Received",
+                                      description: "Thank you for confirming receipt of your refund.",
+                                    });
+                                    fetchOrders(1, true);
+                                    setShowOrderDetail(false);
+                                  }
+                                } catch (error) {
+                                  toast({
+                                    title: "Error",
+                                    description: "Failed to mark refund as received.",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                            >
+                              Mark Received
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {refund.customer_received_refund && (
+                          <p className="text-xs text-green-700 font-medium">✓ Marked as received on {new Date(refund.customer_received_at).toLocaleDateString()}</p>
+                        )}
+                        
+                        {refund.support_contacted && (
+                          <div className="text-xs text-orange-700">
+                            <p className="font-medium">⚠️ Support contacted on {new Date(refund.support_contacted_at).toLocaleDateString()}</p>
+                            <p className="mt-1 bg-white p-1 rounded">{refund.support_notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {refund.status === 'processed' && (
+                      <div className="bg-blue-50 border border-blue-200 rounded p-2 mt-2">
+                        <p className="text-xs text-blue-800 font-medium">💰 Money Transferred</p>
+                        <p className="text-xs text-gray-600">*Delivery charges are not included in refund amount</p>
+                      </div>
+                    )}
+                    
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 border-t pt-2">
                       <div>
                         <p>Requested: {new Date(refund.requested_at).toLocaleDateString()}</p>
@@ -1718,7 +2042,7 @@ export default function Orders() {
                       )}
                       {refund.completed_at && (
                         <div>
-                          <p>Completed: {new Date(refund.completed_at).toLocaleDateString()}</p>
+                          <p>Completed: {new Date(refund.completed_at).toLocaleDateDate()}</p>
                         </div>
                       )}
                       {refund.appeal_at && (

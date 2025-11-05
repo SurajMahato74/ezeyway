@@ -39,6 +39,21 @@ const VendorOrders: React.FC = () => {
   // Use notification system
   const { notifications, unreadCount, isConnected } = useNotificationWebSocket();
   
+  // WebSocket order update handler
+  useEffect(() => {
+    const handleWebSocketOrderUpdate = (event) => {
+      const data = event.detail;
+      if (data.type === 'order_update' || data.type === 'order_status_change' || data.type === 'refund_update') {
+        console.log('WebSocket order update:', data);
+        // Refresh orders immediately
+        fetchVendorOrders();
+      }
+    };
+    
+    window.addEventListener('websocket_message', handleWebSocketOrderUpdate);
+    return () => window.removeEventListener('websocket_message', handleWebSocketOrderUpdate);
+  }, []);
+  
   // Mobile detection
   useEffect(() => {
     const checkMobile = () => {
@@ -63,7 +78,24 @@ const VendorOrders: React.FC = () => {
       }
     };
 
+    // Listen for real-time order status updates from customer
+    const handleOrderStatusUpdate = (event: CustomEvent) => {
+      const { orderId, status, type } = event.detail;
+      console.log('Order status update received:', { orderId, status, type });
+      
+      // For review updates, refresh immediately to show new review
+      if (type === 'review') {
+        setTimeout(() => {
+          fetchVendorOrders();
+        }, 500); // Small delay to ensure API is updated
+      } else {
+        // Immediately refresh orders to show updated status
+        fetchVendorOrders();
+      }
+    };
+
     window.addEventListener('newNotification', handleNewNotification as EventListener);
+    window.addEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
     
     // Disable auto-refresh on mobile for better performance
     let interval;
@@ -75,6 +107,7 @@ const VendorOrders: React.FC = () => {
     
     return () => {
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
+      window.removeEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
       if (interval) clearInterval(interval);
     };
   }, [isMobile]);
@@ -299,6 +332,15 @@ const VendorOrders: React.FC = () => {
                 <div>
                   <p className="text-xs text-gray-700 font-medium truncate max-w-[80px]">{item.product_name}</p>
                   <p className="text-xs text-gray-500 truncate max-w-[80px] capitalize">{item.product_details?.category || 'Item'}</p>
+                  {item.product_selections && Object.keys(item.product_selections).length > 0 && (
+                    <div className="text-xs text-blue-600 truncate max-w-[80px] mt-1">
+                      {Object.entries(item.product_selections).map(([key, value]) => (
+                        <div key={key} className="capitalize">
+                          {key}: {Array.isArray(value) ? value.join(', ') : value}
+                        </div>
+                      )).slice(0, 1)}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -310,51 +352,32 @@ const VendorOrders: React.FC = () => {
           </div>
         </div>
 
-        {/* Customer Info with Message Button */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-gray-600 flex-1 min-w-0">
-            <User className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate">{order.customer_details?.username || order.delivery_name}</span>
-          </div>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="h-8 w-8 p-0 ml-2 flex-shrink-0" 
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                const customerId = order.customer_details?.id;
-                if (customerId) {
-                  // Navigate to messages page and trigger conversation creation
-                  window.location.href = `/vendor/messages?start_conversation=${customerId}&customer_name=${encodeURIComponent(order.customer_details?.username || order.delivery_name)}&order_id=${order.id}`;
-                } else {
-                  // Fallback: navigate to messages with customer info
-                  const customerPhone = order.customer_details?.phone_number || order.delivery_phone;
-                  const customerName = order.customer_details?.username || order.delivery_name;
-                  window.location.href = `/vendor/messages?customer_phone=${encodeURIComponent(customerPhone)}&customer_name=${encodeURIComponent(customerName)}&order_id=${order.id}`;
-                }
-              } catch (error) {
-                console.error('Error opening conversation:', error);
-              }
-            }}
-          >
-            <MessageCircle className="h-5 w-5" />
-          </Button>
+        {/* Customer Info */}
+        <div className="flex items-center gap-1 text-sm text-gray-600">
+          <User className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate text-gray-700 min-w-0">{order.customer_details?.username || order.delivery_name}</span>
         </div>
 
         {/* Delivery Info */}
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <MapPin className="h-4 w-4" />
-          <span className="truncate">{order.delivery_address}</span>
+        <div className="flex items-center gap-1 text-sm text-gray-600">
+          <MapPin className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate text-gray-700 min-w-0">{order.delivery_address}</span>
         </div>
 
         {/* Review indicator for delivered orders */}
         {order.status === 'delivered' && order.review && (
-          <div className="flex items-center gap-2 text-sm">
-            <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-            <span className="text-yellow-600 font-medium text-xs">
-              Rated {order.review.overall_rating}/5
-            </span>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+            <div className="flex items-center gap-2 text-sm mb-1">
+              <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+              <span className="text-yellow-600 font-medium text-xs">
+                Customer Rating: {order.review.overall_rating}/5
+              </span>
+            </div>
+            {order.review.review_text && (
+              <p className="text-xs text-yellow-700 bg-white p-2 rounded">
+                "{order.review.review_text}"
+              </p>
+            )}
           </div>
         )}
 
@@ -385,11 +408,58 @@ const VendorOrders: React.FC = () => {
           </div>
         )}
 
+        {/* Message Button Above Line */}
+        <div className="flex justify-end gap-2 mb-2">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-8 w-8 p-0 flex-shrink-0" 
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                const customerId = order.customer_details?.id;
+                if (customerId) {
+                  window.location.href = `/vendor/messages?start_conversation=${customerId}&customer_name=${encodeURIComponent(order.customer_details?.username || order.delivery_name)}&order_id=${order.id}`;
+                } else {
+                  const customerPhone = order.customer_details?.phone_number || order.delivery_phone;
+                  const customerName = order.customer_details?.username || order.delivery_name;
+                  window.location.href = `/vendor/messages?customer_phone=${encodeURIComponent(customerPhone)}&customer_name=${encodeURIComponent(customerName)}&order_id=${order.id}`;
+                }
+              } catch (error) {
+                console.error('Error opening conversation:', error);
+              }
+            }}
+          >
+            <MessageCircle className="h-4 w-4" />
+          </Button>
+        </div>
+
         {/* Total Amount */}
         <div className="flex justify-between items-center pt-2 border-t">
-          <span className="font-semibold text-lg text-emerald-600">
-            ₹{parseFloat(order.total_amount).toFixed(2)}
-          </span>
+          {(() => {
+            // Calculate total delivery fee from items
+            const itemDeliveryFee = order.items?.reduce((total, item) => {
+              return total + parseFloat(item.delivery_fee || 0);
+            }, 0) || 0;
+            
+            const orderDeliveryFee = parseFloat(order.delivery_fee || 0);
+            const totalDeliveryFee = Math.max(itemDeliveryFee, orderDeliveryFee);
+            const orderTotal = parseFloat(order.total_amount || 0);
+            const grandTotal = orderTotal + totalDeliveryFee;
+            
+            return (
+              <div className="flex flex-col">
+                <span className="font-semibold text-lg text-emerald-600">
+                  ₹{grandTotal.toFixed(2)}
+                </span>
+                {totalDeliveryFee > 0 && (
+                  <span className="text-xs text-gray-500">
+                    (Bill: ₹{orderTotal.toFixed(2)} + Delivery: ₹{totalDeliveryFee.toFixed(2)})
+                  </span>
+                )}
+              </div>
+            );
+          })()}
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelectedOrder(order)}>
               <Eye className="h-3 w-3 mr-1" />
@@ -413,6 +483,21 @@ const VendorOrders: React.FC = () => {
                       
                       // Trigger wallet refresh event
                       window.dispatchEvent(new CustomEvent('walletUpdated'));
+                      
+                      // Send WebSocket notification
+                      if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                        window.websocket.send(JSON.stringify({
+                          type: 'order_update',
+                          action: 'order_accepted',
+                          order_id: order.id,
+                          timestamp: new Date().toISOString()
+                        }));
+                      }
+                      
+                      // Dispatch order status update event
+                      window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+                        detail: { orderId: order.id, status: 'confirmed', type: 'accept' }
+                      }));
                     }
                   } catch (error) {
                     console.error('Error accepting order:', error);
@@ -491,6 +576,11 @@ const VendorOrders: React.FC = () => {
                     
                     if (response.ok) {
                       fetchVendorOrders();
+                      
+                      // Dispatch order status update event
+                      window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+                        detail: { orderId: order.id, status: 'delivered', type: 'deliver' }
+                      }));
                     }
                   } catch (error) {
                     console.error('Error marking as delivered:', error);
@@ -691,21 +781,18 @@ const VendorOrders: React.FC = () => {
                                   variant="outline"
                                   className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
                                   onClick={async () => {
-                                    const reason = prompt('Reason for rejection:');
-                                    if (!reason) return;
-                                    
+                                    const reason = window.prompt('Reason for rejection:');
+                                    if (!reason || reason.trim() === '') return;
+
                                     try {
-                                      const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
+                                      const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
                                         method: 'POST',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                        },
                                         body: JSON.stringify({
                                           action: 'reject',
-                                          admin_notes: reason
+                                          admin_notes: reason.trim()
                                         })
                                       });
-                                      
+
                                       if (response.ok) {
                                         fetchVendorOrders();
                                       }
@@ -721,11 +808,8 @@ const VendorOrders: React.FC = () => {
                                   className="flex-1 bg-green-600 hover:bg-green-700"
                                   onClick={async () => {
                                     try {
-                                      const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
+                                      const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
                                         method: 'POST',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                        },
                                         body: JSON.stringify({
                                           action: 'approve',
                                           approved_amount: refund.requested_amount,
@@ -754,7 +838,7 @@ const VendorOrders: React.FC = () => {
                                   className="w-full bg-blue-600 hover:bg-blue-700"
                                   onClick={async () => {
                                     try {
-                                      const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
+                                      const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
                                         method: 'POST',
                                         headers: {
                                           'Content-Type': 'application/json',
@@ -767,6 +851,27 @@ const VendorOrders: React.FC = () => {
                                       
                                       if (response.ok) {
                                         fetchVendorOrders();
+                                        
+                                        // Send WebSocket notification
+                                        if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                                          window.websocket.send(JSON.stringify({
+                                            type: 'refund_update',
+                                            action: 'refund_processed',
+                                            order_id: order.id,
+                                            refund_id: refund.id,
+                                            timestamp: new Date().toISOString()
+                                          }));
+                                        }
+                                        
+                                        // Dispatch event
+                                        window.dispatchEvent(new CustomEvent('websocket_message', {
+                                          detail: {
+                                            type: 'refund_update',
+                                            action: 'refund_processed',
+                                            order_id: order.id,
+                                            refund_id: refund.id
+                                          }
+                                        }));
                                       }
                                     } catch (error) {
                                       console.error('Error processing refund:', error);
@@ -811,7 +916,7 @@ const VendorOrders: React.FC = () => {
                                   className="w-full bg-green-600 hover:bg-green-700"
                                   onClick={async () => {
                                     try {
-                                      const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
+                                      const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
                                         method: 'POST',
                                         headers: {
                                           'Content-Type': 'application/json',
@@ -824,6 +929,27 @@ const VendorOrders: React.FC = () => {
                                       
                                       if (response.ok) {
                                         fetchVendorOrders();
+                                        
+                                        // Send WebSocket notification
+                                        if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                                          window.websocket.send(JSON.stringify({
+                                            type: 'refund_update',
+                                            action: 'refund_completed',
+                                            order_id: order.id,
+                                            refund_id: refund.id,
+                                            timestamp: new Date().toISOString()
+                                          }));
+                                        }
+                                        
+                                        // Dispatch event
+                                        window.dispatchEvent(new CustomEvent('websocket_message', {
+                                          detail: {
+                                            type: 'refund_update',
+                                            action: 'refund_completed',
+                                            order_id: order.id,
+                                            refund_id: refund.id
+                                          }
+                                        }));
                                       }
                                     } catch (error) {
                                       console.error('Error completing refund:', error);
@@ -845,11 +971,8 @@ const VendorOrders: React.FC = () => {
                                     className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
                                     onClick={async () => {
                                       try {
-                                        const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
+                                        const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
                                           method: 'POST',
-                                          headers: {
-                                            'Content-Type': 'application/json',
-                                          },
                                           body: JSON.stringify({
                                             action: 'reject',
                                             admin_notes: 'Appeal rejected - final decision'
@@ -858,6 +981,27 @@ const VendorOrders: React.FC = () => {
                                         
                                         if (response.ok) {
                                           fetchVendorOrders();
+                                          
+                                          // Send WebSocket notification
+                                          if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                                            window.websocket.send(JSON.stringify({
+                                              type: 'refund_update',
+                                              action: 'appeal_rejected',
+                                              order_id: order.id,
+                                              refund_id: refund.id,
+                                              timestamp: new Date().toISOString()
+                                            }));
+                                          }
+                                          
+                                          // Dispatch event
+                                          window.dispatchEvent(new CustomEvent('websocket_message', {
+                                            detail: {
+                                              type: 'refund_update',
+                                              action: 'appeal_rejected',
+                                              order_id: order.id,
+                                              refund_id: refund.id
+                                            }
+                                          }));
                                         }
                                       } catch (error) {
                                         console.error('Error rejecting appeal:', error);
@@ -871,11 +1015,8 @@ const VendorOrders: React.FC = () => {
                                     className="flex-1 bg-green-600 hover:bg-green-700"
                                     onClick={async () => {
                                       try {
-                                        const { response } = await apiRequest(`/admin/refunds/${refund.id}/process/`, {
+                                        const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
                                           method: 'POST',
-                                          headers: {
-                                            'Content-Type': 'application/json',
-                                          },
                                           body: JSON.stringify({
                                             action: 'approve',
                                             approved_amount: refund.requested_amount,
@@ -885,6 +1026,27 @@ const VendorOrders: React.FC = () => {
                                         
                                         if (response.ok) {
                                           fetchVendorOrders();
+                                          
+                                          // Send WebSocket notification
+                                          if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                                            window.websocket.send(JSON.stringify({
+                                              type: 'refund_update',
+                                              action: 'appeal_approved',
+                                              order_id: order.id,
+                                              refund_id: refund.id,
+                                              timestamp: new Date().toISOString()
+                                            }));
+                                          }
+                                          
+                                          // Dispatch event
+                                          window.dispatchEvent(new CustomEvent('websocket_message', {
+                                            detail: {
+                                              type: 'refund_update',
+                                              action: 'appeal_approved',
+                                              order_id: order.id,
+                                              refund_id: refund.id
+                                            }
+                                          }));
                                         }
                                       } catch (error) {
                                         console.error('Error approving appeal:', error);
@@ -1166,8 +1328,8 @@ const VendorOrders: React.FC = () => {
                       </h3>
                       <div className="space-y-2">
                         {selectedOrder.items?.map((item: any, index: number) => (
-                          <div key={index} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
-                            <div className="flex items-center gap-2">
+                          <div key={index} className="py-1 border-b border-gray-100 last:border-0">
+                            <div className="flex items-center gap-2 mb-2">
                               <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
                                 {item.product_details?.images?.[0]?.image_url ? (
                                   <img
@@ -1184,51 +1346,114 @@ const VendorOrders: React.FC = () => {
                                   <span className="text-xs text-gray-400">📦</span>
                                 )}
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium truncate">{item.product_name}</p>
-                                <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 break-words">{item.product_name}</p>
+                                <p className="text-xs text-gray-600">Qty: {item.quantity}</p>
+                                <p className="text-sm font-semibold text-emerald-600 mt-1">₹{item.total_price}</p>
                               </div>
                             </div>
-                            <p className="text-sm font-semibold flex-shrink-0">₹{item.total_price}</p>
+                            {item.product_selections && Object.keys(item.product_selections).length > 0 && (
+                              <div className="text-xs text-blue-600 mt-2 bg-blue-50 p-2 rounded border border-blue-200">
+                                <div className="font-medium text-blue-800 mb-1">Selected Variants:</div>
+                                {(() => {
+                                  const selections = item.product_selections;
+                                  const keys = Object.keys(selections);
+                                  if (keys.length === 0) return null;
+                                  
+                                  const firstKey = keys[0];
+                                  const firstArray = Array.isArray(selections[firstKey]) ? selections[firstKey] : [selections[firstKey]];
+                                  
+                                  return firstArray.map((_, index) => (
+                                    <div key={index} className="mb-1 p-1 bg-white rounded border">
+                                      <span className="font-medium text-blue-900">Item {index + 1}:</span>
+                                      {keys.map(key => {
+                                        const values = Array.isArray(selections[key]) ? selections[key] : [selections[key]];
+                                        return (
+                                          <span key={key} className="ml-2 capitalize">
+                                            {key}: <span className="font-medium">{values[index] || values[0]}</span>
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  ));
+                                })()} 
+                              </div>
+                            )}
                           </div>
                         )) || []}
                       </div>
                     </div>
                     
                     <div className="bg-white border rounded-lg p-3">
-                      <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        Payment Details
-                      </h3>
-                      <div className="space-y-1 text-xs">
-                        <div className="flex justify-between">
-                          <span>Subtotal:</span>
-                          <span>₹{selectedOrder.subtotal}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Delivery Fee:</span>
-                          <span>₹{selectedOrder.delivery_fee}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Tax:</span>
-                          <span>₹{selectedOrder.tax_amount}</span>
-                        </div>
-                        <hr className="my-1" />
-                        <div className="flex justify-between font-semibold">
-                          <span>Total:</span>
-                          <span>₹{selectedOrder.total_amount}</span>
-                        </div>
-                        <div className="flex justify-between mt-2">
-                          <span>Payment Method:</span>
-                          <span className="capitalize">{selectedOrder.payment_method}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span>Payment Status:</span>
-                          <Badge variant={selectedOrder.payment_status === 'paid' ? 'default' : 'secondary'} className="text-xs">
-                            {selectedOrder.payment_status}
-                          </Badge>
-                        </div>
-                      </div>
+                      <h3 className="font-semibold text-sm mb-3">Payment Details</h3>
+                      
+                      {(() => {
+                        // Calculate total delivery fee from items
+                        const itemDeliveryFee = selectedOrder.items?.reduce((total, item) => {
+                          return total + parseFloat(item.delivery_fee || 0);
+                        }, 0) || 0;
+                        
+                        const orderDeliveryFee = parseFloat(selectedOrder.delivery_fee || 0);
+                        const totalDeliveryFee = Math.max(itemDeliveryFee, orderDeliveryFee);
+                        const subtotal = parseFloat(selectedOrder.subtotal || 0);
+                        const taxAmount = parseFloat(selectedOrder.tax_amount || 0);
+                        const billTotal = subtotal + taxAmount;
+                        const grandTotal = billTotal + totalDeliveryFee;
+                        
+                        return (
+                          <>
+                            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 mb-3">
+                              <h4 className="font-semibold text-emerald-800 text-sm mb-2">Bill Amount (Paid via {selectedOrder.payment_method})</h4>
+                              <div className="space-y-1 text-xs">
+                                <div className="flex justify-between">
+                                  <span>Subtotal:</span>
+                                  <span>₹{subtotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Tax:</span>
+                                  <span>₹{taxAmount.toFixed(2)}</span>
+                                </div>
+                                <hr className="my-1" />
+                                <div className="flex justify-between font-semibold">
+                                  <span>Bill Total (Paid):</span>
+                                  <span className="text-emerald-600">₹{billTotal.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {totalDeliveryFee > 0 && (
+                              <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mb-3">
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <h4 className="font-bold text-orange-800 text-base">Delivery Fee</h4>
+                                    <p className="text-xs text-orange-700">{selectedOrder.status === 'delivered' ? 'Paid on delivery' : 'Pay on delivery'}</p>
+                                  </div>
+                                  <span className="font-bold text-lg text-orange-600">₹{totalDeliveryFee.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            <hr className="my-2" />
+                            <div className="flex justify-between font-semibold text-sm">
+                              <span>Grand Total:</span>
+                              <span>₹{grandTotal.toFixed(2)}</span>
+                            </div>
+                            
+                            <div className="mt-3 pt-2 border-t space-y-1 text-xs">
+                              <div className="flex justify-between">
+                                <span>Payment Method:</span>
+                                <span className="capitalize">{selectedOrder.payment_method}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Payment Status:</span>
+                                <Badge variant={selectedOrder.payment_status === 'paid' ? 'default' : 'secondary'} className="text-xs">
+                                  {selectedOrder.payment_status}
+                                </Badge>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                     
                     <div className="bg-white border rounded-lg p-3">
@@ -1592,6 +1817,21 @@ const VendorOrders: React.FC = () => {
                                 setDeliveryFeeSource('');
                                 setIsDeliveryFeeReadonly(false);
                                 setSelectedOrder(null);
+                                
+                                // Send WebSocket notification
+                                if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
+                                  window.websocket.send(JSON.stringify({
+                                    type: 'order_update',
+                                    action: 'order_shipped',
+                                    order_id: selectedOrder.id,
+                                    timestamp: new Date().toISOString()
+                                  }));
+                                }
+                                
+                                // Dispatch order status update event
+                                window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+                                  detail: { orderId: selectedOrder.id, status: 'out_for_delivery', type: 'ship' }
+                                }));
                               }
                             } catch (error) {
                               console.error('Error shipping order:', error);

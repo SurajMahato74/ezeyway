@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiRequest } from '@/utils/apiUtils';
 import { authService } from '@/services/authService';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export function FloatingChat() {
    const navigate = useNavigate();
+   const [searchParams] = useSearchParams();
    const [isOpen, setIsOpen] = useState(false);
    const [messages, setMessages] = useState([]);
    const [newMessage, setNewMessage] = useState('');
@@ -27,7 +28,14 @@ export function FloatingChat() {
 
   useEffect(() => {
     checkAuth();
-  }, []);
+    
+    // Check for support message in URL params
+    const supportMessage = searchParams.get('support_message');
+    if (supportMessage) {
+      setNewMessage(decodeURIComponent(supportMessage));
+      setIsOpen(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (isOpen && isAuthenticated) {
@@ -160,7 +168,7 @@ export function FloatingChat() {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-32 right-4 w-80 h-96 bg-white rounded-lg shadow-xl border-2 border-black z-50 flex flex-col">
+        <div className="fixed bottom-32 right-4 w-72 h-[500px] bg-white rounded-lg shadow-xl border-2 border-black z-50 flex flex-col">
           {/* Header */}
           <div className="bg-yellow-500 text-black p-3 rounded-t-lg border-2 border-black border-b-0">
             <h3 className="font-semibold">Chat with Support</h3>
@@ -212,23 +220,43 @@ export function FloatingChat() {
 
           {/* Input */}
           {isAuthenticated && (
-            <div className="p-3 border-t flex gap-2">
-              <Input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your message..."
-                className="flex-1"
-                disabled={loading}
-              />
-              <Button
-                onClick={sendMessage}
-                disabled={!newMessage.trim() || loading}
-                size="sm"
-                className="bg-yellow-500 hover:bg-yellow-600 text-black border border-black"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+            <div className="p-3 border-t">
+              <div className="flex gap-2">
+                <textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your message..."
+                  className="w-[85%] resize-none border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent h-[100px] overflow-y-auto"
+                  disabled={loading}
+                  rows={5}
+                />
+                <div className="flex flex-col gap-1 w-[15%]">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx"
+                    className="hidden"
+                    id="chat-file-upload"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('chat-file-upload').click()}
+                    className="w-full h-8 p-0 text-base"
+                  >
+                    📎
+                  </Button>
+                  <Button
+                    onClick={sendMessage}
+                    disabled={!newMessage.trim() || loading}
+                    size="sm"
+                    className="bg-yellow-500 hover:bg-yellow-600 text-black border border-black w-full h-8 p-0"
+                  >
+                    <Send className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </div>

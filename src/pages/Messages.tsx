@@ -10,6 +10,7 @@ import { authService } from '@/services/authService';
 import { apiRequest } from '@/utils/apiUtils';
 import { getImageUrl } from '@/utils/imageUtils';
 import { notificationService } from '@/services/notificationService';
+import { API_CONFIG } from '@/config/api';
 
 const Messages: React.FC = () => {
   const navigate = useNavigate();
@@ -105,31 +106,50 @@ const Messages: React.FC = () => {
     }
   }, [selectedConversation]);
 
-  // Refresh messages on visibility change instead of polling
+  // Auto-refresh messages every 5 seconds when conversation is selected
   useEffect(() => {
     if (!selectedConversation) return;
-    
-    const handleVisibilityChange = async () => {
-      if (!document.hidden) {
-        try {
-          const data = await messageService.getMessages(selectedConversation.id);
-          let messageArray = [];
-          if (Array.isArray(data)) {
-            messageArray = data.reverse();
-          } else if (data?.results && Array.isArray(data.results)) {
-            messageArray = data.results.reverse();
-          }
+
+    const refreshMessages = async () => {
+      try {
+        const data = await messageService.getMessages(selectedConversation.id);
+        let messageArray = [];
+        if (Array.isArray(data)) {
+          messageArray = data.reverse();
+        } else if (data?.results && Array.isArray(data.results)) {
+          messageArray = data.results.reverse();
+        }
+
+        // Only update if we have new messages
+        if (messageArray.length !== lastMessageCount) {
           setMessages(messageArray);
           setLastMessageCount(messageArray.length);
-        } catch (error) {
-          console.error('Failed to refresh messages:', error);
         }
+      } catch (error) {
+        console.error('Failed to refresh messages:', error);
       }
     };
-    
+
+    // Initial load
+    refreshMessages();
+
+    // Set up interval for auto-refresh
+    const interval = setInterval(refreshMessages, 5000); // Refresh every 5 seconds
+
+    // Also refresh on visibility change
+    const handleVisibilityChange = async () => {
+      if (!document.hidden) {
+        refreshMessages();
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [selectedConversation]);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedConversation, lastMessageCount]);
 
 
 
@@ -243,7 +263,8 @@ const Messages: React.FC = () => {
       
       // Also broadcast via API for cross-domain
       try {
-        await fetch('http://localhost:8000/api/broadcast/', {
+        const broadcastUrl = `${API_CONFIG.BASE_URL}/broadcast/`;
+        await fetch(broadcastUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

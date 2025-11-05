@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, MapPin, CreditCard, Navigation, Map, Check } from "lucide-react";
+import { ArrowLeft, MapPin, CreditCard, Navigation, Map, Check, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,10 +59,13 @@ export default function CheckOut() {
     instructions: ""
   });
   const [userInfo, setUserInfo] = useState(null);
-  const [activeTab, setActiveTab] = useState("delivery");
+  const [activeTab, setActiveTab] = useState("options");
   const [locationSearch, setLocationSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [productSelections, setProductSelections] = useState({});
+  const [itemQuantities, setItemQuantities] = useState({});
+  const [productVariants, setProductVariants] = useState({});
 
   useEffect(() => {
     // Get current location on component mount
@@ -173,7 +176,7 @@ export default function CheckOut() {
   // Use either direct buy product, selected cart items, or all cart items
   const cartItems = directBuyData ? [
     {
-      id: Date.now(), // temporary ID
+      id: 'direct', // temporary ID
       product: {
         id: directBuyData.product.id,
         name: directBuyData.product.name,
@@ -184,7 +187,9 @@ export default function CheckOut() {
         // Include delivery properties from direct buy data
         free_delivery: directBuyData.product.free_delivery,
         custom_delivery_fee_enabled: directBuyData.product.custom_delivery_fee_enabled,
-        custom_delivery_fee: directBuyData.product.custom_delivery_fee
+        custom_delivery_fee: directBuyData.product.custom_delivery_fee,
+        // Include dynamic fields for product options
+        dynamic_fields: directBuyData.product.dynamic_fields || {}
       },
       quantity: directBuyData.product.quantity,
       total_price: (parseFloat(directBuyData.product.price) * directBuyData.product.quantity).toString()
@@ -196,9 +201,12 @@ export default function CheckOut() {
   console.log('Checkout - Buy now product from localStorage:', buyNowProduct);
 
   const subtotal = cartItems.reduce((sum, item) => {
+    const itemKey = `${item.product.id}_${item.id || 'direct'}`;
+    const totalVariantQty = Object.values(productVariants[itemKey] || {}).reduce((sum, qty) => sum + qty, 0);
+    const quantity = totalVariantQty || item.quantity;
     const itemPrice = parseFloat(item.product.price || item.total_price || 0);
-    console.log(`Checkout - Item: ${item.product.name}, Price: ${item.product.price}, Total: ${item.total_price}, Calculated: ${itemPrice}, Quantity: ${item.quantity}`);
-    return sum + (itemPrice * item.quantity);
+    console.log(`Checkout - Item: ${item.product.name}, Price: ${item.product.price}, Total: ${item.total_price}, Calculated: ${itemPrice}, Quantity: ${quantity}`);
+    return sum + (itemPrice * quantity);
   }, 0);
 
   // Calculate delivery fee based on product settings
@@ -312,6 +320,23 @@ export default function CheckOut() {
     const hasValidPhone = phoneToValidate && validateNepaliPhone(phoneToValidate);
     return hasLocation && hasValidPhone;
   };
+  
+  const areProductSelectionsComplete = () => {
+    return cartItems.every(item => {
+      const multiSelectFields = item.product.dynamic_fields ? 
+        Object.entries(item.product.dynamic_fields).filter(([key, value]) => 
+          Array.isArray(value) && value.length > 0
+        ) : [];
+      
+      if (multiSelectFields.length === 0) return true;
+      
+      const itemKey = `${item.product.id}_${item.id || 'direct'}`;
+      const variants = productVariants[itemKey] || {};
+      const totalVariantQty = Object.values(variants).reduce((sum, qty) => sum + qty, 0);
+      
+      return totalVariantQty > 0;
+    });
+  };
 
   const handlePlaceOrder = async () => {
     const token = await authService.getToken();
@@ -332,6 +357,15 @@ export default function CheckOut() {
         variant: "destructive",
       });
       setActiveTab("delivery");
+      return;
+    }
+    
+    if (!areProductSelectionsComplete()) {
+      toast({
+        title: "Product Options Required",
+        description: "Please select all required product options",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -373,15 +407,49 @@ export default function CheckOut() {
       }
       
       const orderData = {
-        items: cartItems.map(item => ({
-          product_id: item.product.id,
-          quantity: item.quantity,
-          price: parseFloat(item.product.price || item.total_price || 0),
-          delivery_fee: item.product.free_delivery === true ? 0 : 
-            (item.product.custom_delivery_fee_enabled === true && item.product.custom_delivery_fee !== null && item.product.custom_delivery_fee !== undefined
-              ? parseFloat(item.product.custom_delivery_fee.toString()) 
-              : 0) // 0 for undetermined (backend doesn't accept null)
-        })),
+        items: cartItems.map(item => {
+          const itemKey = `${item.product.id}_${item.id || 'direct'}`;
+          const selections = productSelections[itemKey] || {};
+          const totalVariantQty = Object.values(productVariants[itemKey] || {}).reduce((sum, qty) => sum + qty, 0);
+          const quantity = totalVariantQty || item.quantity;
+          
+          // Create variant selections for order
+          const variantSelections = {};
+          if (productVariants[itemKey]) {
+            Object.entries(productVariants[itemKey]).forEach(([variantKey, qty]) => {
+              if (qty > 0) {
+                const variantParts = variantKey.split('-');
+                const multiSelectFields = item.product.dynamic_fields ? 
+                  Object.entries(item.product.dynamic_fields).filter(([key, value]) => 
+                    Array.isArray(value) && value.length > 0
+                  ) : [];
+                
+                multiSelectFields.forEach(([fieldName], index) => {
+                  if (!variantSelections[fieldName]) {
+                    variantSelections[fieldName] = [];
+                  }
+                  for (let i = 0; i < qty; i++) {
+                    variantSelections[fieldName].push(variantParts[index]);
+                  }
+                });
+              }
+            });
+          }
+          
+          return {
+            product_id: item.product.id,
+            quantity: quantity,
+            unit_price: parseFloat(item.product.price || item.total_price || 0),
+            price: parseFloat(item.product.price || item.total_price || 0),
+            delivery_fee: item.product.free_delivery === true ? 0 : 
+              (item.product.custom_delivery_fee_enabled === true && item.product.custom_delivery_fee !== null && item.product.custom_delivery_fee !== undefined
+                ? parseFloat(item.product.custom_delivery_fee.toString()) 
+                : 0),
+            product_selections: Object.keys(variantSelections).length > 0 ? variantSelections : selections,
+            product_name: item.product.name,
+            vendor_name: item.product.vendor_name
+          };
+        }),
         delivery_name: userInfo?.username || userInfo?.first_name || "Customer",
         delivery_phone: userInfo?.phone_number || deliveryAddress.phone,
         delivery_address: locationOption === "current" ? currentLocationName : customLocation.address,
@@ -392,6 +460,7 @@ export default function CheckOut() {
         total_amount: total,
         subtotal: subtotal,
         delivery_fee: deliveryFee,
+        delivery_distance: validation.distance,
         notes: `Distance: ${validation.distance.toFixed(1)}km from vendor. Items: ${cartItems.map(item => `${item.product.name} (${item.quantity}x)`).join(', ')}`
       };
       
@@ -552,6 +621,35 @@ export default function CheckOut() {
     return () => clearTimeout(delayedSearch);
   }, [locationSearch]);
 
+  // Auto-select single options on component mount
+  useEffect(() => {
+    const newSelections = { ...productSelections };
+    let hasChanges = false;
+
+    cartItems.forEach(item => {
+      const multiSelectFields = item.product.dynamic_fields ? 
+        Object.entries(item.product.dynamic_fields).filter(([key, value]) => 
+          Array.isArray(value) && value.length > 0
+        ) : [];
+      
+      const itemKey = `${item.product.id}_${item.id || 'direct'}`;
+      
+      multiSelectFields.forEach(([fieldName, options]) => {
+        if (options.length === 1 && !newSelections[itemKey]?.[fieldName]) {
+          if (!newSelections[itemKey]) {
+            newSelections[itemKey] = {};
+          }
+          newSelections[itemKey][fieldName] = options[0];
+          hasChanges = true;
+        }
+      });
+    });
+
+    if (hasChanges) {
+      setProductSelections(newSelections);
+    }
+  }, [cartItems]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 font-sans">
       {/* Header */}
@@ -572,15 +670,232 @@ export default function CheckOut() {
 
       <main className="max-w-4xl mx-auto p-6 pb-32">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="options" className="flex items-center gap-2">
+              {areProductSelectionsComplete() && <Check className="h-4 w-4" />}
+              Options
+            </TabsTrigger>
             <TabsTrigger value="delivery" className="flex items-center gap-2">
               {isDeliveryComplete() && <Check className="h-4 w-4" />}
               Delivery
             </TabsTrigger>
-            <TabsTrigger value="summary" disabled={!isDeliveryComplete()}>
+            <TabsTrigger value="summary">
               Summary
             </TabsTrigger>
           </TabsList>
+          <TabsContent value="options" className="space-y-6">
+            <Card className="border-none shadow-xl rounded-2xl bg-white overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
+                <CardTitle className="flex items-center gap-3 text-xl font-semibold text-gray-800">
+                  Product Options
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                {cartItems.map((item) => {
+                  const multiSelectFields = item.product.dynamic_fields ? 
+                    Object.entries(item.product.dynamic_fields).filter(([key, value]) => 
+                      Array.isArray(value) && value.length > 0
+                    ) : [];
+                  
+                  const itemKey = `${item.product.id}_${item.id || 'direct'}`;
+                  console.log('Rendering item:', item.product.name, 'ItemKey:', itemKey);
+                  console.log('Dynamic fields:', item.product.dynamic_fields);
+                  console.log('Multi-select fields:', multiSelectFields);
+                  
+                  return (
+                    <div key={item.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-3 mb-4">
+                        <img
+                          src={getImageUrl(item.product.images?.[0]?.image_url)}
+                          alt={item.product.name}
+                          className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                        />
+                        <div className="flex-1">
+                          <p className="font-semibold text-lg text-gray-800">{item.product.name}</p>
+                          <p className="text-sm text-gray-500">{item.product.vendor_name}</p>
+                          <p className="text-sm font-medium text-gray-700">Rs {parseFloat(item.product.price || item.total_price || 0).toFixed(2)} each</p>
+                        </div>
+                      </div>
+                      
+                      {/* Total Quantity Display */}
+                      <div className="mb-4">
+                        <Label className="text-sm font-medium text-gray-600 mb-2 block">Total Quantity</Label>
+                        <div className="bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
+                          <span className="font-medium text-lg text-emerald-800">
+                            {Object.values(productVariants[itemKey] || {}).reduce((sum, qty) => sum + qty, 0) || item.quantity}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Product Variants */}
+                      {multiSelectFields.length > 0 && (
+                        <div className="space-y-4">
+                          <Label className="text-sm font-medium text-gray-600 mb-2 block">Product Variants</Label>
+                          <div className="space-y-3">
+                            {/* Current Selection */}
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <div className="grid grid-cols-2 gap-3 mb-3">
+                                {multiSelectFields.map(([fieldName, options]) => (
+                                  <div key={fieldName}>
+                                    <Label className="text-xs text-gray-500 capitalize">{fieldName}</Label>
+                                    <select 
+                                      className="w-full mt-1 p-2 border border-gray-200 rounded text-sm"
+                                      value={productSelections[itemKey]?.[fieldName] || ""}
+                                      onChange={(e) => {
+                                        setProductSelections(prev => ({
+                                          ...prev,
+                                          [itemKey]: {
+                                            ...prev[itemKey],
+                                            [fieldName]: e.target.value
+                                          }
+                                        }));
+                                      }}
+                                    >
+                                      <option value="">Select {fieldName}</option>
+                                      {options.map(option => (
+                                        <option key={option} value={option}>{option}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const selections = productSelections[itemKey];
+                                      if (!selections || !Object.values(selections).every(v => v)) return;
+                                      
+                                      const variantKey = Object.values(selections).join('-');
+                                      setProductVariants(prev => ({
+                                        ...prev,
+                                        [itemKey]: {
+                                          ...prev[itemKey],
+                                          [variantKey]: (prev[itemKey]?.[variantKey] || 0) - 1
+                                        }
+                                      }));
+                                    }}
+                                    className="h-8 w-8 rounded-full"
+                                  >
+                                    <Minus className="h-4 w-4" />
+                                  </Button>
+                                  <span className="w-8 text-center text-sm">
+                                    {(() => {
+                                      const selections = productSelections[itemKey];
+                                      if (!selections || !Object.values(selections).every(v => v)) return 0;
+                                      const variantKey = Object.values(selections).join('-');
+                                      return productVariants[itemKey]?.[variantKey] || 0;
+                                    })()}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const selections = productSelections[itemKey];
+                                      if (!selections || !Object.values(selections).every(v => v)) return;
+                                      
+                                      const variantKey = Object.values(selections).join('-');
+                                      setProductVariants(prev => ({
+                                        ...prev,
+                                        [itemKey]: {
+                                          ...prev[itemKey],
+                                          [variantKey]: (prev[itemKey]?.[variantKey] || 0) + 1
+                                        }
+                                      }));
+                                    }}
+                                    className="h-8 w-8 rounded-full"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    const selections = productSelections[itemKey];
+                                    if (!selections || !Object.values(selections).every(v => v)) return;
+                                    
+                                    const variantKey = Object.values(selections).join('-');
+                                    setProductVariants(prev => ({
+                                      ...prev,
+                                      [itemKey]: {
+                                        ...prev[itemKey],
+                                        [variantKey]: (prev[itemKey]?.[variantKey] || 0) + 1
+                                      }
+                                    }));
+                                  }}
+                                  disabled={!productSelections[itemKey] || !Object.values(productSelections[itemKey]).every(v => v)}
+                                  className="text-xs px-3"
+                                >
+                                  Add Variant
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Added Variants List */}
+                            {productVariants[itemKey] && Object.entries(productVariants[itemKey]).filter(([_, qty]) => qty > 0).length > 0 && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-gray-500">Added Variants:</Label>
+                                {Object.entries(productVariants[itemKey]).filter(([_, qty]) => qty > 0).map(([variantKey, qty]) => {
+                                  const variantParts = variantKey.split('-');
+                                  return (
+                                    <div key={variantKey} className="flex items-center justify-between p-2 bg-emerald-50 rounded border border-emerald-200">
+                                      <span className="text-sm">
+                                        {multiSelectFields.map(([fieldName], index) => (
+                                          <span key={fieldName} className="capitalize">
+                                            {fieldName}: {variantParts[index]}
+                                            {index < multiSelectFields.length - 1 && ', '}
+                                          </span>
+                                        ))}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium">Qty: {qty}</span>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            setProductVariants(prev => ({
+                                              ...prev,
+                                              [itemKey]: {
+                                                ...prev[itemKey],
+                                                [variantKey]: 0
+                                              }
+                                            }));
+                                          }}
+                                          className="h-6 w-6 rounded-full text-red-600"
+                                        >
+                                          ×
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {multiSelectFields.length === 0 && (
+                        <p className="text-sm text-gray-500 italic">No additional options for this product</p>
+                      )}
+                    </div>
+                  );
+                })}
+                
+                <div className="flex justify-end">
+                  <Button 
+                    onClick={() => setActiveTab("delivery")} 
+                    className="px-8 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
+                  >
+                    Continue to Delivery
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
           <TabsContent value="delivery" className="space-y-6">
             <Card className="border-none shadow-xl rounded-2xl bg-white overflow-hidden">
               <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
@@ -722,10 +1037,11 @@ export default function CheckOut() {
                   />
                 </div>
                 
+
+                
                 <div className="flex justify-end">
                   <Button 
                     onClick={() => setActiveTab("summary")} 
-                    disabled={!isDeliveryComplete()}
                     className="px-8 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
                   >
                     Continue to Summary
@@ -764,38 +1080,84 @@ export default function CheckOut() {
                 
                 <Separator className="my-4 bg-gray-200" />
                 
-                {cartItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-4 py-4 border-b border-gray-100">
-                    <img
-                      src={getImageUrl(item.product.images?.[0]?.image_url)}
-                      alt={item.product.name}
-                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 shadow-sm"
-                    />
-                    <div className="flex-1">
-                      <p className="font-semibold text-lg text-gray-800">{item.product.name}</p>
-                      <p className="text-sm text-gray-500">{item.product.vendor_name}</p>
-                      <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                      <p className="text-sm text-gray-500">Price: Rs {parseFloat(item.product.price || item.total_price || 0).toFixed(2)} each</p>
-                      {item.product.free_delivery === true && (
-                        <p className="text-xs text-green-600 font-medium">✓ Free Delivery</p>
-                      )}
-                      {item.product.custom_delivery_fee_enabled === true && item.product.custom_delivery_fee !== null && item.product.custom_delivery_fee !== undefined && item.product.free_delivery !== true && (
-                        <p className="text-xs text-orange-600">Delivery: Rs {parseFloat(item.product.custom_delivery_fee.toString()).toFixed(2)}</p>
-                      )}
-                      {item.product.free_delivery !== true && (item.product.custom_delivery_fee_enabled !== true || item.product.custom_delivery_fee === null || item.product.custom_delivery_fee === undefined) && (
-                        <p className="text-xs text-orange-600">Delivery: To be determined</p>
+                {cartItems.map((item) => {
+                  // Get multi-select dynamic fields for this product
+                  const multiSelectFields = item.product.dynamic_fields ? 
+                    Object.entries(item.product.dynamic_fields).filter(([key, value]) => 
+                      Array.isArray(value) && value.length > 0
+                    ) : [];
+                  
+                  const hasMultiSelectFields = multiSelectFields.length > 0;
+                  const itemKey = `${item.product.id}_${item.id || 'direct'}`;
+                  
+                  return (
+                    <div key={item.id} className="py-4 border-b border-gray-100">
+                      <div className="flex items-center gap-4">
+                        <img
+                          src={getImageUrl(item.product.images?.[0]?.image_url)}
+                          alt={item.product.name}
+                          className="w-20 h-20 object-cover rounded-lg border border-gray-200 shadow-sm"
+                        />
+                        <div className="flex-1">
+                          <p className="font-semibold text-lg text-gray-800">{item.product.name}</p>
+                          <p className="text-sm text-gray-500">{item.product.vendor_name}</p>
+                          <p className="text-sm text-gray-500">Total Quantity: {Object.values(productVariants[itemKey] || {}).reduce((sum, qty) => sum + qty, 0) || item.quantity}</p>
+                          <p className="text-sm text-gray-500">Price: Rs {parseFloat(item.product.price || item.total_price || 0).toFixed(2)} each</p>
+                          {item.product.free_delivery === true && (
+                            <p className="text-xs text-green-600 font-medium">✓ Free Delivery</p>
+                          )}
+                          {item.product.custom_delivery_fee_enabled === true && item.product.custom_delivery_fee !== null && item.product.custom_delivery_fee !== undefined && item.product.free_delivery !== true && (
+                            <p className="text-xs text-orange-600">Delivery: Rs {parseFloat(item.product.custom_delivery_fee.toString()).toFixed(2)}</p>
+                          )}
+                          {item.product.free_delivery !== true && (item.product.custom_delivery_fee_enabled !== true || item.product.custom_delivery_fee === null || item.product.custom_delivery_fee === undefined) && (
+                            <p className="text-xs text-orange-600">Delivery: To be determined</p>
+                          )}
+                        </div>
+                        <p className="font-semibold text-lg text-gray-800">Rs {(parseFloat(item.product.price || item.total_price || 0) * (Object.values(productVariants[itemKey] || {}).reduce((sum, qty) => sum + qty, 0) || item.quantity)).toFixed(2)}</p>
+                      </div>
+                      
+                      {/* Selected Variants Display */}
+                      {hasMultiSelectFields && productVariants[itemKey] && Object.entries(productVariants[itemKey]).filter(([_, qty]) => qty > 0).length > 0 && (
+                        <div className="mt-4 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                          <p className="text-sm font-medium text-emerald-800 mb-3">Selected Variants:</p>
+                          <div className="space-y-2">
+                            {Object.entries(productVariants[itemKey]).filter(([_, qty]) => qty > 0).map(([variantKey, qty]) => {
+                              const variantParts = variantKey.split('-');
+                              const variantPrice = parseFloat(item.product.price || item.total_price || 0) * qty;
+                              return (
+                                <div key={variantKey} className="flex items-center justify-between p-2 bg-white rounded border border-emerald-200">
+                                  <div>
+                                    <span className="text-sm font-medium">
+                                      {multiSelectFields.map(([fieldName], index) => (
+                                        <span key={fieldName} className="capitalize">
+                                          {fieldName}: {variantParts[index]}
+                                          {index < multiSelectFields.length - 1 && ', '}
+                                        </span>
+                                      ))}
+                                    </span>
+                                    <span className="text-xs text-gray-500 ml-2">× {qty}</span>
+                                  </div>
+                                  <span className="text-sm font-semibold text-emerald-700">Rs {variantPrice.toFixed(2)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <p className="font-semibold text-lg text-gray-800">Rs {(parseFloat(item.product.price || item.total_price || 0) * item.quantity).toFixed(2)}</p>
-                  </div>
-                ))}
+                  );
+                })}
                 <Separator className="my-4 bg-gray-200" />
                 <div className="space-y-4">
                   <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
                     <h4 className="font-semibold text-emerald-800 mb-3">Order Summary</h4>
                     <div className="space-y-2">
                       <div className="flex justify-between text-base text-gray-700">
-                        <span>Subtotal ({cartItems.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
+                        <span>Subtotal ({cartItems.reduce((sum, item) => {
+                          const itemKey = `${item.product.id}_${item.id || 'direct'}`;
+                          const totalVariantQty = Object.values(productVariants[itemKey] || {}).reduce((sum, qty) => sum + qty, 0);
+                          return sum + (totalVariantQty || item.quantity);
+                        }, 0)} items)</span>
                         <span className="font-semibold">Rs {subtotal.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-base text-gray-700">
@@ -831,8 +1193,15 @@ export default function CheckOut() {
                 <div className="flex justify-between">
                   <Button 
                     variant="outline" 
+                    onClick={() => setActiveTab("options")}
+                    className="px-6 py-2 rounded-xl"
+                  >
+                    Back to Options
+                  </Button>
+                  <Button 
+                    variant="outline" 
                     onClick={() => setActiveTab("delivery")}
-                    className="px-8 py-2 rounded-xl"
+                    className="px-6 py-2 rounded-xl"
                   >
                     Back to Delivery
                   </Button>
@@ -855,7 +1224,7 @@ export default function CheckOut() {
             </div>
             <Button
               onClick={handlePlaceOrder}
-              disabled={!isDeliveryComplete()}
+              disabled={!isDeliveryComplete() || !areProductSelectionsComplete()}
               className="px-10 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Place Order

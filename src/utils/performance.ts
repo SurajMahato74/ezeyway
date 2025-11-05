@@ -17,7 +17,6 @@ export class PerformanceMonitor {
   endTimer(label: string): number {
     const startTime = this.metrics.get(label);
     if (!startTime) {
-      console.warn(`Timer '${label}' was not started`);
       return 0;
     }
     

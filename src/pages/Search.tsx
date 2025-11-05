@@ -338,7 +338,12 @@ export default function Search() {
         const productPage = type === 'products' ? page : pagination.products.page;
         requests.push(
           fetch(`${API_BASE}search/products/?${buildParams(productPage)}`, { headers })
-            .then(res => res.json())
+            .then(res => {
+              if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+              }
+              return res.json();
+            })
             .then(data => ({ type: 'products', data, page: productPage }))
         );
       }
@@ -347,19 +352,30 @@ export default function Search() {
         const vendorPage = type === 'vendors' ? page : pagination.vendors.page;
         requests.push(
           fetch(`${API_BASE}search/vendors/?${buildParams(vendorPage)}`, { headers })
-            .then(res => res.json())
+            .then(res => {
+              if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+              }
+              return res.json();
+            })
             .then(data => ({ type: 'vendors', data, page: vendorPage }))
         );
       }
       
       const results = await performanceMonitor.measureAsync('api-requests', () => 
-        Promise.all(requests)
+        Promise.allSettled(requests)
       );
       
       // Preload images for better UX
       const imagesToPreload: string[] = [];
       
-      results.forEach(({ type: resultType, data, page: resultPage }) => {
+      results.forEach((result) => {
+        if (result.status === 'rejected') {
+          console.error('API request failed:', result.reason);
+          return;
+        }
+        
+        const { type: resultType, data, page: resultPage } = result.value;
         if (resultType === 'products') {
           const processedProducts = processProducts(data.results || []);
           
@@ -417,6 +433,18 @@ export default function Search() {
               hasMore: data.next !== null,
               total: data.count || 0
             }
+          }));
+        }
+      });
+      
+      // Handle failed requests by stopping pagination for specific API types
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const isVendorRequest = (type === 'both' && index === 1) || type === 'vendors';
+          const failedType = isVendorRequest ? 'vendors' : 'products';
+          setPagination(prev => ({
+            ...prev,
+            [failedType]: { ...prev[failedType], hasMore: false }
           }));
         }
       });
@@ -699,7 +727,9 @@ export default function Search() {
         // Include delivery properties
         free_delivery: product.free_delivery,
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
-        custom_delivery_fee: product.custom_delivery_fee
+        custom_delivery_fee: product.custom_delivery_fee,
+        // Include dynamic fields
+        dynamic_fields: product.dynamic_fields || {}
       };
       
         console.log('Search Buy Now - Product data:', productData);
@@ -729,7 +759,9 @@ export default function Search() {
           // Include delivery properties
           free_delivery: product.free_delivery,
           custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
-          custom_delivery_fee: product.custom_delivery_fee
+          custom_delivery_fee: product.custom_delivery_fee,
+          // Include dynamic fields
+          dynamic_fields: product.dynamic_fields || {}
         }
       }
     });
