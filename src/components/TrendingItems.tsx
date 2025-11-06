@@ -119,12 +119,42 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         throw new Error(`HTTP ${productsResponse.status}`);
       }
 
-  const productsData = await productsResponse.json();
-  console.log('Trending API response:', productsData);
-  const filteredProducts = await filterOwnProducts(productsData.results || []);
-  console.log('Filtered products:', filteredProducts);
-  const processedProducts = processProducts(filteredProducts);
-  console.log('Processed products:', processedProducts);
+      const productsData = await productsResponse.json();
+      console.log('🔥 TRENDING ITEMS - API Response:', {
+        total_results: productsData.results?.length || 0,
+        query_params: Object.fromEntries(params),
+        user_location: currentLocation,
+        full_response: productsData
+      });
+
+      const filteredProducts = await filterOwnProducts(productsData.results || []);
+      console.log('🔥 TRENDING ITEMS - After filterOwnProducts:', {
+        count: filteredProducts.length,
+        products: filteredProducts.map(p => ({
+          id: p.id,
+          name: p.name,
+          vendor_name: p.vendor_name,
+          vendor_latitude: p.vendor_latitude,
+          vendor_longitude: p.vendor_longitude,
+          vendor_delivery_radius: p.vendor_delivery_radius,
+          vendor_online: p.vendor_online
+        }))
+      });
+
+      const processedProducts = processProducts(filteredProducts);
+      console.log('🔥 TRENDING ITEMS - After processProducts:', {
+        count: processedProducts.length,
+        products: processedProducts.map(p => ({
+          id: p.id,
+          name: p.name,
+          vendor: p.vendor,
+          distance: p.distance,
+          distanceValue: p.distanceValue,
+          deliveryRadius: p.deliveryRadius,
+          vendorOnline: p.vendorOnline,
+          included: p.vendorOnline && (p.distanceValue === Infinity || p.distanceValue <= p.deliveryRadius)
+        }))
+      });
 
   // If no products after processing, try without location filter
   if (processedProducts.length === 0 && currentLocation) {
@@ -199,8 +229,19 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
-  // Use delivery radius from product/vendor when available. If not provided,
-  // treat as no client-side limit (Infinity) and rely on the backend to filter by vendor radius.
+    console.log('🔥 TRENDING ITEMS - processProducts called with:', {
+      total_products: products.length,
+      user_location: currentLocation,
+      products_sample: products.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.name,
+        vendor_name: p.vendor_name,
+        vendor_latitude: p.vendor_latitude,
+        vendor_longitude: p.vendor_longitude,
+        vendor_delivery_radius: p.vendor_delivery_radius,
+        vendor_online: p.vendor_online
+      }))
+    });
 
     const computeAggregateRating = (product) => {
       // Prefer explicit reviews array if present
@@ -236,6 +277,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
       }
 
       const deliveryInfo = getDeliveryInfo(product, product.vendor_delivery_fee);
+      const deliveryRadius = getDeliveryRadius(product) ?? 5;
 
       return {
         id: product.id,
@@ -244,7 +286,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         vendor_id: product.vendor_id,
         distance,
         distanceValue,
-  rating: computeAggregateRating(product),
+        rating: computeAggregateRating(product),
         price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
         image: primaryImage?.image_url || "/placeholder-product.jpg",
@@ -253,7 +295,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         totalSold: product.total_sold || 0,
         deliveryInfo,
         vendorOnline: product.vendor_online !== false,
-  deliveryRadius: getDeliveryRadius(product) ?? 5,
+        deliveryRadius,
         // Include delivery properties for checkout
         free_delivery: product.free_delivery,
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
@@ -261,7 +303,31 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
       };
     })
     .filter(product => {
-      return product.vendorOnline;
+      const isOnline = product.vendorOnline;
+      const withinRadius = product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius;
+
+      console.log(`🔥 TRENDING ITEMS - Filtering product ${product.id} (${product.name}):`, {
+        vendorOnline: product.vendorOnline,
+        distanceValue: product.distanceValue,
+        deliveryRadius: product.deliveryRadius,
+        withinRadius,
+        included: isOnline && withinRadius,
+        reason: !isOnline ? 'Vendor offline' : !withinRadius ? `Too far (${product.distanceValue}km > ${product.deliveryRadius}km)` : 'Included'
+      });
+
+      return isOnline && withinRadius;
+    });
+
+    console.log('🔥 TRENDING ITEMS - After filtering:', {
+      total_filtered: processedProducts.length,
+      filtered_products: processedProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        vendor: p.vendor,
+        distance: p.distance,
+        vendorOnline: p.vendorOnline,
+        deliveryRadius: p.deliveryRadius
+      }))
     });
 
     // Sort by totalSold (highest first) to show trending/popular items

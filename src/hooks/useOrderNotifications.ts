@@ -20,6 +20,8 @@ interface NewOrder {
   customer_name: string;
   delivery_phone: string;
   delivery_address: string;
+  delivery_latitude: number;
+  delivery_longitude: number;
   total_amount: string;
   payment_method: string;
   created_at: string;
@@ -32,6 +34,7 @@ export function useOrderNotifications() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const notifiedOrdersRef = useRef<Set<number>>(new Set());
+  const lastOrderCountRef = useRef<number>(0);
   
   // Use the comprehensive notification system
   const { notifications, unreadCount, isConnected } = useNotificationWebSocket();
@@ -74,28 +77,36 @@ export function useOrderNotifications() {
       console.log('📱 Mobile: Pending orders response:', response.status, response.ok);
       if (response.ok && orders) {
         console.log('Pending orders received:', orders.length, orders);
-        setPendingOrders(orders);
-        setIsModalOpen(orders.length > 0);
-        
-        // Show notification if there are new orders
-        if (orders.length > 0) {
-          console.log('📱 Mobile: Showing order notification for', orders.length, 'orders');
-          
-          // Import and use notification service only for new orders
-          import('@/services/simpleNotificationService').then(({ simpleNotificationService }) => {
-            orders.forEach((order: any) => {
-              // Only notify if this order hasn't been notified before
-              if (!notifiedOrdersRef.current.has(order.id)) {
-                console.log('📱 Processing NEW order:', order.order_number, order.total_amount);
-                notifiedOrdersRef.current.add(order.id);
-                simpleNotificationService.showOrderNotification(
-                  order.order_number,
-                  order.total_amount,
-                  order.id
-                );
-              }
+
+        // Only update if we have new orders (like messages page)
+        if (orders.length !== lastOrderCountRef.current) {
+          console.log(`📱 Order count changed: ${lastOrderCountRef.current} → ${orders.length}`);
+          setPendingOrders(orders);
+          setIsModalOpen(orders.length > 0);
+          lastOrderCountRef.current = orders.length;
+
+          // Show notification if there are new orders
+          if (orders.length > 0) {
+            console.log('📱 Mobile: Showing order notification for', orders.length, 'orders');
+
+            // Import and use notification service only for new orders
+            import('@/services/simpleNotificationService').then(({ simpleNotificationService }) => {
+              orders.forEach((order: any) => {
+                // Only notify if this order hasn't been notified before
+                if (!notifiedOrdersRef.current.has(order.id)) {
+                  console.log('📱 Processing NEW order:', order.order_number, order.total_amount);
+                  notifiedOrdersRef.current.add(order.id);
+                  simpleNotificationService.showOrderNotification(
+                    order.order_number,
+                    order.total_amount,
+                    order.id
+                  );
+                }
+              });
             });
-          });
+          }
+        } else {
+          console.log('📱 No change in order count, skipping update');
         }
       } else {
         console.error('Failed to fetch pending orders:', response.status, response.statusText);
@@ -105,7 +116,7 @@ export function useOrderNotifications() {
     }
   };
 
-  // Initial fetch and periodic refresh
+  // Initial fetch and auto-refresh (like messages page)
   useEffect(() => {
     const checkTokenAndFetch = async () => {
       const { authService } = await import('@/services/authService');
@@ -115,57 +126,57 @@ export function useOrderNotifications() {
       // Initial fetch
       fetchPendingOrders();
     };
-    
+
     checkTokenAndFetch();
 
-    // Reasonable polling interval (every 30 seconds for mobile, 60 seconds for web)
-    const pollInterval = Capacitor.isNativePlatform() ? 30000 : 60000;
-    pollIntervalRef.current = setInterval(fetchPendingOrders, pollInterval);
+    // Auto-refresh orders every 10 seconds (more frequent than messages since orders are urgent)
+    const refreshOrders = async () => {
+      try {
+        const { authService } = await import('@/services/authService');
+        const token = await authService.getToken();
+        if (!token) return;
 
-    // Also fetch when page becomes visible
+        console.log('🔄 Auto-refreshing pending orders...');
+        await fetchPendingOrders();
+      } catch (error) {
+        console.error('Failed to auto-refresh orders:', error);
+      }
+    };
+
+    // Set up interval for auto-refresh
+    const interval = setInterval(refreshOrders, 10000); // Refresh every 10 seconds
+
+    // Also refresh when page becomes visible
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        fetchPendingOrders();
+        console.log('📱 Page visible - refreshing orders');
+        refreshOrders();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Listen for mobile app refresh events
-    const handleRefreshPendingOrders = () => {
-      console.log('Refreshing pending orders from mobile app resume');
-      fetchPendingOrders();
-    };
-
-    window.addEventListener('refreshPendingOrders', handleRefreshPendingOrders);
-    
-    // Listen for app state changes on mobile
     if (Capacitor.isNativePlatform()) {
       const handleAppStateChange = () => {
         console.log('📱 App state changed - refreshing orders');
-        fetchPendingOrders();
+        refreshOrders();
       };
-      
+
       document.addEventListener('resume', handleAppStateChange);
       document.addEventListener('visibilitychange', handleAppStateChange);
-      
+
       return () => {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-        }
+        clearInterval(interval);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('refreshPendingOrders', handleRefreshPendingOrders);
         document.removeEventListener('resume', handleAppStateChange);
         document.removeEventListener('visibilitychange', handleAppStateChange);
       };
     }
 
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
+      clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('refreshPendingOrders', handleRefreshPendingOrders);
     };
   }, []);
 

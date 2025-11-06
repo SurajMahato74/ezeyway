@@ -4,6 +4,49 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Bell, Clock, MapPin, Phone, Package, CheckCircle, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
+import L from 'leaflet';
+import '@/assets/leaflet.css';
+import { vendorService } from '@/services/vendorService';
+import { apiRequest } from '@/utils/apiUtils';
+
+// Custom markers for the map
+const vendorMarkerIcon = L.divIcon({
+  className: 'vendor-marker',
+  html: `<div style="background-color: #10b981; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`,
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
+
+const deliveryMarkerIcon = L.divIcon({
+  className: 'delivery-marker',
+  html: `<div style="background-color: #ef4444; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`,
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
+
+// Function to fetch route from OSRM
+const fetchRoute = async (startLng: number, startLat: number, endLng: number, endLat: number) => {
+  try {
+    const response = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`
+    );
+    const data = await response.json();
+
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const coordinates = route.geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]] as [number, number]);
+      return {
+        coordinates,
+        distance: route.distance / 1000, // Convert to km
+        duration: route.duration / 60 // Convert to minutes
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching route:', error);
+  }
+  return null;
+};
 
 interface OrderItem {
   id: number;
@@ -11,6 +54,9 @@ interface OrderItem {
   quantity: number;
   unit_price: string;
   total_price: string;
+  product_details?: {
+    images?: { image_url: string }[];
+  };
 }
 
 interface NewOrder {
@@ -19,6 +65,8 @@ interface NewOrder {
   customer_name: string;
   delivery_phone: string;
   delivery_address: string;
+  delivery_latitude: number;
+  delivery_longitude: number;
   total_amount: string;
   payment_method: string;
   created_at: string;
@@ -35,12 +83,46 @@ interface OrderNotificationModalProps {
 
 export function OrderNotificationModal({ isOpen, orders, onAccept, onReject }: OrderNotificationModalProps) {
   const [elapsedTimes, setElapsedTimes] = useState<{[key: number]: number}>({});
+  const [vendorLocation, setVendorLocation] = useState<{ lat: number; lng: number; radius: number } | null>(null);
+  const [routes, setRoutes] = useState<{[key: number]: { coordinates: [number, number][], distance: number, duration: number }}>({});
   const audioRef = useRef<HTMLAudioElement>(null);
   const { toast } = useToast();
   const orderTimesRef = useRef<{[key: number]: Date}>({});
 
+  // Fetch vendor location and routes when modal opens
   useEffect(() => {
+    const fetchVendorLocationAndRoutes = async () => {
+      try {
+        const { response, data } = await apiRequest('vendor-profiles/');
+        if (response.ok && data.results && data.results.length > 0) {
+          const vendor = data.results[0];
+          if (vendor.latitude && vendor.longitude) {
+            setVendorLocation({
+              lat: vendor.latitude,
+              lng: vendor.longitude,
+              radius: vendor.delivery_radius || 50
+            });
+
+            // Fetch routes for all orders
+            const newRoutes: {[key: number]: { coordinates: [number, number][], distance: number, duration: number }} = {};
+            for (const order of orders) {
+              if (order.delivery_latitude && order.delivery_longitude) {
+                const route = await fetchRoute(vendor.longitude, vendor.latitude, order.delivery_longitude, order.delivery_latitude);
+                if (route) {
+                  newRoutes[order.id] = route;
+                }
+              }
+            }
+            setRoutes(newRoutes);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching vendor location:', error);
+      }
+    };
+
     if (isOpen && orders.length > 0) {
+      fetchVendorLocationAndRoutes();
       // Play alert sound with retry mechanism
       const playSound = async () => {
         if (audioRef.current) {
@@ -117,6 +199,27 @@ export function OrderNotificationModal({ isOpen, orders, onAccept, onReject }: O
     }
   }, [isOpen, orders]);
 
+  // Update routes when orders change
+  useEffect(() => {
+    if (vendorLocation && orders.length > 0) {
+      const updateRoutes = async () => {
+        const newRoutes: {[key: number]: { coordinates: [number, number][], distance: number, duration: number }} = {};
+        for (const order of orders) {
+          if (order.delivery_latitude && order.delivery_longitude && !routes[order.id]) {
+            const route = await fetchRoute(vendorLocation.lng, vendorLocation.lat, order.delivery_longitude, order.delivery_latitude);
+            if (route) {
+              newRoutes[order.id] = route;
+            }
+          }
+        }
+        if (Object.keys(newRoutes).length > 0) {
+          setRoutes(prev => ({ ...prev, ...newRoutes }));
+        }
+      };
+      updateRoutes();
+    }
+  }, [orders, vendorLocation]);
+
   const showNotifications = () => {
     orders.forEach(order => {
       new Notification('New Order Received!', {
@@ -156,29 +259,35 @@ export function OrderNotificationModal({ isOpen, orders, onAccept, onReject }: O
         <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" type="audio/wav" />
       </audio>
 
-      {/* Overlay */}
-      <div className="fixed inset-0 bg-black/50 z-[9999] flex items-end">
-        {/* Modal */}
-        <div className="w-full bg-white rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom duration-300" style={{ height: '80vh' }}>
-          <div className="p-6 h-full flex flex-col">
+      {/* Full Page */}
+      <div className="fixed inset-0 bg-white z-[9999] flex flex-col">
+        {/* Full Page Container */}
+        <div className="flex-1 flex flex-col w-full h-full">
+          <div className="p-4 h-full flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => window.history.back()}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-600" />
+              </button>
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
-                  <Bell className="h-3 w-3 text-red-600 animate-bounce" />
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
+                  <Bell className="h-4 w-4 text-red-600 animate-bounce" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-red-900">🔔 New Orders Received!</h2>
-                  <p className="text-xs text-red-600 font-medium">{orders.length} order{orders.length > 1 ? 's' : ''} waiting for response</p>
+                  <h2 className="text-lg font-bold text-red-900">🔔 New Orders Received!</h2>
+                  <p className="text-sm text-red-600 font-medium">{orders.length} order{orders.length > 1 ? 's' : ''} waiting for response</p>
                 </div>
               </div>
-              <div className="text-xs text-red-600 font-bold animate-pulse">
+              <div className="text-sm text-red-600 font-bold animate-pulse">
                 URGENT
               </div>
             </div>
 
             {/* Orders List */}
-            <div className="flex-1 overflow-y-auto space-y-2">
+            <div className="flex-1 overflow-y-auto space-y-4">
               {orders.map((order) => {
                 const elapsedTime = elapsedTimes[order.id] || 0;
                 return (
@@ -202,6 +311,100 @@ export function OrderNotificationModal({ isOpen, orders, onAccept, onReject }: O
                         <p className="text-xs text-gray-900">{order.delivery_phone}</p>
                       </div>
                     </div>
+
+                    {/* Distance and Radius Info */}
+                    {routes[order.id] && vendorLocation && (
+                      <div className={`border rounded-lg p-2 mb-2 ${
+                        routes[order.id].distance > vendorLocation.radius
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-blue-50 border-blue-200'
+                      }`}>
+                        <div className="flex items-center justify-between text-center">
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-blue-800">📍 Distance</p>
+                            <p className={`text-sm font-bold ${
+                              routes[order.id].distance > vendorLocation.radius ? 'text-red-900' : 'text-blue-900'
+                            }`}>
+                              {routes[order.id].distance.toFixed(1)}km
+                            </p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-green-800">🎯 Radius</p>
+                            <p className="text-sm font-bold text-green-900">{vendorLocation.radius}km</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-gray-700">⏱️ Time</p>
+                            <p className="text-sm font-bold text-gray-900">{Math.round(routes[order.id].duration)}min</p>
+                          </div>
+                        </div>
+                        {routes[order.id].distance > vendorLocation.radius && (
+                          <p className="text-xs font-bold text-red-600 mt-1 text-center">
+                            ⚠️ Exceeds radius!
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Delivery Map */}
+                    {vendorLocation && order.delivery_latitude && order.delivery_longitude && (
+                      <div className="mb-4">
+                        <div className="h-64 rounded-lg overflow-hidden border relative">
+                          <MapContainer
+                            center={[
+                              (vendorLocation.lat + order.delivery_latitude) / 2,
+                              (vendorLocation.lng + order.delivery_longitude) / 2
+                            ]}
+                            zoom={12}
+                            style={{ height: '100%', width: '100%' }}
+                            zoomControl={false}
+                            attributionControl={false}
+                          >
+                            <TileLayer
+                              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            />
+                            <Marker
+                              position={[vendorLocation.lat, vendorLocation.lng]}
+                              icon={vendorMarkerIcon}
+                            />
+                            <Marker
+                              position={[order.delivery_latitude, order.delivery_longitude]}
+                              icon={deliveryMarkerIcon}
+                            />
+                            {routes[order.id] && (
+                              <Polyline
+                                positions={routes[order.id].coordinates}
+                                pathOptions={{
+                                  color: '#3b82f6',
+                                  weight: 4,
+                                  opacity: 0.8
+                                }}
+                              />
+                            )}
+                          </MapContainer>
+                          {/* Distance Display */}
+                          {routes[order.id] && (
+                            <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1 shadow-lg">
+                              <div className="text-sm font-semibold text-gray-800">
+                                📍 {routes[order.id].distance.toFixed(1)} km
+                              </div>
+                              <div className="text-xs text-gray-600">
+                                ⏱️ {Math.round(routes[order.id].duration)} min
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="text-xs text-gray-600">Your Location</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                            <span className="text-xs text-gray-600">Delivery Location</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mb-1">
                       <p className="text-xs font-medium text-gray-700 mb-1">Items ({order.items.length})</p>

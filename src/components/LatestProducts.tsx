@@ -95,8 +95,45 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
 
       const productsResponse = await fetch(`${API_BASE}search/products/?${params}`, { headers });
       const productsData = await productsResponse.json();
+
+      console.log('🔥 LATEST PRODUCTS - API Response:', {
+        total_results: productsData.results?.length || 0,
+        query_params: Object.fromEntries(params),
+        user_location: currentLocation,
+        full_response: productsData
+      });
+
       const filteredProducts = await filterOwnProducts(productsData.results || []);
+      console.log('🔥 LATEST PRODUCTS - After filterOwnProducts:', {
+        count: filteredProducts.length,
+        products: filteredProducts.map(p => ({
+          id: p.id,
+          name: p.name,
+          vendor_name: p.vendor_name,
+          vendor_latitude: p.vendor_latitude,
+          vendor_longitude: p.vendor_longitude,
+          vendor_delivery_radius: p.vendor_delivery_radius,
+          vendor_online: p.vendor_online,
+          created_at: p.created_at
+        }))
+      });
+
       const processedProducts = processProducts(filteredProducts);
+      console.log('🔥 LATEST PRODUCTS - After processProducts:', {
+        count: processedProducts.length,
+        products: processedProducts.map(p => ({
+          id: p.id,
+          name: p.name,
+          vendor: p.vendor,
+          distance: p.distance,
+          distanceValue: p.distanceValue,
+          deliveryRadius: p.deliveryRadius,
+          vendorOnline: p.vendorOnline,
+          createdAt: p.createdAt,
+          included: p.vendorOnline && (p.distanceValue === Infinity || p.distanceValue <= p.deliveryRadius)
+        }))
+      });
+
       setLatestProducts(processedProducts);
 
       // After setting products, load reviews for visible products
@@ -113,8 +150,21 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
 
   const processProducts = (products) => {
     const currentLocation = locationService.getLocation();
-  // Use delivery radius from product/vendor when available. If not provided,
-  // treat as no client-side limit (Infinity) and rely on the backend to filter by vendor radius.
+    console.log('🔥 LATEST PRODUCTS - processProducts called with:', {
+      total_products: products.length,
+      user_location: currentLocation,
+      products_sample: products.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.name,
+        vendor_name: p.vendor_name,
+        vendor_latitude: p.vendor_latitude,
+        vendor_longitude: p.vendor_longitude,
+        vendor_delivery_radius: p.vendor_delivery_radius,
+        vendor_online: p.vendor_online,
+        created_at: p.created_at
+      }))
+    });
+
     const computeAggregateRating = (product) => {
       if (product.reviews && Array.isArray(product.reviews) && product.reviews.length > 0) {
         const values = product.reviews
@@ -171,8 +221,32 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
       };
     })
     .filter(product => {
-      return product.vendorOnline && 
-             (product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius);
+      const isOnline = product.vendorOnline;
+      const withinRadius = product.distanceValue === Infinity || product.distanceValue <= product.deliveryRadius;
+
+      console.log(`🔥 LATEST PRODUCTS - Filtering product ${product.id} (${product.name}):`, {
+        vendorOnline: product.vendorOnline,
+        distanceValue: product.distanceValue,
+        deliveryRadius: product.deliveryRadius,
+        withinRadius,
+        included: isOnline && withinRadius,
+        reason: !isOnline ? 'Vendor offline' : !withinRadius ? `Too far (${product.distanceValue}km > ${product.deliveryRadius}km)` : 'Included'
+      });
+
+      return isOnline && withinRadius;
+    });
+
+    console.log('🔥 LATEST PRODUCTS - After filtering:', {
+      total_filtered: processedProducts.length,
+      filtered_products: processedProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        vendor: p.vendor,
+        distance: p.distance,
+        vendorOnline: p.vendorOnline,
+        deliveryRadius: p.deliveryRadius,
+        createdAt: p.createdAt
+      }))
     });
 
     // Sort by creation date (newest first)

@@ -97,13 +97,10 @@ const VendorOrders: React.FC = () => {
     window.addEventListener('newNotification', handleNewNotification as EventListener);
     window.addEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
     
-    // Disable auto-refresh on mobile for better performance
-    let interval;
-    if (!isMobile) {
-      interval = setInterval(() => {
-        fetchVendorOrders();
-      }, 60000);
-    }
+    // Auto-refresh orders every 30 seconds for real-time updates
+    const interval = setInterval(() => {
+      fetchVendorOrders();
+    }, 30000);
     
     return () => {
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
@@ -477,26 +474,44 @@ const VendorOrders: React.FC = () => {
                     });
                     
                     if (response.ok) {
-                      // Refresh orders to get updated data
-                      fetchVendorOrders();
+                      // Update local state immediately for instant UI feedback
+                      updateOrderStatus(order.id, 'confirmed');
+
+                      // Refresh orders to get updated data from server
+                      setTimeout(() => fetchVendorOrders(), 1000);
                       setNewOrdersCount(prev => Math.max(0, prev - 1));
-                      
+
                       // Trigger wallet refresh event
                       window.dispatchEvent(new CustomEvent('walletUpdated'));
-                      
-                      // Send WebSocket notification
-                      if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
-                        window.websocket.send(JSON.stringify({
-                          type: 'order_update',
-                          action: 'order_accepted',
-                          order_id: order.id,
-                          timestamp: new Date().toISOString()
-                        }));
+
+                      // Send WebSocket notification (if available)
+                      try {
+                        const ws = (window as any).websocket;
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                          ws.send(JSON.stringify({
+                            type: 'order_update',
+                            action: 'order_accepted',
+                            order_id: order.id,
+                            timestamp: new Date().toISOString()
+                          }));
+                        }
+                      } catch (error) {
+                        console.log('WebSocket not available for notification');
                       }
-                      
-                      // Dispatch order status update event
+
+                      // Dispatch global order status update event
                       window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
                         detail: { orderId: order.id, status: 'confirmed', type: 'accept' }
+                      }));
+
+                      // Dispatch global notification for cross-page updates
+                      window.dispatchEvent(new CustomEvent('newNotification', {
+                        detail: {
+                          type: 'order',
+                          title: `Order #${order.order_number} Accepted`,
+                          message: 'Order has been accepted by vendor',
+                          data: { orderId: order.id, status: 'confirmed' }
+                        }
                       }));
                     }
                   } catch (error) {
@@ -575,11 +590,25 @@ const VendorOrders: React.FC = () => {
                     });
                     
                     if (response.ok) {
-                      fetchVendorOrders();
-                      
+                      // Update local state immediately
+                      updateOrderStatus(order.id, 'delivered');
+
+                      // Refresh from server after a short delay
+                      setTimeout(() => fetchVendorOrders(), 1000);
+
                       // Dispatch order status update event
                       window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
                         detail: { orderId: order.id, status: 'delivered', type: 'deliver' }
+                      }));
+
+                      // Dispatch global notification
+                      window.dispatchEvent(new CustomEvent('newNotification', {
+                        detail: {
+                          type: 'order',
+                          title: `Order #${order.order_number} Delivered`,
+                          message: 'Order has been marked as delivered',
+                          data: { orderId: order.id, status: 'delivered' }
+                        }
                       }));
                     }
                   } catch (error) {
@@ -1807,7 +1836,11 @@ const VendorOrders: React.FC = () => {
                               });
                               
                               if (response.ok) {
-                                fetchVendorOrders();
+                                // Update local state immediately
+                                updateOrderStatus(selectedOrder.id, 'out_for_delivery');
+
+                                // Refresh from server after a short delay
+                                setTimeout(() => fetchVendorOrders(), 1000);
                                 setShowDeliveryForm(false);
                                 setDeliveryBoyPhone('');
                                 setVehicleNumber('');
@@ -1817,20 +1850,35 @@ const VendorOrders: React.FC = () => {
                                 setDeliveryFeeSource('');
                                 setIsDeliveryFeeReadonly(false);
                                 setSelectedOrder(null);
-                                
-                                // Send WebSocket notification
-                                if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
-                                  window.websocket.send(JSON.stringify({
-                                    type: 'order_update',
-                                    action: 'order_shipped',
-                                    order_id: selectedOrder.id,
-                                    timestamp: new Date().toISOString()
-                                  }));
+
+                                // Send WebSocket notification (if available)
+                                try {
+                                  const ws = (window as any).websocket;
+                                  if (ws && ws.readyState === WebSocket.OPEN) {
+                                    ws.send(JSON.stringify({
+                                      type: 'order_update',
+                                      action: 'order_shipped',
+                                      order_id: selectedOrder.id,
+                                      timestamp: new Date().toISOString()
+                                    }));
+                                  }
+                                } catch (error) {
+                                  console.log('WebSocket not available for notification');
                                 }
-                                
+
                                 // Dispatch order status update event
                                 window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
                                   detail: { orderId: selectedOrder.id, status: 'out_for_delivery', type: 'ship' }
+                                }));
+
+                                // Dispatch global notification
+                                window.dispatchEvent(new CustomEvent('newNotification', {
+                                  detail: {
+                                    type: 'order',
+                                    title: `Order #${selectedOrder.order_number} Shipped`,
+                                    message: 'Order has been shipped for delivery',
+                                    data: { orderId: selectedOrder.id, status: 'out_for_delivery' }
+                                  }
                                 }));
                               }
                             } catch (error) {

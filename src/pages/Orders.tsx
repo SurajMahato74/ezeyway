@@ -193,11 +193,19 @@ export default function Orders() {
     window.addEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
+    // Auto-refresh orders every 30 seconds for real-time updates
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchOrdersRef.current(1, true);
+      }
+    }, 30000);
+
     return () => {
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
       window.removeEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      
+      clearInterval(interval);
+
       // Clear debounce timer on cleanup
       if (notificationDebounceRef.current) {
         clearTimeout(notificationDebounceRef.current);
