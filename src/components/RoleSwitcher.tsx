@@ -3,6 +3,7 @@ import { switchToVendorRole, switchToCustomerRole } from '@/utils/roleUtils';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { authService } from '@/services/authService';
+import { simplePersistentAuth } from '@/services/simplePersistentAuth';
 
 export function RoleSwitcher() {
   const { state, login } = useApp();
@@ -11,7 +12,7 @@ export function RoleSwitcher() {
   console.log('🎭 RoleSwitcher rendered, user:', state.user);
   console.log('🎭 Available roles:', state.user?.available_roles);
   console.log('🎭 Available roles length:', state.user?.available_roles?.length);
-  console.log('🎭 Current role:', state.user?.current_role || state.user?.user_type);
+  console.log('🎭 Current role:', state.user?.user_type);
   console.log('🎭 User type:', state.user?.user_type);
   console.log('🎭 Roles check condition:', !state.user?.available_roles || state.user.available_roles.length <= 1);
 
@@ -31,9 +32,8 @@ export function RoleSwitcher() {
             const updatedUser = switchResult.user || { ...state.user!, user_type: 'vendor', current_role: 'vendor' };
             const token = await authService.getToken();
             await login(updatedUser, token);
-            
+
             // Ensure vendor auth is properly set
-            const { simplePersistentAuth } = await import('@/services/simplePersistentAuth');
             await simplePersistentAuth.saveVendorLogin(token, updatedUser);
             
             // Navigate with a small delay to ensure state is updated
@@ -93,7 +93,7 @@ export function RoleSwitcher() {
       <div className="text-center p-4 bg-gray-50 rounded-lg">
         <p className="text-sm text-gray-600">Role switching not available</p>
         <p className="text-xs text-gray-500 mt-1">
-          Current role: {state.user?.current_role || state.user?.user_type || 'Unknown'}
+          Current role: {state.user?.user_type || 'Unknown'}
         </p>
       </div>
     );
@@ -112,7 +112,7 @@ export function RoleSwitcher() {
       <div className="text-center p-4 bg-gray-50 rounded-lg">
         <p className="text-sm text-gray-600">No other roles available</p>
         <p className="text-xs text-gray-500 mt-1">
-          Current role: {state.user?.current_role || state.user?.user_type || 'Unknown'}
+          Current role: {state.user?.user_type || 'Unknown'}
         </p>
       </div>
     );
