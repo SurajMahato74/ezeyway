@@ -75,8 +75,8 @@ class AppInitializer {
       const autoLoginSuccess = await authService.autoLogin();
       
       if (autoLoginSuccess) {
-        // Navigate to vendor dashboard
-        window.location.href = '/vendor/home';
+        // Navigate to vendor orders
+        window.location.href = '/vendor/orders';
       }
     });
 

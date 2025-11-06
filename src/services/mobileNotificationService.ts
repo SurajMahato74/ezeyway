@@ -25,7 +25,7 @@ class MobileNotificationService {
       App.addListener('appUrlOpen', (event) => {
         console.log('App opened from URL:', event.url);
         if (event.url.includes('order-notification')) {
-          window.location.href = '/vendor/home';
+          window.location.href = '/vendor/orders';
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('showOrderModal', {
               detail: { fromNotification: true }
@@ -41,7 +41,7 @@ class MobileNotificationService {
         const data = notification.notification.extra;
         if (data?.type === 'order') {
           await this.vibrateUrgent();
-          window.location.href = '/vendor/home';
+          window.location.href = '/vendor/orders';
           
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('showOrderModal', {

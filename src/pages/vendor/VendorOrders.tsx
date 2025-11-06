@@ -35,6 +35,7 @@ const VendorOrders: React.FC = () => {
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState('');
   const [isMobile, setIsMobile] = useState(false);
+  const [previousOrderIds, setPreviousOrderIds] = useState<Set<number>>(new Set());
   
   // Use notification system
   const { notifications, unreadCount, isConnected } = useNotificationWebSocket();
@@ -60,10 +61,96 @@ const VendorOrders: React.FC = () => {
       const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
       setIsMobile(mobile);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // WHATSAPP-STYLE INSTANT ORDER CHECKING - Never miss an order!
+  useEffect(() => {
+    const checkForInstantOrders = async () => {
+      try {
+        console.log('🚀 WHATSAPP-STYLE: Checking for instant orders on page load');
+        const { apiRequest } = await import('@/utils/apiUtils');
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // Quick check
+
+        const { response, data } = await apiRequest('/vendor/orders/?limit=10', {
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok && data) {
+          const orders = data.results || data || [];
+          const newOrders = orders.filter((order: any) => order.status === 'pending');
+
+          if (newOrders.length > 0) {
+            console.log('🎯 WHATSAPP-STYLE: Found', newOrders.length, 'pending orders instantly!');
+
+            // For page load, play sound for ALL pending orders (like WhatsApp unread messages)
+            // This is the first time we're checking, so all pending orders should alert
+            if (previousOrderIds.size === 0) {
+              console.log('🚨 WHATSAPP-STYLE: FIRST LOAD - Playing sound for ALL', newOrders.length, 'pending orders');
+
+              // Trigger instant notification and sound for ALL pending orders on first load
+              const { simpleNotificationService } = await import('@/services/simpleNotificationService');
+              for (const order of newOrders) {
+                await simpleNotificationService.showOrderNotification(
+                  order.order_number,
+                  order.total_amount,
+                  order.id
+                );
+              }
+            } else {
+              // Filter out orders we've already seen (for subsequent checks)
+              const trulyNewOrders = newOrders.filter(order => !previousOrderIds.has(Number(order.id)));
+
+              if (trulyNewOrders.length > 0) {
+                console.log('🚨 WHATSAPP-STYLE: Playing sound for', trulyNewOrders.length, 'TRULY new orders');
+
+                // Trigger instant notification and sound for each TRULY new order
+                const { simpleNotificationService } = await import('@/services/simpleNotificationService');
+                for (const order of trulyNewOrders) {
+                  await simpleNotificationService.showOrderNotification(
+                    order.order_number,
+                    order.total_amount,
+                    order.id
+                  );
+                }
+              }
+            }
+
+            // Update local state immediately
+            setNewOrdersCount(newOrders.length);
+
+            // Refresh orders to show latest
+            fetchVendorOrders();
+          }
+        }
+      } catch (error) {
+        console.log('WHATSAPP-STYLE: Instant check failed, will use polling instead');
+      }
+    };
+
+    // Check immediately on page load (like WhatsApp)
+    checkForInstantOrders();
+
+    // Also check when page becomes visible (like WhatsApp)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('📱 WHATSAPP-STYLE: Page became visible, checking for orders');
+        checkForInstantOrders();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
   
   // Fetch real orders only
@@ -97,15 +184,39 @@ const VendorOrders: React.FC = () => {
     window.addEventListener('newNotification', handleNewNotification as EventListener);
     window.addEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
     
-    // Auto-refresh orders every 30 seconds for real-time updates
-    const interval = setInterval(() => {
-      fetchVendorOrders();
-    }, 30000);
+    // AGGRESSIVE auto-refresh for orders (they're URGENT business!)
+    let aggressiveInterval: NodeJS.Timeout; // Every 5 seconds when visible
+    let backgroundInterval: NodeJS.Timeout; // Every 15 seconds when hidden
+
+    const startAggressivePolling = () => {
+      // Clear existing intervals
+      if (aggressiveInterval) clearInterval(aggressiveInterval);
+      if (backgroundInterval) clearInterval(backgroundInterval);
+
+      // SUPER AGGRESSIVE: Every 5 seconds when page is visible
+      aggressiveInterval = setInterval(() => {
+        if (!document.hidden) {
+          console.log('🚀 VENDOR ORDERS: AGGRESSIVE POLLING - checking for urgent orders');
+          fetchVendorOrders();
+        }
+      }, 5000); // Every 5 seconds when visible!
+
+      // Background polling: Every 15 seconds when hidden
+      backgroundInterval = setInterval(() => {
+        if (document.hidden) {
+          console.log('📱 VENDOR ORDERS: BACKGROUND POLLING - still checking for orders');
+          fetchVendorOrders();
+        }
+      }, 15000); // Every 15 seconds when hidden
+    };
+
+    startAggressivePolling();
     
     return () => {
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
       window.removeEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
-      if (interval) clearInterval(interval);
+      if (aggressiveInterval) clearInterval(aggressiveInterval);
+      if (backgroundInterval) clearInterval(backgroundInterval);
     };
   }, [isMobile]);
 
@@ -128,6 +239,44 @@ const VendorOrders: React.FC = () => {
       if (response.ok && data) {
         const orders = data.results || data || [];
         console.log('📦 Orders received:', orders.length, orders);
+
+        // 🚨 AUTO SOUND ALERT: Check for TRULY NEW pending orders by ID
+        const currentPendingOrders = orders.filter(o => o.status === 'pending');
+        const currentOrderIds: Set<number> = new Set(currentPendingOrders.map(o => Number(o.id)));
+
+        // Find orders that are NEW (not in previous set)
+        const newOrderIds: number[] = [...currentOrderIds].filter((id: number) => !previousOrderIds.has(id));
+        const newOrders = currentPendingOrders.filter(order => newOrderIds.includes(Number(order.id)));
+
+        if (newOrders.length > 0) {
+          console.log('🎯 TRULY NEW ORDERS DETECTED! Auto-playing sound alert for:', newOrders.length, 'orders');
+          console.log('📋 New orders details:', newOrders.map(o => ({ id: o.id, number: o.order_number, amount: o.total_amount })));
+
+          // IMMEDIATE ALERT FOR DEBUGGING
+          alert(`🚨 NEW ORDERS DETECTED!\n\n${newOrders.length} new order(s) found:\n${newOrders.map(o => `• Order #${o.order_number} - ₹${o.total_amount}`).join('\n')}\n\nAttempting to show notifications...`);
+
+          // Auto-play sound for new orders without requiring user interaction
+          const { simpleNotificationService } = await import('@/services/simpleNotificationService');
+          for (const order of newOrders) {
+            console.log('🔊 Triggering notification for order:', order.order_number);
+            try {
+              await simpleNotificationService.showOrderNotification(
+                order.order_number,
+                order.total_amount,
+                order.id
+              );
+              console.log('✅ Notification triggered for order:', order.order_number);
+            } catch (error) {
+              console.error('❌ Failed to trigger notification for order:', order.order_number, error);
+              alert(`❌ Failed to show notification for order ${order.order_number}: ${error.message}`);
+            }
+          }
+        } else {
+          console.log('📭 No new orders detected in this fetch');
+        }
+
+        // Update tracking
+        setPreviousOrderIds(currentOrderIds);
         setOrdersData(orders);
       } else {
         console.error('Failed to fetch orders:', response.status, data);
@@ -159,11 +308,6 @@ const VendorOrders: React.FC = () => {
     }
   }, [newOrdersCount]);
   
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -477,6 +621,10 @@ const VendorOrders: React.FC = () => {
                       // Update local state immediately for instant UI feedback
                       updateOrderStatus(order.id, 'confirmed');
 
+                      // STOP persistent alerts for this order
+                      const { simpleNotificationService } = await import('@/services/simpleNotificationService');
+                      simpleNotificationService.clearNotification(order.id);
+
                       // Refresh orders to get updated data from server
                       setTimeout(() => fetchVendorOrders(), 1000);
                       setNewOrdersCount(prev => Math.max(0, prev - 1));
@@ -593,6 +741,10 @@ const VendorOrders: React.FC = () => {
                       // Update local state immediately
                       updateOrderStatus(order.id, 'delivered');
 
+                      // STOP persistent alerts for this order
+                      const { simpleNotificationService } = await import('@/services/simpleNotificationService');
+                      simpleNotificationService.clearNotification(order.id);
+
                       // Refresh from server after a short delay
                       setTimeout(() => fetchVendorOrders(), 1000);
 
@@ -652,6 +804,7 @@ const VendorOrders: React.FC = () => {
                 <p className="text-xl font-bold text-blue-600">{ordersData.filter(o => o.status === 'pending').length}</p>
                 <p className="text-xs text-gray-600">New Orders</p>
               </div>
+              {/* TEST NOTIFICATIONS BUTTON */}
               <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
                 <p className="text-xl font-bold text-yellow-600">{ordersData.filter(o => o.status === 'out_for_delivery').length}</p>
                 <p className="text-xs text-gray-600">Shipped</p>
@@ -1743,13 +1896,123 @@ const VendorOrders: React.FC = () => {
                 {/* Action Buttons */}
                 {selectedOrder.status === 'new' && (
                   <div className="fixed bottom-4 left-4 right-4 flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => setSelectedOrder(null)}>
+                    <Button variant="outline" className="flex-1" onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const { response } = await apiRequest(`/orders/${selectedOrder.id}/reject/`, {
+                          method: 'POST'
+                        });
+
+                        if (response.ok) {
+                          // Update local state immediately for instant UI feedback
+                          updateOrderStatus(selectedOrder.id, 'cancelled');
+
+                          // STOP persistent alerts for this order
+                          const { simpleNotificationService } = await import('@/services/simpleNotificationService');
+                          simpleNotificationService.clearNotification(selectedOrder.id);
+
+                          // Refresh orders to get updated data from server
+                          setTimeout(() => fetchVendorOrders(), 1000);
+                          setNewOrdersCount(prev => Math.max(0, prev - 1));
+
+                          // Trigger wallet refresh event
+                          window.dispatchEvent(new CustomEvent('walletUpdated'));
+
+                          // Send WebSocket notification (if available)
+                          try {
+                            const ws = (window as any).websocket;
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                              ws.send(JSON.stringify({
+                                type: 'order_update',
+                                action: 'order_rejected',
+                                order_id: selectedOrder.id,
+                                timestamp: new Date().toISOString()
+                              }));
+                            }
+                          } catch (error) {
+                            console.log('WebSocket not available for notification');
+                          }
+
+                          // Dispatch global order status update event
+                          window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+                            detail: { orderId: selectedOrder.id, status: 'cancelled', type: 'reject' }
+                          }));
+
+                          // Dispatch global notification for cross-page updates
+                          window.dispatchEvent(new CustomEvent('newNotification', {
+                            detail: {
+                              type: 'order',
+                              title: `Order #${selectedOrder.order_number} Rejected`,
+                              message: 'Order has been rejected by vendor',
+                              data: { orderId: selectedOrder.id, status: 'cancelled' }
+                            }
+                          }));
+
+                          setSelectedOrder(null);
+                        }
+                      } catch (error) {
+                        console.error('Error rejecting order:', error);
+                      }
+                    }}>
                       Reject
                     </Button>
-                    <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => {
-                      updateOrderStatus(selectedOrder.id, 'confirmed');
-                      setNewOrdersCount(prev => Math.max(0, prev - 1));
-                      setSelectedOrder(null);
+                    <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const { response } = await apiRequest(`/orders/${selectedOrder.id}/accept/`, {
+                          method: 'POST'
+                        });
+
+                        if (response.ok) {
+                          // Update local state immediately for instant UI feedback
+                          updateOrderStatus(selectedOrder.id, 'confirmed');
+
+                          // STOP persistent alerts for this order
+                          const { simpleNotificationService } = await import('@/services/simpleNotificationService');
+                          simpleNotificationService.clearNotification(selectedOrder.id);
+
+                          // Refresh orders to get updated data from server
+                          setTimeout(() => fetchVendorOrders(), 1000);
+                          setNewOrdersCount(prev => Math.max(0, prev - 1));
+
+                          // Trigger wallet refresh event
+                          window.dispatchEvent(new CustomEvent('walletUpdated'));
+
+                          // Send WebSocket notification (if available)
+                          try {
+                            const ws = (window as any).websocket;
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                              ws.send(JSON.stringify({
+                                type: 'order_update',
+                                action: 'order_accepted',
+                                order_id: selectedOrder.id,
+                                timestamp: new Date().toISOString()
+                              }));
+                            }
+                          } catch (error) {
+                            console.log('WebSocket not available for notification');
+                          }
+
+                          // Dispatch global order status update event
+                          window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+                            detail: { orderId: selectedOrder.id, status: 'confirmed', type: 'accept' }
+                          }));
+
+                          // Dispatch global notification for cross-page updates
+                          window.dispatchEvent(new CustomEvent('newNotification', {
+                            detail: {
+                              type: 'order',
+                              title: `Order #${selectedOrder.order_number} Accepted`,
+                              message: 'Order has been accepted by vendor',
+                              data: { orderId: selectedOrder.id, status: 'confirmed' }
+                            }
+                          }));
+
+                          setSelectedOrder(null);
+                        }
+                      } catch (error) {
+                        console.error('Error accepting order:', error);
+                      }
                     }}>
                       Accept Order
                     </Button>
@@ -1838,6 +2101,10 @@ const VendorOrders: React.FC = () => {
                               if (response.ok) {
                                 // Update local state immediately
                                 updateOrderStatus(selectedOrder.id, 'out_for_delivery');
+
+                                // STOP persistent alerts for this order
+                                const { simpleNotificationService } = await import('@/services/simpleNotificationService');
+                                simpleNotificationService.clearNotification(selectedOrder.id);
 
                                 // Refresh from server after a short delay
                                 setTimeout(() => fetchVendorOrders(), 1000);

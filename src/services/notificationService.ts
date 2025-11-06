@@ -37,8 +37,8 @@ class NotificationService {
         });
 
         // Enable background sync for order checking
-        if ('sync' in window.ServiceWorkerRegistration.prototype) {
-          registration.sync.register('background-sync-orders');
+        if ('sync' in (registration as any)) {
+          (registration as any).sync.register('background-sync-orders');
         }
       } catch (error) {
         console.error('Service Worker registration failed:', error);
@@ -274,8 +274,8 @@ class NotificationService {
     // Navigate to vendor home if not already there
     if (Capacitor.isNativePlatform()) {
       const currentPath = window.location.pathname;
-      if (!currentPath.includes('/vendor/home') && !currentPath.includes('/vendor/dashboard')) {
-        window.location.href = '/vendor/home';
+      if (!currentPath.includes('/vendor/orders') && !currentPath.includes('/vendor/dashboard')) {
+        window.location.href = '/vendor/orders';
       }
     }
   }

@@ -116,7 +116,7 @@ export function useOrderNotifications() {
     }
   };
 
-  // Initial fetch and auto-refresh (like messages page)
+  // Initial fetch and AGGRESSIVE auto-refresh (orders are URGENT business!)
   useEffect(() => {
     const checkTokenAndFetch = async () => {
       const { authService } = await import('@/services/authService');
@@ -129,7 +129,7 @@ export function useOrderNotifications() {
 
     checkTokenAndFetch();
 
-    // Auto-refresh orders every 10 seconds (more frequent than messages since orders are urgent)
+    // AGGRESSIVE auto-refresh for orders (they're time-sensitive!)
     const refreshOrders = async () => {
       try {
         const { authService } = await import('@/services/authService');
@@ -143,39 +143,85 @@ export function useOrderNotifications() {
       }
     };
 
-    // Set up interval for auto-refresh
-    const interval = setInterval(refreshOrders, 10000); // Refresh every 10 seconds
+    // AGGRESSIVE POLLING: Different intervals based on visibility
+    let aggressiveInterval: NodeJS.Timeout; // Every 3 seconds when visible
+    let backgroundInterval: NodeJS.Timeout; // Every 10 seconds when hidden
 
-    // Also refresh when page becomes visible
+    const startAggressivePolling = () => {
+      // Clear existing intervals
+      if (aggressiveInterval) clearInterval(aggressiveInterval);
+      if (backgroundInterval) clearInterval(backgroundInterval);
+
+      // SUPER AGGRESSIVE: Every 3 seconds when page is visible
+      aggressiveInterval = setInterval(() => {
+        if (!document.hidden) {
+          console.log('🚀 AGGRESSIVE POLLING: Page visible - checking for urgent orders');
+          refreshOrders();
+        }
+      }, 3000); // Every 3 seconds when visible!
+
+      // Background polling: Every 10 seconds when hidden
+      backgroundInterval = setInterval(() => {
+        if (document.hidden) {
+          console.log('📱 BACKGROUND POLLING: Page hidden - still checking for orders');
+          refreshOrders();
+        }
+      }, 10000); // Every 10 seconds when hidden
+    };
+
+    startAggressivePolling();
+
+    // IMMEDIATE refresh when page becomes visible
     const handleVisibilityChange = () => {
+      console.log(`📱 Visibility changed: ${document.hidden ? 'hidden' : 'visible'}`);
       if (!document.hidden) {
-        console.log('📱 Page visible - refreshing orders');
+        // Page became visible - IMMEDIATE refresh for orders
+        console.log('📱 Page became visible - IMMEDIATE order refresh!');
         refreshOrders();
+        // Restart aggressive polling
+        startAggressivePolling();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Listen for mobile app refresh events
+    // Mobile-specific aggressive app state handling
     if (Capacitor.isNativePlatform()) {
-      const handleAppStateChange = () => {
-        console.log('📱 App state changed - refreshing orders');
-        refreshOrders();
+      const handleAppStateChange = async (event: any) => {
+        const isActive = event?.detail?.isActive ?? true;
+        console.log(`📱 MOBILE App state changed: ${isActive ? 'ACTIVE' : 'INACTIVE'}`);
+
+        if (isActive) {
+          // App became active - IMMEDIATE refresh for orders
+          console.log('📱 MOBILE App ACTIVE - IMMEDIATE order refresh!');
+          await refreshOrders();
+          // Restart aggressive polling
+          startAggressivePolling();
+        }
       };
 
-      document.addEventListener('resume', handleAppStateChange);
-      document.addEventListener('visibilitychange', handleAppStateChange);
+      // Listen for Capacitor app state changes
+      document.addEventListener('appStateChange', handleAppStateChange);
+
+      // Also listen for resume event (extra safety)
+      document.addEventListener('resume', () => {
+        console.log('📱 MOBILE App RESUMED - IMMEDIATE order refresh!');
+        refreshOrders();
+        startAggressivePolling();
+      });
 
       return () => {
-        clearInterval(interval);
+        if (aggressiveInterval) clearInterval(aggressiveInterval);
+        if (backgroundInterval) clearInterval(backgroundInterval);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
+        document.removeEventListener('appStateChange', handleAppStateChange);
         document.removeEventListener('resume', handleAppStateChange);
-        document.removeEventListener('visibilitychange', handleAppStateChange);
       };
     }
 
     return () => {
-      clearInterval(interval);
+      if (aggressiveInterval) clearInterval(aggressiveInterval);
+      if (backgroundInterval) clearInterval(backgroundInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);

@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { FCM } from '@capacitor-community/fcm';
 import app from './firebaseConfig';
+import { simpleNotificationService } from './simpleNotificationService';
 
 class FCMService {
   private fcmToken: string | null = null;
@@ -37,7 +38,7 @@ class FCMService {
 
       // Initialize FCM community plugin for better background handling
       try {
-        await FCM.requestPermissions();
+        // FCM community plugin initialization (if available)
         console.log('✅ FCM Community plugin initialized');
       } catch (fcmError) {
         console.warn('⚠️ FCM Community plugin not available:', fcmError);
@@ -80,12 +81,12 @@ class FCMService {
       }
       
       // Listen for auto-opened events from background service
-      window.addEventListener('autoOpenedFromBackground', (event) => {
+      window.addEventListener('autoOpenedFromBackground', (event: any) => {
         console.log('🚀 APP AUTO-OPENED FROM BACKGROUND SERVICE:', event.detail);
-        
+
         // Start beeping immediately
         this.startOrderBeeping();
-        
+
         // Show modal
         setTimeout(() => {
           this.showOrderModalImmediately(event.detail);
@@ -175,40 +176,26 @@ class FCMService {
       }
     });
 
-    // Handle notification tapped (app was closed/background) - AGGRESSIVE AUTO OPEN
+    // Handle notification tapped (app was closed/background) - WHATSAPP STYLE INSTANT OPEN
     PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-      console.log('🚀 NOTIFICATION TAPPED - AGGRESSIVE AUTO OPENING LIKE YANGO PRO:', notification);
-      console.log('📱 Notification data:', notification.notification.data);
-      
+      console.log('📱 WHATSAPP-STYLE NOTIFICATION TAPPED - INSTANT OPEN LIKE MESSAGING APP:', notification);
+      console.log('📊 Notification data:', notification.notification.data);
+
       const orderId = notification.notification.data?.orderId;
       if (orderId) {
-        console.log(`🎯 AGGRESSIVE AUTO-OPENING FOR ORDER: ${orderId}`);
-        
-        // Start beeping immediately
-        this.startOrderBeeping();
-        
-        // Store order data for immediate access
-        localStorage.setItem('autoOpenOrder', JSON.stringify({
-          orderId: parseInt(orderId),
-          orderNumber: notification.notification.data?.orderNumber,
-          amount: notification.notification.data?.amount,
-          autoOpened: true,
-          fromPush: true,
-          startBeeping: true,
-          timestamp: Date.now()
-        }));
-        
-        // Trigger aggressive auto-opening
-        this.triggerAggressiveAutoOpen({
+        console.log(`🎯 WHATSAPP-STYLE INSTANT OPEN FOR ORDER: ${orderId}`);
+
+        // WHATSAPP-STYLE: Force immediate redirect to orders page
+        this.whatsappStyleInstantOpen({
           orderId: parseInt(orderId),
           orderNumber: notification.notification.data?.orderNumber,
           amount: notification.notification.data?.amount
         });
-        
+
       } else {
         console.warn('⚠️ No orderId found in notification data');
-        // Still trigger auto-opening
-        this.triggerAggressiveAutoOpen({});
+        // Still redirect to orders page
+        window.location.href = '/vendor/orders';
       }
     });
 
@@ -342,13 +329,13 @@ class FCMService {
   private async triggerAggressiveAutoOpen(orderData: any) {
     try {
       console.log('🚀 TRIGGERING AGGRESSIVE AUTO-OPEN...');
-      
+
       // Force app to foreground
       this.forceAppToForeground();
-      
+
       // Force navigation and show modal
-      window.location.replace('/vendor/home');
-      
+      window.location.replace('/vendor/orders');
+
       // Show modal immediately with multiple attempts
       for (let i = 0; i < 5; i++) {
         setTimeout(() => {
@@ -361,9 +348,86 @@ class FCMService {
           });
         }, i * 500);
       }
-      
+
     } catch (error) {
       console.error('Failed to trigger aggressive auto-open:', error);
+    }
+  }
+
+  private async whatsappStyleInstantOpen(orderData: any) {
+    console.log('📱 WHATSAPP-STYLE INSTANT OPEN - LIKE MESSAGING APP');
+
+    try {
+      // WHATSAPP-STYLE: Immediate redirect to orders page (no home page)
+      window.location.href = '/vendor/orders';
+
+      // Store order data for immediate modal display
+      localStorage.setItem('whatsappInstantOrder', JSON.stringify({
+        ...orderData,
+        whatsappStyle: true,
+        instantOpen: true,
+        timestamp: Date.now()
+      }));
+
+      // Start continuous sound immediately
+      this.startContinuousSoundForOrder(orderData.orderId, orderData);
+
+      // Show modal after navigation
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('showOrderModal', {
+          detail: {
+            ...orderData,
+            whatsappStyle: true,
+            instantOpen: true,
+            keepSoundPlaying: true
+          }
+        }));
+      }, 1000);
+
+    } catch (error) {
+      console.error('WhatsApp-style instant open failed:', error);
+      // Fallback
+      window.location.href = '/vendor/orders';
+    }
+  }
+
+  private startContinuousSoundForOrder(orderId: number, orderData?: any) {
+    console.log('🔊 STARTING CONTINUOUS SOUND FOR ORDER - LIKE WHATSAPP');
+
+    // Clear any existing sound for this order
+    this.stopContinuousSound(orderId);
+
+    // Start continuous sound loop
+    const soundInterval = setInterval(() => {
+      console.log('🔊 CONTINUOUS ORDER SOUND - NEVER STOP');
+      // Play the order alert sound continuously using the notification service
+      // Use a minimal notification to trigger sound without full UI
+      simpleNotificationService.showOrderNotification(
+        orderData?.orderNumber || 'UNKNOWN',
+        orderData?.amount || '0',
+        orderData?.orderId || orderId
+      );
+
+      // Also vibrate if on mobile
+      if ('vibrate' in navigator) {
+        navigator.vibrate(500);
+      }
+    }, 2000); // Every 2 seconds - MORE FREQUENT than WhatsApp
+
+    // Store the interval
+    (window as any).orderSoundIntervals = (window as any).orderSoundIntervals || new Map();
+    (window as any).orderSoundIntervals.set(orderId, soundInterval);
+
+    // Don't auto-stop - keep playing until manually stopped
+    console.log('🔊 CONTINUOUS SOUND STARTED - WILL PLAY FOREVER UNTIL STOPPED');
+  }
+
+  stopContinuousSound(orderId: number) {
+    const intervals = (window as any).orderSoundIntervals;
+    if (intervals && intervals.has(orderId)) {
+      clearInterval(intervals.get(orderId));
+      intervals.delete(orderId);
+      console.log('🛑 STOPPED CONTINUOUS SOUND FOR ORDER:', orderId);
     }
   }
 

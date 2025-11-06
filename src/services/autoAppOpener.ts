@@ -20,7 +20,7 @@ class AutoAppOpener {
         // Navigate to order
         const orderId = notification.notification.extra?.orderId;
         if (orderId) {
-          window.location.href = '/vendor/home';
+          window.location.href = '/vendor/orders';
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('showOrderModal', {
               detail: { orderId, fromNotification: true }

@@ -30,10 +30,10 @@ class MobileAutoOpener {
           // App came to foreground - check for pending orders
           window.dispatchEvent(new CustomEvent('refreshPendingOrders'));
           
-          // Navigate to vendor home if not already there
-          if (!window.location.pathname.includes('/vendor/home')) {
-            console.log('🎯 Auto-navigating to vendor home');
-            window.location.href = '/vendor/home';
+          // Navigate to vendor orders if not already there
+          if (!window.location.pathname.includes('/vendor/orders')) {
+            console.log('🎯 Auto-navigating to vendor orders');
+            window.location.href = '/vendor/orders';
           }
         }
       });
@@ -58,8 +58,8 @@ class MobileAutoOpener {
   private openOrderPage(orderId: number) {
     console.log('🎯 Auto-opening order page for:', orderId);
     
-    // Navigate to vendor dashboard
-    window.location.href = '/vendor/home';
+    // Navigate to vendor orders
+    window.location.href = '/vendor/orders';
     
     // Show order modal after navigation
     setTimeout(() => {
@@ -101,12 +101,12 @@ class MobileAutoOpener {
           window.focus();
           document.body.click();
           
-          // Navigate to vendor home
-          window.location.href = '/vendor/home';
+          // Navigate to vendor orders
+          window.location.href = '/vendor/orders';
         }, 200);
       } catch (e) {
         console.log('Minimize/restore not available, using direct focus');
-        window.location.href = '/vendor/home';
+        window.location.href = '/vendor/orders';
       }
       
       return true;

@@ -8,6 +8,7 @@ import { simplePersistentAuth } from '@/services/simplePersistentAuth';
 export function RoleSwitcher() {
   const { state, login } = useApp();
   const navigate = useNavigate();
+  
 
   console.log('🎭 RoleSwitcher rendered, user:', state.user);
   console.log('🎭 Available roles:', state.user?.available_roles);

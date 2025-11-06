@@ -72,6 +72,8 @@ interface NewOrder {
   created_at: string;
   items: OrderItem[];
   delivery_instructions?: string;
+  delivery_fee?: string;
+  subtotal?: string;
 }
 
 interface OrderNotificationModalProps {
@@ -264,24 +266,19 @@ export function OrderNotificationModal({ isOpen, orders, onAccept, onReject }: O
         {/* Full Page Container */}
         <div className="flex-1 flex flex-col w-full h-full">
           <div className="p-4 h-full flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => window.history.back()}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-600" />
-              </button>
+            {/* Header - NO CLOSE BUTTON - VENDOR MUST ACCEPT OR REJECT */}
+            <div className="flex items-center justify-center mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
                   <Bell className="h-4 w-4 text-red-600 animate-bounce" />
                 </div>
-                <div>
+                <div className="text-center">
                   <h2 className="text-lg font-bold text-red-900">🔔 New Orders Received!</h2>
                   <p className="text-sm text-red-600 font-medium">{orders.length} order{orders.length > 1 ? 's' : ''} waiting for response</p>
+                  <p className="text-xs text-red-500 font-bold mt-1">⚠️ MUST ACCEPT OR REJECT - NO DISMISSAL ALLOWED</p>
                 </div>
               </div>
-              <div className="text-sm text-red-600 font-bold animate-pulse">
+              <div className="text-sm text-red-600 font-bold animate-pulse ml-4">
                 URGENT
               </div>
             </div>
@@ -298,6 +295,44 @@ export function OrderNotificationModal({ isOpen, orders, onAccept, onReject }: O
                       <p className="text-xs text-blue-600">
                         {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
                       </p>
+                    </div>
+
+                    {/* DELIVERY FEE DISPLAY - CRITICAL FOR VENDOR DECISION */}
+                    <div className={`border rounded-lg p-2 mb-2 ${
+                      parseFloat(order.delivery_fee || '0') === 0
+                        ? 'bg-green-50 border-green-200'
+                        : parseFloat(order.delivery_fee || '0') < 50
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-orange-50 border-orange-200'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          <Package className="h-3 w-3 text-gray-600" />
+                          <p className="text-xs font-bold text-gray-800">Delivery Fee:</p>
+                        </div>
+                        <p className={`text-sm font-bold ${
+                          parseFloat(order.delivery_fee || '0') === 0
+                            ? 'text-green-700'
+                            : parseFloat(order.delivery_fee || '0') < 50
+                            ? 'text-blue-700'
+                            : 'text-orange-700'
+                        }`}>
+                          {parseFloat(order.delivery_fee || '0') === 0
+                            ? 'FREE DELIVERY'
+                            : `₹${order.delivery_fee}`
+                          }
+                        </p>
+                      </div>
+                      {parseFloat(order.delivery_fee || '0') > 0 && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          💰 You earn ₹{order.delivery_fee} from this delivery
+                        </p>
+                      )}
+                      {parseFloat(order.delivery_fee || '0') === 0 && (
+                        <p className="text-xs text-green-600 mt-1">
+                          🎁 Free delivery - customer pays nothing extra
+                        </p>
+                      )}
                     </div>
                     <p className="text-xs text-gray-600 mb-1">{order.customer_name}</p>
 

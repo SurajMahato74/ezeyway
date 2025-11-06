@@ -52,8 +52,8 @@ class RealPushNotifications {
         // App is now opening - navigate to order
         const orderId = notification.notification.data?.orderId;
         if (orderId) {
-          // Navigate to vendor dashboard
-          window.location.href = '/vendor/home';
+          // Navigate to vendor orders
+          window.location.href = '/vendor/orders';
           
           // Show order modal after navigation
           setTimeout(() => {
