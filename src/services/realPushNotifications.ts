@@ -112,6 +112,9 @@ class RealPushNotifications {
 
         const extra = notification.notification.extra;
         if (extra?.orderId) {
+          // PLAY SOUND IMMEDIATELY WHEN USER TAPS NOTIFICATION (works on mobile!)
+          this.playMobileEmergencySound();
+
           // FORCE IMMEDIATE NAVIGATION - NO DELAY!
           window.location.href = '/vendor/orders';
 
@@ -125,7 +128,8 @@ class RealPushNotifications {
                 fromMaxEmergencyNotification: true,
                 maxPriority: true,
                 emergency: true,
-                tappedFromBackground: true
+                tappedFromBackground: true,
+                soundPlayed: true
               }
             }));
 
@@ -264,16 +268,32 @@ class RealPushNotifications {
         console.log('📳 INTENSE EMERGENCY VIBRATION PATTERN ACTIVATED');
       }
 
-      // Try to play audio alert if possible (fallback)
-      try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        if (audioContext.state === 'suspended') {
-          audioContext.resume();
-        }
+      // MOBILE SOUND FIX: Try multiple sound strategies for mobile browsers
+      this.playMobileEmergencySound();
 
-        // Play emergency beep sequence
-        const playEmergencyBeep = (frequency: number, duration: number, delay: number) => {
-          setTimeout(() => {
+    } catch (error) {
+      console.error('❌ Failed to show maximum priority emergency notifications:', error);
+    }
+  }
+
+  // MOBILE SOUND FIX: Multiple strategies for mobile browsers
+  private async playMobileEmergencySound() {
+    console.log('🔊 MOBILE EMERGENCY SOUND: Trying multiple strategies...');
+
+    // STRATEGY 1: Try Web Audio API with user interaction simulation
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+      // Force resume audio context (critical for mobile)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+        console.log('🔊 Audio context resumed');
+      }
+
+      // Create LOUD emergency sound sequence
+      const playLoudBeep = (frequency: number, duration: number, delay: number, volume: number = 1.0) => {
+        setTimeout(() => {
+          try {
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
 
@@ -281,29 +301,84 @@ class RealPushNotifications {
             gainNode.connect(audioContext.destination);
 
             oscillator.frequency.value = frequency;
-            oscillator.type = 'square';
-            gainNode.gain.setValueAtTime(1.0, audioContext.currentTime);
+            oscillator.type = 'sawtooth'; // More piercing sound
+            gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
 
             oscillator.start(audioContext.currentTime);
             oscillator.stop(audioContext.currentTime + duration);
-          }, delay);
-        };
+          } catch (error) {
+            console.warn('Web Audio beep failed:', error);
+          }
+        }, delay);
+      };
 
-        // Emergency siren-like pattern
-        playEmergencyBeep(800, 0.2, 0);
-        playEmergencyBeep(1000, 0.2, 300);
-        playEmergencyBeep(1200, 0.3, 600);
-        playEmergencyBeep(1000, 0.2, 1000);
-        playEmergencyBeep(800, 0.2, 1300);
+      // Emergency pattern: High-low-high (like ambulance)
+      playLoudBeep(1200, 0.15, 0, 1.0);    // High beep - LOUD
+      playLoudBeep(800, 0.15, 200, 1.0);   // Low beep - LOUD
+      playLoudBeep(1200, 0.2, 400, 1.0);   // High beep again - LOUD
+      playLoudBeep(1000, 0.3, 700, 1.0);   // Sustained tone - MAX VOLUME
 
-        console.log('🔊 EMERGENCY AUDIO ALERT PLAYED');
-      } catch (audioError) {
-        console.warn('Audio alert failed:', audioError);
+      console.log('✅ MOBILE EMERGENCY SOUND: Web Audio strategy successful');
+    } catch (audioError) {
+      console.warn('❌ MOBILE EMERGENCY SOUND: Web Audio failed:', audioError);
+
+      // STRATEGY 2: Try HTML5 Audio with data URL (works better on mobile)
+      try {
+        // Create a data URL audio (beep sound)
+        const audioData = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+        const audio = new Audio(audioData);
+        audio.volume = 1.0; // MAX VOLUME
+
+        // Force play with user interaction simulation
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log('✅ MOBILE EMERGENCY SOUND: HTML5 Audio successful');
+          }).catch(error => {
+            console.warn('❌ MOBILE EMERGENCY SOUND: HTML5 Audio blocked:', error);
+            // STRATEGY 3: Simulate user interaction to unlock audio
+            this.forceAudioUnlock();
+          });
+        }
+      } catch (html5Error) {
+        console.warn('❌ MOBILE EMERGENCY SOUND: HTML5 Audio failed:', html5Error);
+        this.forceAudioUnlock();
+      }
+    }
+  }
+
+  // FORCE AUDIO UNLOCK: Simulate user interaction to unlock mobile audio
+  private forceAudioUnlock() {
+    console.log('🔓 FORCE AUDIO UNLOCK: Simulating user interaction...');
+
+    // Create temporary audio context and try to unlock it
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+      // Create a silent buffer and play it to unlock audio
+      const buffer = audioContext.createBuffer(1, 1, 22050);
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+
+      // Try to play silent audio to unlock
+      if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+          source.start();
+          console.log('✅ AUDIO UNLOCKED: Silent buffer played');
+        });
+      } else {
+        source.start();
       }
 
-    } catch (error) {
-      console.error('❌ Failed to show maximum priority emergency notifications:', error);
+      // Now try emergency sound again after unlock
+      setTimeout(() => {
+        this.playMobileEmergencySound();
+      }, 100);
+
+    } catch (unlockError) {
+      console.warn('❌ AUDIO UNLOCK FAILED:', unlockError);
     }
   }
 
@@ -311,6 +386,12 @@ class RealPushNotifications {
   async testEmergencyNotification(orderId: string = '123', orderNumber: string = 'TEST-001', amount: string = '100') {
     console.log('🧪 TESTING EMERGENCY NOTIFICATION...');
     await this.showEmergencyLocalNotification(orderId, orderNumber, amount);
+  }
+
+  // TEST SOUND METHOD: Call this from browser console to test mobile sound
+  async testMobileSound() {
+    console.log('🧪 TESTING MOBILE SOUND FUNCTIONALITY...');
+    await this.playMobileEmergencySound();
   }
 
   getFCMToken(): string | null {

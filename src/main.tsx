@@ -225,17 +225,48 @@ createRoot(document.getElementById("root")!).render(<App />);
   }
 };
 
+(window as any).testMobileSound = async function() {
+  console.log('🔊 Testing mobile sound functionality...');
+  alert('🔊 Testing mobile sound - you should hear emergency beeps');
+
+  try {
+    const { realPushNotifications } = await import('./services/realPushNotifications');
+    await realPushNotifications.testMobileSound();
+    console.log('✅ Mobile sound test completed');
+  } catch (error) {
+    console.error('❌ Mobile sound test failed:', error);
+    alert('❌ Sound test failed: ' + error.message);
+  }
+};
+
+(window as any).testEmergencyNotification = async function() {
+  console.log('🚨 Testing emergency notification...');
+  alert('🚨 Testing emergency notification system');
+
+  try {
+    const { realPushNotifications } = await import('./services/realPushNotifications');
+    await realPushNotifications.testEmergencyNotification();
+    console.log('✅ Emergency notification test completed');
+  } catch (error) {
+    console.error('❌ Emergency notification test failed:', error);
+    alert('❌ Emergency notification test failed: ' + error.message);
+  }
+};
+
 console.log('🧪 Global test functions available:');
 console.log('  - testNotifications() - Test full notification system');
 console.log('  - checkNotificationPermissions() - Check permission status');
 console.log('  - showTestOrder() - Show test order modal');
 console.log('  - checkForNewOrders() - Manually check and trigger notifications for pending orders');
+console.log('  - testMobileSound() - Test mobile sound functionality');
+console.log('  - testEmergencyNotification() - Test emergency notification');
 console.log('');
 console.log('🔧 To test notifications:');
 console.log('  1. Open browser console (F12)');
 console.log('  2. Run: checkNotificationPermissions()');
 console.log('  3. Run: testNotifications()');
-console.log('  4. Or click the orange "🧪 TEST" button in vendor orders');
-console.log('  5. Run: checkForNewOrders() to check for real pending orders');
+console.log('  4. Run: testMobileSound() - Test if sound works on mobile');
+console.log('  5. Or click the orange "🧪 TEST" button in vendor orders');
+console.log('  6. Run: checkForNewOrders() to check for real pending orders');
 
 createRoot(document.getElementById("root")!).render(<App />);
