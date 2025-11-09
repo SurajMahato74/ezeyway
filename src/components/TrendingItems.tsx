@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
-import { getDeliveryInfo, getDeliveryRadius } from "@/utils/deliveryUtils";
+import { getDeliveryInfo, getDeliveryRadius, getGlobalDeliveryRadius, getDeliveryRadiusSync } from "@/utils/deliveryUtils";
 
 import { API_BASE } from '@/config/api';
 import { reviewService } from '@/services/reviewService';
@@ -55,13 +55,22 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
   const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
+  const [globalDeliveryRadius, setGlobalDeliveryRadius] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
-    
+
     // Start location tracking immediately
     locationService.startTracking();
-    
+
+    // Fetch global delivery radius
+    getGlobalDeliveryRadius().then(radius => {
+      console.log('🔥 TRENDING ITEMS - Global delivery radius:', radius);
+      setGlobalDeliveryRadius(radius);
+    }).catch(err => {
+      console.warn('Failed to fetch global delivery radius:', err);
+    });
+
     // Only fetch if we already have location, otherwise wait for location update
     const currentLocation = locationService.getLocation();
     if (currentLocation) {
@@ -74,13 +83,13 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
           fetchTrendingItems();
         }
       }, 3000);
-      
+
       return () => {
         clearTimeout(timeoutId);
         unsubscribe();
       };
     }
-    
+
     return unsubscribe;
   }, []);
 
@@ -166,7 +175,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
     if (responseWithoutLocation.ok) {
       const dataWithoutLocation = await responseWithoutLocation.json();
       const filteredWithoutLocation = await filterOwnProducts(dataWithoutLocation.results || []);
-      const processedWithoutLocation = processProducts(filteredWithoutLocation);
+      const processedWithoutLocation = await processProducts(filteredWithoutLocation);
       console.log('Products without location filter:', processedWithoutLocation);
       setTrendingItems(processedWithoutLocation);
       const ids = processedWithoutLocation.map(p => p.id);
@@ -185,7 +194,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
     if (fallbackResponse.ok) {
       const fallbackData = await fallbackResponse.json();
       const fallbackFiltered = await filterOwnProducts(fallbackData.results || []);
-      const fallbackProcessed = processProducts(fallbackFiltered);
+      const fallbackProcessed = await processProducts(fallbackFiltered);
       console.log('Fallback products:', fallbackProcessed);
       setTrendingItems(fallbackProcessed);
       const ids = fallbackProcessed.map(p => p.id);
@@ -277,7 +286,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
       }
 
       const deliveryInfo = getDeliveryInfo(product, product.vendor_delivery_fee);
-      const deliveryRadius = getDeliveryRadius(product) ?? 5;
+      const deliveryRadius = getDeliveryRadiusSync(product) ?? globalDeliveryRadius ?? Infinity;
 
       return {
         id: product.id,
@@ -289,7 +298,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
         rating: computeAggregateRating(product),
         price: `Rs ${product.price}`,
         priceValue: parseFloat(product.price),
-        image: primaryImage?.image_url || "/placeholder-product.jpg",
+        image: primaryImage?.image_url || "/placeholder.svg",
         inStock: product.quantity > 0,
         category: product.category,
         totalSold: product.total_sold || 0,
@@ -439,7 +448,7 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ease-in-out"
                 onError={(e) => {
                   const img = e.target as HTMLImageElement;
-                  img.src = '/placeholder-product.jpg';
+                  img.src = '/placeholder.svg';
                   img.onerror = null; // Prevent infinite loop
                 }}
                 loading="lazy"

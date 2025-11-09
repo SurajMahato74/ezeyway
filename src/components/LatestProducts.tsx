@@ -6,7 +6,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
-import { getDeliveryInfo, getDeliveryRadius } from "@/utils/deliveryUtils";
+import { getDeliveryInfo, getDeliveryRadius, getDeliveryRadiusSync } from "@/utils/deliveryUtils";
 import { API_BASE } from '@/config/api';
 import { filterOwnProducts } from '@/utils/productFilter';
 import { reviewService } from '@/services/reviewService';
@@ -213,7 +213,7 @@ export function LatestProducts({ onDataLoaded }: LatestProductsProps = {}) {
         deliveryInfo,
         createdAt: product.created_at,
         vendorOnline: product.vendor_online !== false,
-  deliveryRadius: getDeliveryRadius(product) ?? Infinity,
+        deliveryRadius: getDeliveryRadiusSync(product) ?? Infinity,
         // Include delivery properties for checkout
         free_delivery: product.free_delivery,
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,

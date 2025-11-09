@@ -91,6 +91,20 @@ class ReviewService {
       };
     }
   }
+
+  async getOrderReviews(orderId: number): Promise<any[]> {
+    try {
+      const response = await fetch(getApiUrl(`/orders/${orderId}/review/`));
+      if (!response.ok) {
+        throw new Error('Failed to fetch order reviews');
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.results || [];
+    } catch (error) {
+      console.error('Error fetching order reviews:', error);
+      return [];
+    }
+  }
 }
 
 export const reviewService = new ReviewService();

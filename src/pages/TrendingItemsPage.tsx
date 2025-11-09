@@ -168,7 +168,7 @@ export default function TrendingItemsPage() {
         rating: computeAggregateRating(product),
         price: `₹${product.price}`,
         priceValue: parseFloat(product.price),
-        image: primaryImage?.image_url || "/placeholder-product.jpg",
+        image: primaryImage?.image_url || "/placeholder.svg",
         inStock: product.quantity > 0,
         category: product.category
       };
@@ -274,7 +274,11 @@ export default function TrendingItemsPage() {
                   src={product.image}
                   alt={product.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    img.src = '/placeholder.svg';
+                    img.onerror = null; // Prevent infinite loop
+                  }}
                 />
                 <Button
                   variant="ghost"

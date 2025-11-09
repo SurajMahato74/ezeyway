@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthAction } from "@/hooks/useAuthAction";
 import { locationService } from "@/services/locationService";
 import { authService } from "@/services/authService";
-import { getDeliveryInfo, getDeliveryRadius } from "@/utils/deliveryUtils";
+import { getDeliveryInfo, getDeliveryRadius, getGlobalDeliveryRadius, getDeliveryRadiusSync } from "@/utils/deliveryUtils";
 
 import { API_BASE } from '@/config/api';
 import { filterOwnProducts } from '@/utils/productFilter';
@@ -51,13 +51,22 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
   const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
+  const [globalDeliveryRadius, setGlobalDeliveryRadius] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = locationService.subscribe(setUserLocation);
-    
+
     // Start location tracking immediately
     locationService.startTracking();
-    
+
+    // Fetch global delivery radius
+    getGlobalDeliveryRadius().then(radius => {
+      console.log('🔥 FEATURED PRODUCTS - Global delivery radius:', radius);
+      setGlobalDeliveryRadius(radius);
+    }).catch(err => {
+      console.warn('Failed to fetch global delivery radius:', err);
+    });
+
     // Only fetch if we already have location, otherwise wait for location update
     const currentLocation = locationService.getLocation();
     if (currentLocation) {
@@ -70,13 +79,13 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
           fetchFeaturedProducts();
         }
       }, 3000);
-      
+
       return () => {
         clearTimeout(timeoutId);
         unsubscribe();
       };
     }
-    
+
     return unsubscribe;
   }, []);
 
@@ -245,7 +254,7 @@ export function FeaturedProducts({ onDataLoaded }: FeaturedProductsProps = {}) {
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
         custom_delivery_fee: product.custom_delivery_fee,
         vendorOnline: product.vendor_online !== false,
-  deliveryRadius: getDeliveryRadius(product) ?? Infinity
+        deliveryRadius: getDeliveryRadiusSync(product) ?? globalDeliveryRadius ?? Infinity
       };
     })
     .filter(product => {

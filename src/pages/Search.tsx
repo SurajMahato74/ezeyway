@@ -12,7 +12,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { performanceMonitor, debounce, imagePreloader } from "@/utils/performance";
-import { getDeliveryInfo, getDeliveryRadius } from '@/utils/deliveryUtils';
+import { getDeliveryInfo, getDeliveryRadius, getDeliveryRadiusSync } from '@/utils/deliveryUtils';
 import { FloatingChat } from "@/components/FloatingChat";
 import { API_BASE } from '@/config/api';
 import { reviewService } from '@/services/reviewService';
@@ -541,7 +541,7 @@ export default function Search() {
       });
       fetchData(1, searchQuery);
     }
-  }, [sortBy, selectedCategories, fetchAttempted]);
+  }, [sortBy, selectedCategories]);
 
   useEffect(() => {
     if (userLocation && fetchAttempted) {
@@ -552,7 +552,7 @@ export default function Search() {
       });
       fetchData(1, searchQuery);
     }
-  }, [userLocation, fetchAttempted]);
+  }, [userLocation]);
 
   // Memoized and optimized product processing
   const computeAggregateRating = (product) => {
@@ -608,7 +608,7 @@ export default function Search() {
           totalSold: product.total_sold || 0,
           deliveryInfo,
           vendorOnline: product.vendor_online !== false,
-          deliveryRadius: getDeliveryRadius(product) ?? Infinity,
+          deliveryRadius: getDeliveryRadiusSync(product) ?? Infinity,
           // Include delivery properties
           free_delivery: product.free_delivery,
           custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
@@ -651,7 +651,7 @@ export default function Search() {
           deliveryTime: "30-45 mins",
           categories: vendor.categories || [],
           isOnline: vendor.is_online !== false,
-          deliveryRadius: getDeliveryRadius(vendor) ?? Infinity
+          deliveryRadius: getDeliveryRadiusSync(vendor) ?? Infinity,
         };
       })
       .filter(vendor => {

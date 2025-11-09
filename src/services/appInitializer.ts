@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { initializeDeliveryRadius } from '@/utils/deliveryUtils';
 
 class AppInitializer {
   private isInitialized = false;
@@ -6,9 +7,11 @@ class AppInitializer {
   async initialize() {
     if (this.isInitialized) return;
 
-    console.log('🚀 Initializing Yango Pro Style App System...');
 
     try {
+      // Initialize delivery radius from API
+      await initializeDeliveryRadius();
+
       // Initialize authentication persistence
       await this.initializeAuth();
 

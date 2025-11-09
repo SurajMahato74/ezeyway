@@ -178,7 +178,7 @@ export default function LatestProductsPage() {
         totalSold: product.total_sold || 0,
         deliveryInfo,
         vendorOnline: product.vendor_online !== false,
-        deliveryRadius: getDeliveryRadius(product) ?? Infinity,
+        deliveryRadius: 10, // Use the global delivery radius from API (10km)
         // Include delivery properties
         free_delivery: product.free_delivery,
         custom_delivery_fee_enabled: product.custom_delivery_fee_enabled,
