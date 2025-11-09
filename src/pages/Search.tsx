@@ -65,11 +65,11 @@ const ProductCard = memo<ProductCardProps>(({ product, onProductClick, onToggleF
       <div className="cursor-pointer" onClick={() => onProductClick(product.id)}>
         <div className="aspect-square md:aspect-[4/3] relative">
           <Suspense fallback={<div className="w-full h-full bg-gray-200 animate-pulse" />}>
-            <LazyImage 
-              src={product.image} 
+            <LazyImage
+              src={product.image}
               alt={product.name}
               className="w-full h-full object-cover"
-              fallback='/placeholder-product.jpg'
+              fallback='/placeholder.svg'
             />
           </Suspense>
           <Button
@@ -160,11 +160,11 @@ const VendorCard = memo<VendorCardProps>(({ vendor, onVendorClick }) => {
       <CardContent className="p-4">
         <div className="flex gap-3">
           <Suspense fallback={<div className="w-16 h-16 bg-gray-200 animate-pulse rounded-full" />}>
-            <LazyImage 
-              src={vendor.image} 
+            <LazyImage
+              src={vendor.image}
               alt={vendor.name}
               className="w-16 h-16 object-cover rounded-full"
-              fallback='/placeholder-vendor.jpg'
+              fallback='/placeholder.svg'
             />
           </Suspense>
           <div className="flex-1">
@@ -206,7 +206,7 @@ export default function Search() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
-  const [pagination, setPagination] = useState({ 
+  const [pagination, setPagination] = useState({
     products: { page: 1, hasMore: true, total: 0 },
     vendors: { page: 1, hasMore: true, total: 0 }
   });
@@ -215,6 +215,7 @@ export default function Search() {
   const [sortBy, setSortBy] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
+  const [fetchAttempted, setFetchAttempted] = useState(false);
   const { toast } = useToast();
   const { addToCart } = useCart();
 
@@ -474,39 +475,45 @@ export default function Search() {
   }, [sortBy, selectedCategories, toast]);
 
   useEffect(() => {
-    performanceMonitor.startTimer('initial-load');
-    
-    const unsubscribe = locationService.subscribe(setUserLocation);
-    locationService.startTracking();
-    testDistance();
-    fetchData();
-    fetchFavorites();
-    
-    performanceMonitor.endTimer('initial-load');
-    
-    setTimeout(() => {
-      performanceMonitor.logRenderMetrics();
-    }, 1000);
-    
-    return unsubscribe;
-  }, []);
+    if (!fetchAttempted) {
+      console.log('Search: Initial load, fetching data');
+      setFetchAttempted(true);
+
+      performanceMonitor.startTimer('initial-load');
+
+      const unsubscribe = locationService.subscribe(setUserLocation);
+      locationService.startTracking();
+      testDistance();
+      fetchData();
+      fetchFavorites();
+
+      performanceMonitor.endTimer('initial-load');
+
+      setTimeout(() => {
+        performanceMonitor.logRenderMetrics();
+      }, 1000);
+
+      return unsubscribe;
+    }
+  }, [fetchAttempted]);
 
   // Optimized debounced search effect
   useEffect(() => {
     const debouncedSearch = debounce(() => {
+      console.log('Search: Query changed, performing search for:', searchQuery);
       performanceMonitor.startTimer('search-query');
-      
+
       if (searchQuery) {
         setSearchParams({ q: searchQuery });
       } else {
         setSearchParams({});
       }
-      setPagination({ 
+      setPagination({
         products: { page: 1, hasMore: true, total: 0 },
         vendors: { page: 1, hasMore: true, total: 0 }
       });
       fetchData(1, searchQuery);
-      
+
       performanceMonitor.endTimer('search-query');
     }, 300);
 
@@ -514,16 +521,18 @@ export default function Search() {
   }, [searchQuery, setSearchParams]);
 
   useEffect(() => {
-    setPagination({ 
+    console.log('Search: Filters changed, refetching data');
+    setPagination({
       products: { page: 1, hasMore: true, total: 0 },
       vendors: { page: 1, hasMore: true, total: 0 }
     });
     fetchData(1, searchQuery);
   }, [sortBy, selectedCategories]);
-  
+
   useEffect(() => {
     if (userLocation) {
-      setPagination({ 
+      console.log('Search: User location changed, refetching data');
+      setPagination({
         products: { page: 1, hasMore: true, total: 0 },
         vendors: { page: 1, hasMore: true, total: 0 }
       });
@@ -575,7 +584,7 @@ export default function Search() {
           vendor_id: product.vendor_id,
           price: `Rs ${product.price}`,
           priceValue: parseFloat(product.price),
-          image: primaryImage?.image_url || "/placeholder-product.jpg",
+          image: primaryImage?.image_url || "/placeholder.svg",
           rating: computeAggregateRating(product),
           distance,
           distanceValue,
@@ -621,7 +630,7 @@ export default function Search() {
           image: vendor.shop_images?.find(img => img.is_primary)?.image_url ||
                  vendor.shop_images?.[0]?.image_url ||
                  vendor.user_info?.profile_picture ||
-                 "/placeholder-vendor.jpg",
+                 "/placeholder.svg",
           rating: computeAggregateRating(vendor),
           distance,
           distanceValue,

@@ -44,6 +44,7 @@ export default function VendorProfile() {
   const [error, setError] = useState(null);
   const [userLocation, setUserLocation] = useState(locationService.getLocation());
   const [distance, setDistance] = useState("N/A");
+  const [fetchAttempted, setFetchAttempted] = useState(false);
   const { toast } = useToast();
   const { addToCart } = useCart();
 
@@ -54,16 +55,20 @@ export default function VendorProfile() {
   }, []);
 
   useEffect(() => {
-    if (vendorId) {
+    if (vendorId && !fetchAttempted) {
+      console.log('Vendor ID changed, fetching profile:', vendorId);
+      setFetchAttempted(true);
       fetchVendorProfile();
     }
-  }, [vendorId]);
+  }, [vendorId, fetchAttempted]);
 
   const fetchVendorProfile = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
+      console.log('Fetching vendor profile for ID:', vendorId);
+
       // Try public vendor endpoint first, fallback to vendor-profiles
       let vendorResponse = await fetch(`${API_BASE}vendors/${vendorId}/`, {
         headers: {
@@ -104,6 +109,8 @@ export default function VendorProfile() {
 
       const vendorData = await vendorResponse.json();
 
+      console.log('Vendor data received:', vendorData);
+
       if (!vendorData) {
         throw new Error('No vendor data received');
       }
@@ -143,6 +150,7 @@ export default function VendorProfile() {
 
     } catch (err) {
       console.error('Error fetching vendor profile:', err);
+      console.error('Error details:', err.stack);
       setError(err.message);
       toast({
         title: "Error",
@@ -151,6 +159,7 @@ export default function VendorProfile() {
       });
     } finally {
       setLoading(false);
+      setFetchAttempted(true);
     }
   };
 
@@ -245,14 +254,20 @@ export default function VendorProfile() {
                 src={getImageUrl(vendor.shop_images[0].image_url)}
                 alt={vendor.business_name}
                 className="w-full h-full object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-vendor.jpg'; }}
+                onError={(e) => {
+                  console.log('Shop image failed to load, falling back to profile picture or placeholder');
+                  (e.target as HTMLImageElement).src = vendor.user_info?.profile_picture ? getImageUrl(vendor.user_info.profile_picture) : '/placeholder.svg';
+                }}
               />
             ) : vendor.user_info?.profile_picture ? (
               <img
                 src={getImageUrl(vendor.user_info.profile_picture)}
                 alt={vendor.business_name}
                 className="w-full h-full object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-vendor.jpg'; }}
+                onError={(e) => {
+                  console.log('Profile picture failed to load, using placeholder');
+                  (e.target as HTMLImageElement).src = '/placeholder.svg';
+                }}
               />
             ) : (
               <Store className="h-8 w-8 text-gray-400" />
@@ -544,7 +559,10 @@ export default function VendorProfile() {
                         src={getImageUrl(image.image_url)}
                         alt={`${vendor.business_name} shop image ${index + 1}`}
                         className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
-                        onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-vendor.jpg'; }}
+                        onError={(e) => {
+                          console.log(`Gallery image ${index + 1} failed to load, using placeholder`);
+                          (e.target as HTMLImageElement).src = '/placeholder.svg';
+                        }}
                       />
                     </div>
                   ))}
