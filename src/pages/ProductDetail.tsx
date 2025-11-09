@@ -605,7 +605,12 @@ Shop now at ezeyway - Same day delivery in Kathmandu Valley!`;
               src={getImageUrl(currentImage?.image_url)}
               alt={product.name}
               className="w-full h-full object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                img.src = '/placeholder-product.jpg';
+                img.onerror = null; // Prevent infinite loop
+              }}
+              loading="lazy"
             />
           </div>
           
@@ -627,7 +632,12 @@ Shop now at ezeyway - Same day delivery in Kathmandu Valley!`;
                       src={getImageUrl(image.image_url)}
                       alt={`${product.name} ${index + 1}`}
                       className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
+                      onError={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        img.src = '/placeholder-product.jpg';
+                        img.onerror = null; // Prevent infinite loop
+                      }}
+                      loading="lazy"
                     />
                   </button>
                 ))}
@@ -655,7 +665,12 @@ Shop now at ezeyway - Same day delivery in Kathmandu Valley!`;
                     src={getImageUrl(image.image_url)}
                     alt={`${product.name} ${index + 1}`}
                     className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      img.src = '/placeholder-product.jpg';
+                      img.onerror = null; // Prevent infinite loop
+                    }}
+                    loading="lazy"
                   />
                 </button>
               ))}
@@ -668,7 +683,12 @@ Shop now at ezeyway - Same day delivery in Kathmandu Valley!`;
               src={getImageUrl(currentImage?.image_url)}
               alt={product.name}
               className="w-full h-full object-cover border border-gray-200"
-              onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                img.src = '/placeholder-product.jpg';
+                img.onerror = null; // Prevent infinite loop
+              }}
+              loading="lazy"
             />
           </div>
         </div>
@@ -832,7 +852,12 @@ Shop now at ezeyway - Same day delivery in Kathmandu Valley!`;
                       src={getImageUrl(relatedProduct.image)}
                       alt={relatedProduct.name}
                       className="w-full h-full object-cover"
-                      onError={(e) => { e.currentTarget.src = '/placeholder-product.jpg'; }}
+                      onError={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        img.src = '/placeholder-product.jpg';
+                        img.onerror = null; // Prevent infinite loop
+                      }}
+                      loading="lazy"
                     />
                   </div>
                   <div className="p-2">

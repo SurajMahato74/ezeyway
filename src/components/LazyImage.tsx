@@ -42,6 +42,9 @@ const LazyImage = ({ src, alt, className = '', fallback = '/placeholder.jpg', pl
   const handleError = () => {
     setIsError(true);
     setImageSrc(fallback);
+    if (imgRef.current) {
+      imgRef.current.onerror = null; // Prevent infinite loop
+    }
   };
 
   return (

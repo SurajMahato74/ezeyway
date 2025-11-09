@@ -437,7 +437,12 @@ export function TrendingItems({ onDataLoaded }: TrendingItemsProps = {}) {
                 src={item.image}
                 alt={item.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ease-in-out"
-                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  img.src = '/placeholder-product.jpg';
+                  img.onerror = null; // Prevent infinite loop
+                }}
+                loading="lazy"
               />
             </div>
             <h3 className="font-semibold text-xs mb-1 text-foreground line-clamp-1">
