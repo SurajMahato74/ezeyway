@@ -14,8 +14,6 @@ import { API_CONFIG } from '@/config/api';
 import { apiRequest } from '@/utils/apiUtils';
 import { getImageUrl } from '@/utils/imageUtils';
 
-
-
 const VendorOrders: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [newOrdersCount, setNewOrdersCount] = useState(2);
@@ -40,21 +38,6 @@ const VendorOrders: React.FC = () => {
   // Use notification system
   const { notifications, unreadCount, isConnected } = useNotificationWebSocket();
   
-  // WebSocket order update handler
-  useEffect(() => {
-    const handleWebSocketOrderUpdate = (event) => {
-      const data = event.detail;
-      if (data.type === 'order_update' || data.type === 'order_status_change' || data.type === 'refund_update') {
-        console.log('WebSocket order update:', data);
-        // Refresh orders immediately
-        fetchVendorOrders();
-      }
-    };
-    
-    window.addEventListener('websocket_message', handleWebSocketOrderUpdate);
-    return () => window.removeEventListener('websocket_message', handleWebSocketOrderUpdate);
-  }, []);
-  
   // Mobile detection
   useEffect(() => {
     const checkMobile = () => {
@@ -67,158 +50,62 @@ const VendorOrders: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // WHATSAPP-STYLE INSTANT ORDER CHECKING - Never miss an order!
+  // WebSocket event handlers for real-time updates only
   useEffect(() => {
-    const checkForInstantOrders = async () => {
-      try {
-        console.log('🚀 WHATSAPP-STYLE: Checking for instant orders on page load');
-        const { apiRequest } = await import('@/utils/apiUtils');
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // Quick check
-
-        const { response, data } = await apiRequest('/vendor/orders/?limit=10', {
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (response.ok && data) {
-          const orders = data.results || data || [];
-          const newOrders = orders.filter((order: any) => order.status === 'pending');
-
-          if (newOrders.length > 0) {
-            console.log('🎯 WHATSAPP-STYLE: Found', newOrders.length, 'pending orders instantly!');
-
-            // For page load, play sound for ALL pending orders (like WhatsApp unread messages)
-            // This is the first time we're checking, so all pending orders should alert
-            if (previousOrderIds.size === 0) {
-              console.log('🚨 WHATSAPP-STYLE: FIRST LOAD - Playing sound for ALL', newOrders.length, 'pending orders');
-
-              // Trigger instant notification and sound for ALL pending orders on first load
-              const { simpleNotificationService } = await import('@/services/simpleNotificationService');
-              for (const order of newOrders) {
-                await simpleNotificationService.showOrderNotification(
-                  order.order_number,
-                  order.total_amount,
-                  order.id
-                );
-              }
-            } else {
-              // Filter out orders we've already seen (for subsequent checks)
-              const trulyNewOrders = newOrders.filter(order => !previousOrderIds.has(Number(order.id)));
-
-              if (trulyNewOrders.length > 0) {
-                console.log('🚨 WHATSAPP-STYLE: Playing sound for', trulyNewOrders.length, 'TRULY new orders');
-
-                // Trigger instant notification and sound for each TRULY new order
-                const { simpleNotificationService } = await import('@/services/simpleNotificationService');
-                for (const order of trulyNewOrders) {
-                  await simpleNotificationService.showOrderNotification(
-                    order.order_number,
-                    order.total_amount,
-                    order.id
-                  );
-                }
-              }
-            }
-
-            // Update local state immediately
-            setNewOrdersCount(newOrders.length);
-
-            // Refresh orders to show latest
-            fetchVendorOrders();
-          }
-        }
-      } catch (error) {
-        console.log('WHATSAPP-STYLE: Instant check failed, will use polling instead');
-      }
-    };
-
-    // Check immediately on page load (like WhatsApp)
-    checkForInstantOrders();
-
-    // Also check when page becomes visible (like WhatsApp)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        console.log('📱 WHATSAPP-STYLE: Page became visible, checking for orders');
-        checkForInstantOrders();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-  
-  // Fetch real orders only
-  useEffect(() => {
-    fetchVendorOrders();
-    
     // Listen for order notifications to refresh orders
     const handleNewNotification = (event: CustomEvent) => {
       const notification = event.detail;
       if (notification.type === 'order') {
-        fetchVendorOrders();
+        console.log('🔔 New order notification received, refreshing...');
+        setTimeout(() => fetchVendorOrders(), 1000);
       }
     };
 
     // Listen for real-time order status updates from customer
     const handleOrderStatusUpdate = (event: CustomEvent) => {
       const { orderId, status, type } = event.detail;
-      console.log('Order status update received:', { orderId, status, type });
+      console.log('📊 Order status update received:', { orderId, status, type });
       
-      // For review updates, refresh immediately to show new review
+      // For review updates, refresh with delay to ensure API is updated
       if (type === 'review') {
         setTimeout(() => {
           fetchVendorOrders();
-        }, 500); // Small delay to ensure API is updated
+        }, 1000);
       } else {
-        // Immediately refresh orders to show updated status
-        fetchVendorOrders();
+        // For other updates, refresh immediately
+        setTimeout(() => {
+          fetchVendorOrders();
+        }, 500);
+      }
+    };
+
+    // WebSocket message handler
+    const handleWebSocketMessage = (event: CustomEvent) => {
+      const data = event.detail;
+      if (data.type === 'order_update' || data.type === 'order_status_change' || data.type === 'refund_update') {
+        console.log('🔄 WebSocket order update received:', data.type);
+        if (data.action && data.order_id) {
+          setTimeout(() => fetchVendorOrders(), 500);
+        }
       }
     };
 
     window.addEventListener('newNotification', handleNewNotification as EventListener);
     window.addEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
-    
-    // AGGRESSIVE auto-refresh for orders (they're URGENT business!)
-    let aggressiveInterval: NodeJS.Timeout; // Every 5 seconds when visible
-    let backgroundInterval: NodeJS.Timeout; // Every 15 seconds when hidden
-
-    const startAggressivePolling = () => {
-      // Clear existing intervals
-      if (aggressiveInterval) clearInterval(aggressiveInterval);
-      if (backgroundInterval) clearInterval(backgroundInterval);
-
-      // SUPER AGGRESSIVE: Every 5 seconds when page is visible
-      aggressiveInterval = setInterval(() => {
-        if (!document.hidden) {
-          console.log('🚀 VENDOR ORDERS: AGGRESSIVE POLLING - checking for urgent orders');
-          fetchVendorOrders();
-        }
-      }, 5000); // Every 5 seconds when visible!
-
-      // Background polling: Every 15 seconds when hidden
-      backgroundInterval = setInterval(() => {
-        if (document.hidden) {
-          console.log('📱 VENDOR ORDERS: BACKGROUND POLLING - still checking for orders');
-          fetchVendorOrders();
-        }
-      }, 15000); // Every 15 seconds when hidden
-    };
-
-    startAggressivePolling();
+    window.addEventListener('websocket_message', handleWebSocketMessage as EventListener);
     
     return () => {
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
       window.removeEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
-      if (aggressiveInterval) clearInterval(aggressiveInterval);
-      if (backgroundInterval) clearInterval(backgroundInterval);
+      window.removeEventListener('websocket_message', handleWebSocketMessage as EventListener);
     };
-  }, [isMobile]);
+  }, []);
+  
+  // Initial order loading - ONCE ONLY
+  useEffect(() => {
+    console.log('📦 Loading initial orders...');
+    fetchVendorOrders();
+  }, []);
 
   const fetchVendorOrders = async () => {
     try {
@@ -238,41 +125,30 @@ const VendorOrders: React.FC = () => {
 
       if (response.ok && data) {
         const orders = data.results || data || [];
-        console.log('📦 Orders received:', orders.length, orders);
+        console.log('📦 Orders received:', orders.length);
 
-        // 🚨 AUTO SOUND ALERT: Check for TRULY NEW pending orders by ID
+        // Check for new pending orders and trigger notifications
         const currentPendingOrders = orders.filter(o => o.status === 'pending');
         const currentOrderIds: Set<number> = new Set(currentPendingOrders.map(o => Number(o.id)));
-
-        // Find orders that are NEW (not in previous set)
         const newOrderIds: number[] = [...currentOrderIds].filter((id: number) => !previousOrderIds.has(id));
         const newOrders = currentPendingOrders.filter(order => newOrderIds.includes(Number(order.id)));
 
         if (newOrders.length > 0) {
-          console.log('🎯 TRULY NEW ORDERS DETECTED! Auto-playing sound alert for:', newOrders.length, 'orders');
-          console.log('📋 New orders details:', newOrders.map(o => ({ id: o.id, number: o.order_number, amount: o.total_amount })));
-
-          // IMMEDIATE ALERT FOR DEBUGGING
-          alert(`🚨 NEW ORDERS DETECTED!\n\n${newOrders.length} new order(s) found:\n${newOrders.map(o => `• Order #${o.order_number} - ₹${o.total_amount}`).join('\n')}\n\nAttempting to show notifications...`);
-
-          // Auto-play sound for new orders without requiring user interaction
+          console.log('🎯 New orders detected:', newOrders.length, 'orders');
+          
+          // Auto-play sound for new orders
           const { simpleNotificationService } = await import('@/services/simpleNotificationService');
           for (const order of newOrders) {
-            console.log('🔊 Triggering notification for order:', order.order_number);
             try {
               await simpleNotificationService.showOrderNotification(
                 order.order_number,
                 order.total_amount,
                 order.id
               );
-              console.log('✅ Notification triggered for order:', order.order_number);
             } catch (error) {
-              console.error('❌ Failed to trigger notification for order:', order.order_number, error);
-              alert(`❌ Failed to show notification for order ${order.order_number}: ${error.message}`);
+              console.error('Failed to show notification for order:', order.order_number, error);
             }
           }
-        } else {
-          console.log('📭 No new orders detected in this fetch');
         }
 
         // Update tracking
@@ -289,25 +165,6 @@ const VendorOrders: React.FC = () => {
       setLoadingOrders(false);
     }
   };
-
-
-
-  // Notification system for new orders
-  useEffect(() => {
-    if (newOrdersCount > 0) {
-      const interval = setInterval(() => {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(`${newOrdersCount} New Order${newOrdersCount > 1 ? 's' : ''} Waiting!`, {
-            icon: '/favicon.ico',
-            body: 'Please check and confirm your orders'
-          });
-        }
-      }, 60000);
-      
-      return () => clearInterval(interval);
-    }
-  }, [newOrdersCount]);
-  
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -357,19 +214,13 @@ const VendorOrders: React.FC = () => {
     }));
   };
 
-  const handleViewAll = () => {
-    setActiveTab('new');
-    setCurrentPage(1);
-  };
-
   const getPaginatedOrders = (orders: any[]) => {
     const mobileLimit = isMobile ? 15 : itemsPerPage;
     
-    // Limit items on mobile for better performance
     if (activeTab === 'new') {
       return isMobile ? orders.slice(0, mobileLimit) : orders;
     }
-    // Pagination for other tabs
+    
     const startIndex = (currentPage - 1) * mobileLimit;
     const endIndex = startIndex + mobileLimit;
     return orders.slice(startIndex, endIndex);
@@ -384,7 +235,6 @@ const VendorOrders: React.FC = () => {
   };
 
   const PaginationControls = ({ orders }: { orders: any[] }) => {
-    // No pagination controls for new orders
     if (activeTab === 'new') return null;
     
     const totalPages = getTotalPages(orders);
@@ -477,7 +327,7 @@ const VendorOrders: React.FC = () => {
                     <div className="text-xs text-blue-600 truncate max-w-[80px] mt-1">
                       {Object.entries(item.product_selections).map(([key, value]) => (
                         <div key={key} className="capitalize">
-                          {key}: {Array.isArray(value) ? value.join(', ') : value}
+                          {key}: {Array.isArray(value) ? value.join(', ') : String(value)}
                         </div>
                       )).slice(0, 1)}
                     </div>
@@ -505,102 +355,13 @@ const VendorOrders: React.FC = () => {
           <span className="truncate text-gray-700 min-w-0">{order.delivery_address}</span>
         </div>
 
-        {/* Review indicator for delivered orders */}
-        {order.status === 'delivered' && order.review && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-            <div className="flex items-center gap-2 text-sm mb-1">
-              <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-              <span className="text-yellow-600 font-medium text-xs">
-                Customer Rating: {order.review.overall_rating}/5
-              </span>
-            </div>
-            {order.review.review_text && (
-              <p className="text-xs text-yellow-700 bg-white p-2 rounded">
-                "{order.review.review_text}"
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Return status indicator for any order with refunds */}
-        {order.refunds?.length > 0 && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 mt-2">
-            {order.refunds.map(refund => (
-              <div key={refund.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <RotateCcw className="h-4 w-4 text-orange-500" />
-                  <span className="text-orange-700 font-medium text-xs capitalize">
-                    {refund.reason.replace('_', ' ')}
-                  </span>
-                </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  refund.status === 'requested' ? 'bg-yellow-100 text-yellow-800' :
-                  refund.status === 'approved' ? 'bg-green-100 text-green-800' :
-                  refund.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                  refund.status === 'appeal' ? 'bg-purple-100 text-purple-800' :
-                  refund.status === 'processed' ? 'bg-blue-100 text-blue-800' :
-                  refund.status === 'completed' ? 'bg-emerald-100 text-emerald-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {refund.status.charAt(0).toUpperCase() + refund.status.slice(1)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Message Button Above Line */}
-        <div className="flex justify-end gap-2 mb-2">
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="h-8 w-8 p-0 flex-shrink-0" 
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                const customerId = order.customer_details?.id;
-                if (customerId) {
-                  window.location.href = `/vendor/messages?start_conversation=${customerId}&customer_name=${encodeURIComponent(order.customer_details?.username || order.delivery_name)}&order_id=${order.id}`;
-                } else {
-                  const customerPhone = order.customer_details?.phone_number || order.delivery_phone;
-                  const customerName = order.customer_details?.username || order.delivery_name;
-                  window.location.href = `/vendor/messages?customer_phone=${encodeURIComponent(customerPhone)}&customer_name=${encodeURIComponent(customerName)}&order_id=${order.id}`;
-                }
-              } catch (error) {
-                console.error('Error opening conversation:', error);
-              }
-            }}
-          >
-            <MessageCircle className="h-4 w-4" />
-          </Button>
-        </div>
-
         {/* Total Amount */}
         <div className="flex justify-between items-center pt-2 border-t">
-          {(() => {
-            // Calculate total delivery fee from items
-            const itemDeliveryFee = order.items?.reduce((total, item) => {
-              return total + parseFloat(item.delivery_fee || 0);
-            }, 0) || 0;
-            
-            const orderDeliveryFee = parseFloat(order.delivery_fee || 0);
-            const totalDeliveryFee = Math.max(itemDeliveryFee, orderDeliveryFee);
-            const orderTotal = parseFloat(order.total_amount || 0);
-            const grandTotal = orderTotal + totalDeliveryFee;
-            
-            return (
-              <div className="flex flex-col">
-                <span className="font-semibold text-lg text-emerald-600">
-                  ₹{grandTotal.toFixed(2)}
-                </span>
-                {totalDeliveryFee > 0 && (
-                  <span className="text-xs text-gray-500">
-                    (Bill: ₹{orderTotal.toFixed(2)} + Delivery: ₹{totalDeliveryFee.toFixed(2)})
-                  </span>
-                )}
-              </div>
-            );
-          })()}
+          <div className="flex flex-col">
+            <span className="font-semibold text-lg text-emerald-600">
+              ₹{parseFloat(order.total_amount || 0).toFixed(2)}
+            </span>
+          </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelectedOrder(order)}>
               <Eye className="h-3 w-3 mr-1" />
@@ -618,41 +379,14 @@ const VendorOrders: React.FC = () => {
                     });
                     
                     if (response.ok) {
-                      // Update local state immediately for instant UI feedback
                       updateOrderStatus(order.id, 'confirmed');
-
-                      // STOP persistent alerts for this order
-                      const { simpleNotificationService } = await import('@/services/simpleNotificationService');
-                      simpleNotificationService.clearNotification(order.id);
-
-                      // Refresh orders to get updated data from server
-                      setTimeout(() => fetchVendorOrders(), 1000);
                       setNewOrdersCount(prev => Math.max(0, prev - 1));
-
-                      // Trigger wallet refresh event
-                      window.dispatchEvent(new CustomEvent('walletUpdated'));
-
-                      // Send WebSocket notification (if available)
-                      try {
-                        const ws = (window as any).websocket;
-                        if (ws && ws.readyState === WebSocket.OPEN) {
-                          ws.send(JSON.stringify({
-                            type: 'order_update',
-                            action: 'order_accepted',
-                            order_id: order.id,
-                            timestamp: new Date().toISOString()
-                          }));
-                        }
-                      } catch (error) {
-                        console.log('WebSocket not available for notification');
-                      }
-
-                      // Dispatch global order status update event
+                      
+                      // Trigger events for cross-component communication
                       window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
                         detail: { orderId: order.id, status: 'confirmed', type: 'accept' }
                       }));
-
-                      // Dispatch global notification for cross-page updates
+                      
                       window.dispatchEvent(new CustomEvent('newNotification', {
                         detail: {
                           type: 'order',
@@ -661,6 +395,9 @@ const VendorOrders: React.FC = () => {
                           data: { orderId: order.id, status: 'confirmed' }
                         }
                       }));
+                      
+                      // Refresh after a delay
+                      setTimeout(() => fetchVendorOrders(), 1000);
                     }
                   } catch (error) {
                     console.error('Error accepting order:', error);
@@ -668,107 +405,6 @@ const VendorOrders: React.FC = () => {
                 }}
               >
                 Accept
-              </Button>
-            )}
-            {order.status === 'confirmed' && (
-              <Button 
-                size="sm" 
-                className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedOrder(order);
-                  
-                  // Auto-calculate delivery fee based on product settings
-                  let calculatedFee = '';
-                  let feeSource = '';
-                  let isReadonly = false;
-                  
-                  if (order.items && order.items.length > 0) {
-                    // Check if any product has free delivery
-                    const hasFreeDelivery = order.items.some(item => 
-                      item.product_details?.free_delivery === true
-                    );
-                    
-                    if (hasFreeDelivery) {
-                      calculatedFee = '0';
-                      feeSource = 'Free delivery (set by vendor)';
-                      isReadonly = true;
-                    } else {
-                      // Check for custom delivery fee
-                      const customDeliveryItem = order.items.find(item => 
-                        item.product_details?.custom_delivery_fee_enabled === true &&
-                        item.product_details?.custom_delivery_fee > 0
-                      );
-                      
-                      if (customDeliveryItem) {
-                        calculatedFee = customDeliveryItem.product_details.custom_delivery_fee.toString();
-                        feeSource = `Custom delivery fee (₹${customDeliveryItem.product_details.custom_delivery_fee})`;
-                        isReadonly = true;
-                      } else {
-                        // No specific delivery settings, allow manual entry
-                        calculatedFee = '';
-                        feeSource = 'Enter delivery charge manually';
-                        isReadonly = false;
-                      }
-                    }
-                  }
-                  
-                  setDeliveryFee(calculatedFee);
-                  setDeliveryFeeSource(feeSource);
-                  setIsDeliveryFeeReadonly(isReadonly);
-                  setShowDeliveryForm(true);
-                }}
-              >
-                Ship
-              </Button>
-            )}
-            {order.status === 'out_for_delivery' && (
-              <Button 
-                size="sm" 
-                className="h-7 text-xs bg-green-600 hover:bg-green-700"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    const { response } = await apiRequest(`vendor/orders/${order.id}/status/`, {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        status: 'delivered',
-                        notes: 'Marked as delivered by vendor'
-                      })
-                    });
-                    
-                    if (response.ok) {
-                      // Update local state immediately
-                      updateOrderStatus(order.id, 'delivered');
-
-                      // STOP persistent alerts for this order
-                      const { simpleNotificationService } = await import('@/services/simpleNotificationService');
-                      simpleNotificationService.clearNotification(order.id);
-
-                      // Refresh from server after a short delay
-                      setTimeout(() => fetchVendorOrders(), 1000);
-
-                      // Dispatch order status update event
-                      window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
-                        detail: { orderId: order.id, status: 'delivered', type: 'deliver' }
-                      }));
-
-                      // Dispatch global notification
-                      window.dispatchEvent(new CustomEvent('newNotification', {
-                        detail: {
-                          type: 'order',
-                          title: `Order #${order.order_number} Delivered`,
-                          message: 'Order has been marked as delivered',
-                          data: { orderId: order.id, status: 'delivered' }
-                        }
-                      }));
-                    }
-                  } catch (error) {
-                    console.error('Error marking as delivered:', error);
-                  }
-                }}
-              >
-                Delivered
               </Button>
             )}
           </div>
@@ -780,8 +416,6 @@ const VendorOrders: React.FC = () => {
   return (
     <VendorPage title="Orders">
       <div className="bg-gray-50 min-h-screen pb-20 max-w-full overflow-x-hidden">
-
-
         {loadingOrders ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
@@ -797,1370 +431,212 @@ const VendorOrders: React.FC = () => {
           </div>
         ) : (
           <>
-        <div className="p-4">
-          <div className="overflow-x-auto">
-            <div className="flex gap-3 pb-2">
-              <div className="min-w-[120px] bg-white rounded-lg p-3 text-center border-l-4 border-blue-500">
-                <p className="text-xl font-bold text-blue-600">{ordersData.filter(o => o.status === 'pending').length}</p>
-                <p className="text-xs text-gray-600">New Orders</p>
-              </div>
-              {/* TEST NOTIFICATIONS BUTTON */}
-              <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-yellow-600">{ordersData.filter(o => o.status === 'out_for_delivery').length}</p>
-                <p className="text-xs text-gray-600">Shipped</p>
-              </div>
-              <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-orange-600">{ordersData.filter(o => o.status === 'confirmed').length}</p>
-                <p className="text-xs text-gray-600">Confirmed</p>
-              </div>
-              <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-green-600">{ordersData.filter(o => o.status === 'delivered').length}</p>
-                <p className="text-xs text-gray-600">Delivered</p>
-              </div>
-              <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-gray-600">{ordersData.filter(o => o.status === 'cancelled').length}</p>
-                <p className="text-xs text-gray-600">Cancelled</p>
-              </div>
-              <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-orange-600">{ordersData.filter(o => o.refunds?.length > 0).length}</p>
-                <p className="text-xs text-gray-600">Returns</p>
-              </div>
-              <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-gray-600">{ordersData.length}</p>
-                <p className="text-xs text-gray-600">Total</p>
+            <div className="p-4">
+              <div className="overflow-x-auto">
+                <div className="flex gap-3 pb-2">
+                  <div className="min-w-[120px] bg-white rounded-lg p-3 text-center border-l-4 border-blue-500">
+                    <p className="text-xl font-bold text-blue-600">{ordersData.filter(o => o.status === 'pending').length}</p>
+                    <p className="text-xs text-gray-600">New Orders</p>
+                  </div>
+                  <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-yellow-600">{ordersData.filter(o => o.status === 'out_for_delivery').length}</p>
+                    <p className="text-xs text-gray-600">Shipped</p>
+                  </div>
+                  <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-orange-600">{ordersData.filter(o => o.status === 'confirmed').length}</p>
+                    <p className="text-xs text-gray-600">Confirmed</p>
+                  </div>
+                  <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-green-600">{ordersData.filter(o => o.status === 'delivered').length}</p>
+                    <p className="text-xs text-gray-600">Delivered</p>
+                  </div>
+                  <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-gray-600">{ordersData.filter(o => o.status === 'cancelled').length}</p>
+                    <p className="text-xs text-gray-600">Cancelled</p>
+                  </div>
+                  <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-orange-600">{ordersData.filter(o => o.refunds?.length > 0).length}</p>
+                    <p className="text-xs text-gray-600">Returns</p>
+                  </div>
+                  <div className="min-w-[120px] bg-white rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-gray-600">{ordersData.length}</p>
+                    <p className="text-xs text-gray-600">Total</p>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="px-4">
-          <div className="bg-white rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
-            </div>
-            
-            <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setCurrentPage(1); }} className="w-full">
-              <div className="border-b border-gray-100 overflow-x-auto scrollbar-hide">
-                <TabsList className="flex w-max bg-transparent h-auto p-2 gap-3">
-                  <TabsTrigger value="all" className="text-xs py-2 px-3 data-[state=active]:bg-gray-50 data-[state=active]:text-gray-600 data-[state=active]:border-b-2 data-[state=active]:border-gray-600 rounded-none whitespace-nowrap flex-shrink-0">
-                    All <span className="font-bold ml-2">({ordersData.length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="new" className="text-xs py-2 px-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none whitespace-nowrap flex-shrink-0">
-                    New <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'pending').length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="confirmed" className="text-xs py-2 px-3 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-600 rounded-none whitespace-nowrap flex-shrink-0">
-                    Confirmed <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'confirmed').length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="pending" className="text-xs py-2 px-3 data-[state=active]:bg-yellow-50 data-[state=active]:text-yellow-600 data-[state=active]:border-b-2 data-[state=active]:border-yellow-600 rounded-none whitespace-nowrap flex-shrink-0">
-                    Shipped <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'out_for_delivery').length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="delivered" className="text-xs py-2 px-3 data-[state=active]:bg-green-50 data-[state=active]:text-green-600 data-[state=active]:border-b-2 data-[state=active]:border-green-600 rounded-none whitespace-nowrap flex-shrink-0">
-                    Delivered <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'delivered').length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="returns" className="text-xs py-2 px-3 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-600 rounded-none whitespace-nowrap flex-shrink-0">
-                    Returns <span className="font-bold ml-2">({ordersData.filter(o => o.refunds?.length > 0).length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="cancelled" className="text-xs py-2 px-3 data-[state=active]:bg-gray-50 data-[state=active]:text-gray-600 data-[state=active]:border-b-2 data-[state=active]:border-gray-600 rounded-none whitespace-nowrap flex-shrink-0">
-                    Cancelled <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'cancelled').length})</span>
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-              
-              <TabsContent value="all" className="mt-0">
-                <div className="divide-y divide-gray-100">
-                  {getPaginatedOrders(ordersData).map((order) => (
-                    <OrderItem key={order.id} order={order} />
-                  ))}
+            <div className="px-4">
+              <div className="bg-white rounded-lg overflow-hidden">
+                <div className="p-4 border-b border-gray-100">
+                  <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
                 </div>
-                <PaginationControls orders={ordersData} />
-              </TabsContent>
-              
-              <TabsContent value="new" className="mt-0">
-                <div className="divide-y divide-gray-100">
-                  {getPaginatedOrders(filterOrdersByStatus('new')).map((order) => (
-                    <OrderItem key={order.id} order={order} />
-                  ))}
-                </div>
-                <PaginationControls orders={filterOrdersByStatus('new')} />
-              </TabsContent>
-              
-              <TabsContent value="confirmed" className="mt-0">
-                <div className="divide-y divide-gray-100">
-                  {getPaginatedOrders(filterOrdersByStatus('confirmed')).map((order) => (
-                    <OrderItem key={order.id} order={order} />
-                  ))}
-                </div>
-                <PaginationControls orders={filterOrdersByStatus('confirmed')} />
-              </TabsContent>
-              
-              <TabsContent value="pending" className="mt-0">
-                <div className="divide-y divide-gray-100">
-                  {getPaginatedOrders(filterOrdersByStatus('pending')).map((order) => (
-                    <OrderItem key={order.id} order={order} />
-                  ))}
-                </div>
-                <PaginationControls orders={filterOrdersByStatus('pending')} />
-              </TabsContent>
-              
-              <TabsContent value="delivered" className="mt-0">
-                <div className="divide-y divide-gray-100">
-                  {getPaginatedOrders(filterOrdersByStatus('delivered')).map((order) => (
-                    <OrderItem key={order.id} order={order} />
-                  ))}
-                </div>
-                <PaginationControls orders={filterOrdersByStatus('delivered')} />
-              </TabsContent>
-              
-              <TabsContent value="returns" className="mt-0">
-                <div className="divide-y divide-gray-100">
-                  {ordersData.filter(order => order.refunds?.length > 0).map((order) => (
-                    <div key={order.id} className="p-4 bg-white cursor-pointer hover:bg-gray-50">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-sm text-gray-900">{order.order_number}</h3>
-                        </div>
-                        <Badge className="bg-orange-100 text-orange-800 flex items-center gap-1 text-xs px-2 py-1">
-                          <RotateCcw className="h-3 w-3" />
-                          Return Request
-                        </Badge>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <User className="h-4 w-4" />
-                          <span className="truncate">{order.customer_details?.username || order.delivery_name}</span>
-                        </div>
-
-                        {order.refunds?.map(refund => (
-                          <div key={refund.id} className="bg-orange-50 p-3 rounded-lg space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium">Return Reason:</span>
-                              <Badge className={`text-xs ${
-                                refund.status === 'requested' ? 'bg-yellow-100 text-yellow-800' :
-                                refund.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                refund.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                refund.status === 'appeal' ? 'bg-purple-100 text-purple-800' :
-                                'bg-blue-100 text-blue-800'
-                              }`}>
-                                {refund.status.charAt(0).toUpperCase() + refund.status.slice(1)}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-gray-700 capitalize">{refund.reason.replace('_', ' ')}</p>
-                            {refund.customer_notes && (
-                              <p className="text-xs text-gray-600">"{refund.customer_notes}"</p>
-                            )}
-                            <div className="text-xs text-gray-600">
-                              <span className="font-medium">Amount:</span> ₹{refund.requested_amount}
-                            </div>
-                            <div className="text-xs text-gray-600">
-                              <span className="font-medium">Method:</span> {refund.refund_method}
-                            </div>
-                            
-                            {refund.status === 'requested' && (
-                              <div className="flex gap-2 pt-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
-                                  onClick={async () => {
-                                    const reason = window.prompt('Reason for rejection:');
-                                    if (!reason || reason.trim() === '') return;
-
-                                    try {
-                                      const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
-                                        method: 'POST',
-                                        body: JSON.stringify({
-                                          action: 'reject',
-                                          admin_notes: reason.trim()
-                                        })
-                                      });
-
-                                      if (response.ok) {
-                                        fetchVendorOrders();
-                                      }
-                                    } catch (error) {
-                                      console.error('Error rejecting return:', error);
-                                    }
-                                  }}
-                                >
-                                  Reject
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  className="flex-1 bg-green-600 hover:bg-green-700"
-                                  onClick={async () => {
-                                    try {
-                                      const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
-                                        method: 'POST',
-                                        body: JSON.stringify({
-                                          action: 'approve',
-                                          approved_amount: refund.requested_amount,
-                                          admin_notes: 'Return approved by vendor'
-                                        })
-                                      });
-                                      
-                                      if (response.ok) {
-                                        fetchVendorOrders();
-                                      }
-                                    } catch (error) {
-                                      console.error('Error approving return:', error);
-                                    }
-                                  }}
-                                >
-                                  Approve
-                                </Button>
-                              </div>
-                            )}
-                            
-                            {refund.status === 'approved' && (
-                              <div className="bg-green-50 p-2 rounded mt-2">
-                                <p className="text-xs text-green-800 font-medium mb-2">Return Approved - Process Refund</p>
-                                <Button
-                                  size="sm"
-                                  className="w-full bg-blue-600 hover:bg-blue-700"
-                                  onClick={async () => {
-                                    try {
-                                      const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
-                                        method: 'POST',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                        },
-                                        body: JSON.stringify({
-                                          action: 'process',
-                                          admin_notes: 'Money transferred to customer'
-                                        })
-                                      });
-                                      
-                                      if (response.ok) {
-                                        fetchVendorOrders();
-                                        
-                                        // Send WebSocket notification
-                                        if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
-                                          window.websocket.send(JSON.stringify({
-                                            type: 'refund_update',
-                                            action: 'refund_processed',
-                                            order_id: order.id,
-                                            refund_id: refund.id,
-                                            timestamp: new Date().toISOString()
-                                          }));
-                                        }
-                                        
-                                        // Dispatch event
-                                        window.dispatchEvent(new CustomEvent('websocket_message', {
-                                          detail: {
-                                            type: 'refund_update',
-                                            action: 'refund_processed',
-                                            order_id: order.id,
-                                            refund_id: refund.id
-                                          }
-                                        }));
-                                      }
-                                    } catch (error) {
-                                      console.error('Error processing refund:', error);
-                                    }
-                                  }}
-                                >
-                                  Process Refund (Transfer Money)
-                                </Button>
-                              </div>
-                            )}
-                            
-                            {refund.status === 'processed' && (
-                              <div className="bg-blue-50 p-2 rounded mt-2">
-                                <p className="text-xs text-blue-800 font-medium mb-2">Money Transferred - Upload Proof</p>
-                                <input
-                                  type="file"
-                                  accept="image/*,.pdf"
-                                  onChange={async (e) => {
-                                    const file = e.target.files[0];
-                                    if (!file) return;
-                                    
-                                    const formData = new FormData();
-                                    formData.append('document', file);
-                                    
-                                    try {
-                                      const { response } = await apiRequest(`/refunds/${refund.id}/upload-document/`, {
-                                        method: 'POST',
-                                        body: formData
-                                      });
-                                      
-                                      if (response.ok) {
-                                        fetchVendorOrders();
-                                      }
-                                    } catch (error) {
-                                      console.error('Error uploading document:', error);
-                                    }
-                                  }}
-                                  className="w-full text-xs mb-2"
-                                />
-                                <Button
-                                  size="sm"
-                                  className="w-full bg-green-600 hover:bg-green-700"
-                                  onClick={async () => {
-                                    try {
-                                      const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
-                                        method: 'POST',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                        },
-                                        body: JSON.stringify({
-                                          action: 'complete',
-                                          admin_notes: 'Refund completed successfully'
-                                        })
-                                      });
-                                      
-                                      if (response.ok) {
-                                        fetchVendorOrders();
-                                        
-                                        // Send WebSocket notification
-                                        if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
-                                          window.websocket.send(JSON.stringify({
-                                            type: 'refund_update',
-                                            action: 'refund_completed',
-                                            order_id: order.id,
-                                            refund_id: refund.id,
-                                            timestamp: new Date().toISOString()
-                                          }));
-                                        }
-                                        
-                                        // Dispatch event
-                                        window.dispatchEvent(new CustomEvent('websocket_message', {
-                                          detail: {
-                                            type: 'refund_update',
-                                            action: 'refund_completed',
-                                            order_id: order.id,
-                                            refund_id: refund.id
-                                          }
-                                        }));
-                                      }
-                                    } catch (error) {
-                                      console.error('Error completing refund:', error);
-                                    }
-                                  }}
-                                >
-                                  Mark as Completed
-                                </Button>
-                              </div>
-                            )}
-                            
-                            {refund.status === 'appeal' && (
-                              <div className="bg-purple-50 p-2 rounded mt-2">
-                                <p className="text-xs text-purple-800 font-medium">Customer has appealed this decision</p>
-                                <div className="flex gap-2 mt-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
-                                    onClick={async () => {
-                                      try {
-                                        const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
-                                          method: 'POST',
-                                          body: JSON.stringify({
-                                            action: 'reject',
-                                            admin_notes: 'Appeal rejected - final decision'
-                                          })
-                                        });
-                                        
-                                        if (response.ok) {
-                                          fetchVendorOrders();
-                                          
-                                          // Send WebSocket notification
-                                          if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
-                                            window.websocket.send(JSON.stringify({
-                                              type: 'refund_update',
-                                              action: 'appeal_rejected',
-                                              order_id: order.id,
-                                              refund_id: refund.id,
-                                              timestamp: new Date().toISOString()
-                                            }));
-                                          }
-                                          
-                                          // Dispatch event
-                                          window.dispatchEvent(new CustomEvent('websocket_message', {
-                                            detail: {
-                                              type: 'refund_update',
-                                              action: 'appeal_rejected',
-                                              order_id: order.id,
-                                              refund_id: refund.id
-                                            }
-                                          }));
-                                        }
-                                      } catch (error) {
-                                        console.error('Error rejecting appeal:', error);
-                                      }
-                                    }}
-                                  >
-                                    Reject Appeal
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    className="flex-1 bg-green-600 hover:bg-green-700"
-                                    onClick={async () => {
-                                      try {
-                                        const { response } = await apiRequest(`vendor/refunds/${refund.id}/process/`, {
-                                          method: 'POST',
-                                          body: JSON.stringify({
-                                            action: 'approve',
-                                            approved_amount: refund.requested_amount,
-                                            admin_notes: 'Appeal approved - refund processed'
-                                          })
-                                        });
-                                        
-                                        if (response.ok) {
-                                          fetchVendorOrders();
-                                          
-                                          // Send WebSocket notification
-                                          if (window.websocket && window.websocket.readyState === WebSocket.OPEN) {
-                                            window.websocket.send(JSON.stringify({
-                                              type: 'refund_update',
-                                              action: 'appeal_approved',
-                                              order_id: order.id,
-                                              refund_id: refund.id,
-                                              timestamp: new Date().toISOString()
-                                            }));
-                                          }
-                                          
-                                          // Dispatch event
-                                          window.dispatchEvent(new CustomEvent('websocket_message', {
-                                            detail: {
-                                              type: 'refund_update',
-                                              action: 'appeal_approved',
-                                              order_id: order.id,
-                                              refund_id: refund.id
-                                            }
-                                          }));
-                                        }
-                                      } catch (error) {
-                                        console.error('Error approving appeal:', error);
-                                      }
-                                    }}
-                                  >
-                                    Approve Appeal
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {refund.evidence_photos?.length > 0 && (
-                              <div className="mt-2">
-                                <p className="text-xs font-medium mb-1">Evidence Documents:</p>
-                                <div className="flex flex-wrap gap-1">
-                                  {refund.evidence_photos.map((doc, idx) => {
-                                    const isImage = doc.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                                    // Handle different possible URL formats
-                                    let imageUrl;
-                                    if (doc.filename.startsWith('http')) {
-                                      imageUrl = doc.filename;
-                                    } else if (doc.filename.startsWith('/media/')) {
-                                      imageUrl = `${API_CONFIG.BASE_URL}${doc.filename}`;
-                                    } else {
-                                      imageUrl = `${API_CONFIG.BASE_URL}/media/${doc.filename}`;
-                                    }
-                                    return (
-                                      <div 
-                                        key={idx} 
-                                        className="bg-blue-100 p-2 rounded text-xs cursor-pointer hover:bg-blue-200 transition-colors flex items-center gap-1"
-                                        onClick={() => {
-                                          if (isImage) {
-                                            setPreviewImage(imageUrl);
-                                            setShowImagePreview(true);
-                                          } else {
-                                            window.open(imageUrl, '_blank');
-                                          }
-                                        }}
-                                      >
-                                        {isImage ? (
-                                          <Eye className="h-3 w-3 text-blue-600" />
-                                        ) : (
-                                          <Package className="h-3 w-3 text-blue-600" />
-                                        )}
-                                        <span className="text-blue-800">{doc.filename || `Document ${idx + 1}`}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {refund.admin_notes && (
-                              <div className="text-xs text-gray-600 mt-2">
-                                <span className="font-medium">Response:</span> {refund.admin_notes}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-
-                        <div className="flex justify-between items-center pt-2 border-t">
-                          <span className="font-semibold text-lg text-emerald-600">
-                            ₹{parseFloat(order.total_amount).toFixed(2)}
-                          </span>
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelectedOrder(order)}>
-                            <Eye className="h-3 w-3 mr-1" />
-                            View Details
-                          </Button>
-                        </div>
-                      </div>
+                
+                <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setCurrentPage(1); }} className="w-full">
+                  <div className="border-b border-gray-100 overflow-x-auto scrollbar-hide">
+                    <TabsList className="flex w-max bg-transparent h-auto p-2 gap-3">
+                      <TabsTrigger value="all" className="text-xs py-2 px-3 data-[state=active]:bg-gray-50 data-[state=active]:text-gray-600 data-[state=active]:border-b-2 data-[state=active]:border-gray-600 rounded-none whitespace-nowrap flex-shrink-0">
+                        All <span className="font-bold ml-2">({ordersData.length})</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="new" className="text-xs py-2 px-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none whitespace-nowrap flex-shrink-0">
+                        New <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'pending').length})</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="confirmed" className="text-xs py-2 px-3 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-600 rounded-none whitespace-nowrap flex-shrink-0">
+                        Confirmed <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'confirmed').length})</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="delivered" className="text-xs py-2 px-3 data-[state=active]:bg-green-50 data-[state=active]:text-green-600 data-[state=active]:border-b-2 data-[state=active]:border-green-600 rounded-none whitespace-nowrap flex-shrink-0">
+                        Delivered <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'delivered').length})</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="cancelled" className="text-xs py-2 px-3 data-[state=active]:bg-gray-50 data-[state=active]:text-gray-600 data-[state=active]:border-b-2 data-[state=active]:border-gray-600 rounded-none whitespace-nowrap flex-shrink-0">
+                        Cancelled <span className="font-bold ml-2">({ordersData.filter(o => o.status === 'cancelled').length})</span>
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
+                  
+                  <TabsContent value="all" className="mt-0">
+                    <div className="divide-y divide-gray-100">
+                      {getPaginatedOrders(ordersData).map((order) => (
+                        <OrderItem key={order.id} order={order} />
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="cancelled" className="mt-0">
-                <div className="divide-y divide-gray-100">
-                  {getPaginatedOrders(filterOrdersByStatus('cancelled')).map((order) => (
-                    <OrderItem key={order.id} order={order} />
-                  ))}
-                </div>
-                <PaginationControls orders={filterOrdersByStatus('cancelled')} />
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-        </>
+                    <PaginationControls orders={ordersData} />
+                  </TabsContent>
+                  
+                  <TabsContent value="new" className="mt-0">
+                    <div className="divide-y divide-gray-100">
+                      {getPaginatedOrders(filterOrdersByStatus('new')).map((order) => (
+                        <OrderItem key={order.id} order={order} />
+                      ))}
+                    </div>
+                    <PaginationControls orders={filterOrdersByStatus('new')} />
+                  </TabsContent>
+                  
+                  <TabsContent value="confirmed" className="mt-0">
+                    <div className="divide-y divide-gray-100">
+                      {getPaginatedOrders(filterOrdersByStatus('confirmed')).map((order) => (
+                        <OrderItem key={order.id} order={order} />
+                      ))}
+                    </div>
+                    <PaginationControls orders={filterOrdersByStatus('confirmed')} />
+                  </TabsContent>
+                  
+                  <TabsContent value="delivered" className="mt-0">
+                    <div className="divide-y divide-gray-100">
+                      {getPaginatedOrders(filterOrdersByStatus('delivered')).map((order) => (
+                        <OrderItem key={order.id} order={order} />
+                      ))}
+                    </div>
+                    <PaginationControls orders={filterOrdersByStatus('delivered')} />
+                  </TabsContent>
+                  
+                  <TabsContent value="cancelled" className="mt-0">
+                    <div className="divide-y divide-gray-100">
+                      {getPaginatedOrders(filterOrdersByStatus('cancelled')).map((order) => (
+                        <OrderItem key={order.id} order={order} />
+                      ))}
+                    </div>
+                    <PaginationControls orders={filterOrdersByStatus('cancelled')} />
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
+          </>
         )}
         
+        {/* Order Details Sheet */}
         <Sheet open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
           <SheetContent side="bottom" className="h-[90vh] rounded-t-xl">
             <SheetHeader className="pb-4">
               <SheetTitle className="text-left">
-                {selectedOrder?.status === 'confirmed' && showDeliveryForm ? 'Ship Order' : `Order Details - ${selectedOrder?.id}`}
+                Order Details - {selectedOrder?.order_number}
               </SheetTitle>
             </SheetHeader>
             
             {selectedOrder && (
               <div className="space-y-4 overflow-y-auto h-full pb-20">
-                {/* Show delivery form only for confirmed orders when shipping */}
-                {selectedOrder.status === 'confirmed' && showDeliveryForm ? (
-                  <>
-                    {/* Customer Details for Rider */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-sm flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          Customer Details for Rider
-                        </h3>
-                        <div className="flex gap-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="h-7 text-xs"
-                            onClick={() => {
-                              const customerInfo = `Order ID: ${selectedOrder.order_number}\n\nCustomer: ${selectedOrder.customer_details?.username || selectedOrder.delivery_name}\n\nPhone: ${selectedOrder.customer_details?.phone_number || selectedOrder.delivery_phone}\n\nAddress: ${selectedOrder.delivery_address}\n\nMap Link: https://www.google.com/maps/place/${selectedOrder.delivery_latitude},${selectedOrder.delivery_longitude}\n\nTotal Amount: ₹${selectedOrder.total_amount}\n\nPayment: ${selectedOrder.payment_method} (${selectedOrder.payment_status})\n\nItems:\n${selectedOrder.items?.map(item => `• ${item.product_name} x${item.quantity}`).join('\n') || ''}`;
-                              navigator.clipboard.writeText(customerInfo);
-                            }}
-                          >
-                            <Copy className="h-3 w-3 mr-1" />
-                            Copy
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="h-7 text-xs"
-                            onClick={() => {
-                              const customerInfo = `Order ID: ${selectedOrder.order_number}\n\nCustomer: ${selectedOrder.customer_details?.username || selectedOrder.delivery_name}\n\nPhone: ${selectedOrder.customer_details?.phone_number || selectedOrder.delivery_phone}\n\nAddress: ${selectedOrder.delivery_address}\n\nMap Link: https://www.google.com/maps/place/${selectedOrder.delivery_latitude},${selectedOrder.delivery_longitude}\n\nTotal Amount: ₹${selectedOrder.total_amount}\n\nPayment: ${selectedOrder.payment_method} (${selectedOrder.payment_status})\n\nItems:\n${selectedOrder.items?.map(item => `• ${item.product_name} x${item.quantity}`).join('\n') || ''}`;
-                              if (navigator.share) {
-                                navigator.share({
-                                  title: 'Delivery Details',
-                                  text: customerInfo
-                                });
-                              } else {
-                                const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(customerInfo)}`;
-                                window.open(whatsappUrl, '_blank');
-                              }
-                            }}
-                          >
-                            <Share2 className="h-3 w-3 mr-1" />
-                            Share
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="space-y-2 text-xs bg-white rounded p-3">
-                        <p><span className="font-medium">Order ID:</span> {selectedOrder.order_number}</p>
-                        <p><span className="font-medium">Customer:</span> {selectedOrder.customer_details?.username || selectedOrder.delivery_name}</p>
-                        <p><span className="font-medium">Phone:</span> {selectedOrder.customer_details?.phone_number || selectedOrder.delivery_phone}</p>
-                        <p><span className="font-medium">Address:</span> {selectedOrder.delivery_address}</p>
-                        <p><span className="font-medium">Map Link:</span> <a href={`https://www.google.com/maps/place/${selectedOrder.delivery_latitude},${selectedOrder.delivery_longitude}`} target="_blank" className="text-blue-600 underline">Open in Maps</a></p>
-                        <p><span className="font-medium">Total Amount:</span> ₹{selectedOrder.total_amount}</p>
-                        <p><span className="font-medium">Payment:</span> {selectedOrder.payment_method} ({selectedOrder.payment_status})</p>
-                        <div className="mt-2">
-                          <span className="font-medium">Items:</span>
-                          <ul className="ml-2 mt-1">
-                            {selectedOrder.items?.map((item: any, index: number) => (
-                              <li key={index}>• {item.product_name} x{item.quantity}</li>
-                            )) || []}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Delivery Information Form */}
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                      <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                        <Truck className="h-4 w-4" />
-                        Delivery Information
-                      </h3>
-                      <div className="space-y-3">
-                        <div>
-                          <Label className="text-xs font-medium text-gray-700">Rider Phone Number <span className="text-red-500">*</span></Label>
-                          <Input 
-                            value={deliveryBoyPhone}
-                            onChange={(e) => setDeliveryBoyPhone(e.target.value)}
-                            placeholder="+977-98XXXXXXXX"
-                            className="h-8 text-xs mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-700">Vehicle Number <span className="text-red-500">*</span></Label>
-                          <Input 
-                            value={vehicleNumber}
-                            onChange={(e) => setVehicleNumber(e.target.value)}
-                            placeholder="e.g., BA-1-PA-1234"
-                            className="h-8 text-xs mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-700">Vehicle Color</Label>
-                          <Input 
-                            value={vehicleColor}
-                            onChange={(e) => setVehicleColor(e.target.value)}
-                            placeholder="e.g., Red, Blue, White"
-                            className="h-8 text-xs mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-700">Estimated Delivery Time <span className="text-red-500">*</span></Label>
-                          <Input 
-                            value={estimatedDeliveryTime}
-                            onChange={(e) => setEstimatedDeliveryTime(e.target.value)}
-                            placeholder="e.g., 30-45 mins"
-                            className="h-8 text-xs mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-700">Delivery Fee <span className="text-red-500">*</span></Label>
-                          {deliveryFeeSource && (
-                            <p className={`text-xs mt-1 mb-2 px-2 py-1 rounded ${
-                              isDeliveryFeeReadonly 
-                                ? deliveryFee === '0' 
-                                  ? 'bg-green-50 text-green-700 border border-green-200'
-                                  : 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : 'bg-gray-50 text-gray-600 border border-gray-200'
-                            }`}>
-                              {deliveryFeeSource}
-                            </p>
-                          )}
-                          <Input 
-                            type="number"
-                            value={deliveryFee}
-                            onChange={(e) => setDeliveryFee(e.target.value)}
-                            placeholder={isDeliveryFeeReadonly ? "Auto-calculated" : "e.g., 50"}
-                            className={`h-8 text-xs mt-1 ${
-                              isDeliveryFeeReadonly 
-                                ? 'bg-gray-50 cursor-not-allowed' 
-                                : ''
-                            }`}
-                            readOnly={isDeliveryFeeReadonly}
-                            disabled={isDeliveryFeeReadonly}
-                          />
-                          {!isDeliveryFeeReadonly && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              💡 No delivery settings found for products. Enter charge manually.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Regular Order Details */}
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        Customer Information
-                      </h3>
-                      <div className="space-y-1 text-xs">
-                        <p><span className="font-medium">Name:</span> {selectedOrder.customer_details?.username || selectedOrder.delivery_name}</p>
-                        <p className="flex items-center gap-1">
-                          <Phone className="h-3 w-3" />
-                          <span className="font-medium">Phone:</span> {selectedOrder.customer_details?.phone_number || selectedOrder.delivery_phone}
-                        </p>
-                        <p className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          <span className="font-medium">Address:</span> {selectedOrder.delivery_address}
-                        </p>
-                        <p className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          <span className="font-medium">Map:</span> 
-                          <a 
-                            href={`https://www.google.com/maps/place/${selectedOrder.delivery_latitude},${selectedOrder.delivery_longitude}`} 
-                            target="_blank" 
-                            className="text-blue-600 underline text-xs"
-                          >
-                            View Location
-                          </a>
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-white border rounded-lg p-3">
-                      <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                        <Package className="h-4 w-4" />
-                        Order Items
-                      </h3>
-                      <div className="space-y-2">
-                        {selectedOrder.items?.map((item: any, index: number) => (
-                          <div key={index} className="py-1 border-b border-gray-100 last:border-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
-                                {item.product_details?.images?.[0]?.image_url ? (
-                                  <img
-                                    src={getImageUrl(item.product_details.images[0].image_url)}
-                                    alt={item.product_name}
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                      e.currentTarget.parentElement.innerHTML = '<span class="text-xs text-gray-400">📦</span>';
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="text-xs text-gray-400">📦</span>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 break-words">{item.product_name}</p>
-                                <p className="text-xs text-gray-600">Qty: {item.quantity}</p>
-                                <p className="text-sm font-semibold text-emerald-600 mt-1">₹{item.total_price}</p>
-                              </div>
-                            </div>
-                            {item.product_selections && Object.keys(item.product_selections).length > 0 && (
-                              <div className="text-xs text-blue-600 mt-2 bg-blue-50 p-2 rounded border border-blue-200">
-                                <div className="font-medium text-blue-800 mb-1">Selected Variants:</div>
-                                {(() => {
-                                  const selections = item.product_selections;
-                                  const keys = Object.keys(selections);
-                                  if (keys.length === 0) return null;
-                                  
-                                  const firstKey = keys[0];
-                                  const firstArray = Array.isArray(selections[firstKey]) ? selections[firstKey] : [selections[firstKey]];
-                                  
-                                  return firstArray.map((_, index) => (
-                                    <div key={index} className="mb-1 p-1 bg-white rounded border">
-                                      <span className="font-medium text-blue-900">Item {index + 1}:</span>
-                                      {keys.map(key => {
-                                        const values = Array.isArray(selections[key]) ? selections[key] : [selections[key]];
-                                        return (
-                                          <span key={key} className="ml-2 capitalize">
-                                            {key}: <span className="font-medium">{values[index] || values[0]}</span>
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                  ));
-                                })()} 
-                              </div>
-                            )}
-                          </div>
-                        )) || []}
-                      </div>
-                    </div>
-                    
-                    <div className="bg-white border rounded-lg p-3">
-                      <h3 className="font-semibold text-sm mb-3">Payment Details</h3>
-                      
-                      {(() => {
-                        // Calculate total delivery fee from items
-                        const itemDeliveryFee = selectedOrder.items?.reduce((total, item) => {
-                          return total + parseFloat(item.delivery_fee || 0);
-                        }, 0) || 0;
-                        
-                        const orderDeliveryFee = parseFloat(selectedOrder.delivery_fee || 0);
-                        const totalDeliveryFee = Math.max(itemDeliveryFee, orderDeliveryFee);
-                        const subtotal = parseFloat(selectedOrder.subtotal || 0);
-                        const taxAmount = parseFloat(selectedOrder.tax_amount || 0);
-                        const billTotal = subtotal + taxAmount;
-                        const grandTotal = billTotal + totalDeliveryFee;
-                        
-                        return (
-                          <>
-                            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 mb-3">
-                              <h4 className="font-semibold text-emerald-800 text-sm mb-2">Bill Amount (Paid via {selectedOrder.payment_method})</h4>
-                              <div className="space-y-1 text-xs">
-                                <div className="flex justify-between">
-                                  <span>Subtotal:</span>
-                                  <span>₹{subtotal.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Tax:</span>
-                                  <span>₹{taxAmount.toFixed(2)}</span>
-                                </div>
-                                <hr className="my-1" />
-                                <div className="flex justify-between font-semibold">
-                                  <span>Bill Total (Paid):</span>
-                                  <span className="text-emerald-600">₹{billTotal.toFixed(2)}</span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {totalDeliveryFee > 0 && (
-                              <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mb-3">
-                                <div className="flex justify-between items-center">
-                                  <div>
-                                    <h4 className="font-bold text-orange-800 text-base">Delivery Fee</h4>
-                                    <p className="text-xs text-orange-700">{selectedOrder.status === 'delivered' ? 'Paid on delivery' : 'Pay on delivery'}</p>
-                                  </div>
-                                  <span className="font-bold text-lg text-orange-600">₹{totalDeliveryFee.toFixed(2)}</span>
-                                </div>
-                              </div>
-                            )}
-                            
-                            <hr className="my-2" />
-                            <div className="flex justify-between font-semibold text-sm">
-                              <span>Grand Total:</span>
-                              <span>₹{grandTotal.toFixed(2)}</span>
-                            </div>
-                            
-                            <div className="mt-3 pt-2 border-t space-y-1 text-xs">
-                              <div className="flex justify-between">
-                                <span>Payment Method:</span>
-                                <span className="capitalize">{selectedOrder.payment_method}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Payment Status:</span>
-                                <Badge variant={selectedOrder.payment_status === 'paid' ? 'default' : 'secondary'} className="text-xs">
-                                  {selectedOrder.payment_status}
-                                </Badge>
-                              </div>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                    
-                    <div className="bg-white border rounded-lg p-3">
-                      <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        Order Timeline
-                      </h3>
-                      <div className="text-xs space-y-1">
-                        <p><span className="font-medium">Ordered:</span> {new Date(selectedOrder.created_at).toLocaleDateString()} at {new Date(selectedOrder.created_at).toLocaleTimeString()}</p>
-                        <p><span className="font-medium">Order Number:</span> {selectedOrder.order_number}</p>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Customer Information
+                  </h3>
+                  <div className="space-y-1 text-xs">
+                    <p><span className="font-medium">Name:</span> {selectedOrder.customer_details?.username || selectedOrder.delivery_name}</p>
+                    <p className="flex items-center gap-1">
+                      <Phone className="h-3 w-3" />
+                      <span className="font-medium">Phone:</span> {selectedOrder.customer_details?.phone_number || selectedOrder.delivery_phone}
+                    </p>
+                    <p className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      <span className="font-medium">Address:</span> {selectedOrder.delivery_address}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="bg-white border rounded-lg p-3">
+                  <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Order Items
+                  </h3>
+                  <div className="space-y-2">
+                    {selectedOrder.items?.map((item: any, index: number) => (
+                      <div key={index} className="py-1 border-b border-gray-100 last:border-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">Status:</span>
-                          <Badge className={`${getStatusColor(selectedOrder.status)} text-xs`}>
-                            {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Customer Review */}
-                    {selectedOrder.status === 'delivered' && selectedOrder.review && (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                          <Star className="h-4 w-4" />
-                          Customer Review
-                        </h3>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex gap-1">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`h-4 w-4 ${
-                                    star <= selectedOrder.review.overall_rating
-                                      ? 'text-yellow-400 fill-yellow-400'
-                                      : 'text-gray-300'
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                            <span className="text-sm font-medium">
-                              {selectedOrder.review.overall_rating}/5
-                            </span>
-                          </div>
-                          {selectedOrder.review.review_text && (
-                            <div className="bg-white p-2 rounded text-xs">
-                              <p className="text-gray-700">{selectedOrder.review.review_text}</p>
-                            </div>
-                          )}
-                          <p className="text-xs text-gray-500">
-                            Reviewed on {new Date(selectedOrder.review.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Cancellation Details */}
-                    {selectedOrder.status === 'cancelled' && selectedOrder.cancelReason && (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                          <XCircle className="h-4 w-4" />
-                          Cancellation Details
-                        </h3>
-                        <div className="space-y-2 text-xs">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <p className="font-medium text-gray-700">Reason:</p>
-                              <p className="text-gray-600">{selectedOrder.cancelReason}</p>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-700">Cancelled By:</p>
-                              <p className="text-gray-600 capitalize">{selectedOrder.cancelledBy || 'System'}</p>
-                            </div>
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-700 mb-1">Payment Status:</p>
-                            <Badge className={`text-xs ${
-                              selectedOrder.paymentStatus === 'Refunded' ? 'bg-green-100 text-green-800' :
-                              selectedOrder.paymentStatus === 'Cancelled' ? 'bg-gray-100 text-gray-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {selectedOrder.paymentStatus}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Refund Details */}
-                    {selectedOrder.refunds?.map(refund => (
-                      <div key={refund.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                          <RotateCcw className="h-4 w-4" />
-                          Return/Refund Details
-                        </h3>
-                        <div className="space-y-3 text-xs">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <p className="font-medium text-gray-700">Status:</p>
-                              <Badge className={`text-xs ${
-                                refund.status === 'requested' ? 'bg-yellow-100 text-yellow-800' :
-                                refund.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                refund.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                refund.status === 'appeal' ? 'bg-purple-100 text-purple-800' :
-                                refund.status === 'processed' ? 'bg-blue-100 text-blue-800' :
-                                refund.status === 'completed' ? 'bg-emerald-100 text-emerald-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {refund.status.charAt(0).toUpperCase() + refund.status.slice(1)}
-                              </Badge>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-700">Reason:</p>
-                              <p className="text-gray-600 capitalize">{refund.reason.replace('_', ' ')}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <p className="font-medium text-gray-700">Requested Amount:</p>
-                              <p className="text-gray-600">₹{refund.requested_amount}</p>
-                            </div>
-                            {refund.approved_amount && (
-                              <div>
-                                <p className="font-medium text-gray-700">Approved Amount:</p>
-                                <p className="text-gray-600">₹{refund.approved_amount}</p>
-                              </div>
+                          <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {item.product_details?.images?.[0]?.image_url ? (
+                              <img
+                                src={getImageUrl(item.product_details.images[0].image_url)}
+                                alt={item.product_name}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.parentElement.innerHTML = '<span class="text-xs text-gray-400">📦</span>';
+                                }}
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-400">📦</span>
                             )}
                           </div>
-                          
-                          <div className="bg-blue-50 border border-blue-200 rounded p-2">
-                            <p className="font-medium text-blue-800 mb-2">Customer Refund Details:</p>
-                            <div className="space-y-1">
-                              <p><span className="font-medium">Method:</span> {refund.refund_method}</p>
-                              {refund.refund_method === 'esewa' && refund.esewa_number && (
-                                <p><span className="font-medium">eSewa Number:</span> {refund.esewa_number}</p>
-                              )}
-                              {refund.refund_method === 'khalti' && refund.khalti_number && (
-                                <p><span className="font-medium">Khalti Number:</span> {refund.khalti_number}</p>
-                              )}
-                              {refund.refund_method === 'bank' && (
-                                <div>
-                                  <p><span className="font-medium">Account Name:</span> {refund.bank_account_name}</p>
-                                  <p><span className="font-medium">Account Number:</span> {refund.bank_account_number}</p>
-                                  <p><span className="font-medium">Branch:</span> {refund.bank_branch}</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {refund.customer_notes && (
-                            <div>
-                              <p className="font-medium text-gray-700">Customer Notes:</p>
-                              <p className="text-gray-600 bg-white p-2 rounded">{refund.customer_notes}</p>
-                            </div>
-                          )}
-                          
-                          {refund.admin_notes && (
-                            <div>
-                              <p className="font-medium text-gray-700">Vendor Response:</p>
-                              <p className="text-gray-600 bg-white p-2 rounded">{refund.admin_notes}</p>
-                            </div>
-                          )}
-                          
-                          {refund.evidence_photos?.length > 0 && (
-                            <div>
-                              <p className="font-medium text-gray-700 mb-2">Evidence Documents:</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {refund.evidence_photos.map((doc, idx) => {
-                                  const isImage = doc.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                                  // Handle different possible URL formats
-                                  let imageUrl;
-                                  if (doc.filename.startsWith('http')) {
-                                    imageUrl = doc.filename;
-                                  } else {
-                                    imageUrl = getImageUrl(doc.filename);
-                                  }
-                                  return (
-                                    <div key={idx} className="bg-white p-2 rounded border hover:shadow-md transition-shadow">
-                                      {isImage ? (
-                                        <div 
-                                          className="cursor-pointer mb-2 group"
-                                          onClick={() => {
-                                            setPreviewImage(imageUrl);
-                                            setShowImagePreview(true);
-                                          }}
-                                        >
-                                          <div className="relative overflow-hidden rounded">
-                                            <img 
-                                              src={imageUrl} 
-                                              alt={doc.filename}
-                                              className="w-full h-20 object-cover rounded mb-1 group-hover:scale-105 transition-transform"
-                                              onError={(e) => {
-                                                e.currentTarget.src = '/placeholder-image.svg';
-                                                e.currentTarget.alt = 'Image not found';
-                                              }}
-                                            />
-                                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
-                                              <Eye className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            </div>
-                                          </div>
-                                          <p className="text-xs text-blue-600 font-medium">📷 Click to enlarge</p>
-                                        </div>
-                                      ) : (
-                                        <div 
-                                          className="w-full h-20 bg-gray-100 rounded mb-2 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
-                                          onClick={() => {
-                                            window.open(imageUrl, '_blank');
-                                          }}
-                                        >
-                                          <div className="text-center">
-                                            <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-                                            <span className="text-xs text-gray-500">Document</span>
-                                          </div>
-                                        </div>
-                                      )}
-                                      <p className="font-medium text-xs truncate" title={doc.filename}>{doc.filename || `Document ${idx + 1}`}</p>
-                                      <p className="text-gray-500 text-xs">📤 {doc.uploaded_by}</p>
-                                      <p className="text-gray-500 text-xs">📅 {new Date(doc.uploaded_at).toLocaleDateString()}</p>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                          
-                          <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                            <div>
-                              <p>Requested: {new Date(refund.requested_at).toLocaleDateString()}</p>
-                            </div>
-                            {refund.approved_at && (
-                              <div>
-                                <p>Approved: {new Date(refund.approved_at).toLocaleDateString()}</p>
-                              </div>
-                            )}
-                            {refund.processed_at && (
-                              <div>
-                                <p>Processed: {new Date(refund.processed_at).toLocaleDateString()}</p>
-                              </div>
-                            )}
-                            {refund.completed_at && (
-                              <div>
-                                <p>Completed: {new Date(refund.completed_at).toLocaleDateString()}</p>
-                              </div>
-                            )}
-                            {refund.appeal_at && (
-                              <div>
-                                <p>Appealed: {new Date(refund.appeal_at).toLocaleDateString()}</p>
-                              </div>
-                            )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 break-words">{item.product_name}</p>
+                            <p className="text-xs text-gray-600">Qty: {item.quantity}</p>
+                            <p className="text-sm font-semibold text-emerald-600 mt-1">₹{item.total_price}</p>
                           </div>
                         </div>
                       </div>
                     )) || []}
-                  </>
-                )}
-                
-                {/* Action Buttons */}
-                {selectedOrder.status === 'new' && (
-                  <div className="fixed bottom-4 left-4 right-4 flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        const { response } = await apiRequest(`/orders/${selectedOrder.id}/reject/`, {
-                          method: 'POST'
-                        });
-
-                        if (response.ok) {
-                          // Update local state immediately for instant UI feedback
-                          updateOrderStatus(selectedOrder.id, 'cancelled');
-
-                          // STOP persistent alerts for this order
-                          const { simpleNotificationService } = await import('@/services/simpleNotificationService');
-                          simpleNotificationService.clearNotification(selectedOrder.id);
-
-                          // Refresh orders to get updated data from server
-                          setTimeout(() => fetchVendorOrders(), 1000);
-                          setNewOrdersCount(prev => Math.max(0, prev - 1));
-
-                          // Trigger wallet refresh event
-                          window.dispatchEvent(new CustomEvent('walletUpdated'));
-
-                          // Send WebSocket notification (if available)
-                          try {
-                            const ws = (window as any).websocket;
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                              ws.send(JSON.stringify({
-                                type: 'order_update',
-                                action: 'order_rejected',
-                                order_id: selectedOrder.id,
-                                timestamp: new Date().toISOString()
-                              }));
-                            }
-                          } catch (error) {
-                            console.log('WebSocket not available for notification');
-                          }
-
-                          // Dispatch global order status update event
-                          window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
-                            detail: { orderId: selectedOrder.id, status: 'cancelled', type: 'reject' }
-                          }));
-
-                          // Dispatch global notification for cross-page updates
-                          window.dispatchEvent(new CustomEvent('newNotification', {
-                            detail: {
-                              type: 'order',
-                              title: `Order #${selectedOrder.order_number} Rejected`,
-                              message: 'Order has been rejected by vendor',
-                              data: { orderId: selectedOrder.id, status: 'cancelled' }
-                            }
-                          }));
-
-                          setSelectedOrder(null);
-                        }
-                      } catch (error) {
-                        console.error('Error rejecting order:', error);
-                      }
-                    }}>
-                      Reject
-                    </Button>
-                    <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        const { response } = await apiRequest(`/orders/${selectedOrder.id}/accept/`, {
-                          method: 'POST'
-                        });
-
-                        if (response.ok) {
-                          // Update local state immediately for instant UI feedback
-                          updateOrderStatus(selectedOrder.id, 'confirmed');
-
-                          // STOP persistent alerts for this order
-                          const { simpleNotificationService } = await import('@/services/simpleNotificationService');
-                          simpleNotificationService.clearNotification(selectedOrder.id);
-
-                          // Refresh orders to get updated data from server
-                          setTimeout(() => fetchVendorOrders(), 1000);
-                          setNewOrdersCount(prev => Math.max(0, prev - 1));
-
-                          // Trigger wallet refresh event
-                          window.dispatchEvent(new CustomEvent('walletUpdated'));
-
-                          // Send WebSocket notification (if available)
-                          try {
-                            const ws = (window as any).websocket;
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                              ws.send(JSON.stringify({
-                                type: 'order_update',
-                                action: 'order_accepted',
-                                order_id: selectedOrder.id,
-                                timestamp: new Date().toISOString()
-                              }));
-                            }
-                          } catch (error) {
-                            console.log('WebSocket not available for notification');
-                          }
-
-                          // Dispatch global order status update event
-                          window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
-                            detail: { orderId: selectedOrder.id, status: 'confirmed', type: 'accept' }
-                          }));
-
-                          // Dispatch global notification for cross-page updates
-                          window.dispatchEvent(new CustomEvent('newNotification', {
-                            detail: {
-                              type: 'order',
-                              title: `Order #${selectedOrder.order_number} Accepted`,
-                              message: 'Order has been accepted by vendor',
-                              data: { orderId: selectedOrder.id, status: 'confirmed' }
-                            }
-                          }));
-
-                          setSelectedOrder(null);
-                        }
-                      } catch (error) {
-                        console.error('Error accepting order:', error);
-                      }
-                    }}>
-                      Accept Order
-                    </Button>
                   </div>
-                )}
+                </div>
                 
-                {selectedOrder.status === 'confirmed' && (
-                  <div className="fixed bottom-4 left-4 right-4 flex gap-2">
-                    {!showDeliveryForm ? (
-                      <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => {
-                        // Auto-calculate delivery fee based on product settings
-                        let calculatedFee = '';
-                        let feeSource = '';
-                        let isReadonly = false;
-                        
-                        if (selectedOrder.items && selectedOrder.items.length > 0) {
-                          // Check if any product has free delivery
-                          const hasFreeDelivery = selectedOrder.items.some(item => 
-                            item.product_details?.free_delivery === true
-                          );
-                          
-                          if (hasFreeDelivery) {
-                            calculatedFee = '0';
-                            feeSource = 'Free delivery (set by vendor)';
-                            isReadonly = true;
-                          } else {
-                            // Check for custom delivery fee
-                            const customDeliveryItem = selectedOrder.items.find(item => 
-                              item.product_details?.custom_delivery_fee_enabled === true &&
-                              item.product_details?.custom_delivery_fee > 0
-                            );
-                            
-                            if (customDeliveryItem) {
-                              calculatedFee = customDeliveryItem.product_details.custom_delivery_fee.toString();
-                              feeSource = `Custom delivery fee (₹${customDeliveryItem.product_details.custom_delivery_fee})`;
-                              isReadonly = true;
-                            } else {
-                              // No specific delivery settings, allow manual entry
-                              calculatedFee = '';
-                              feeSource = 'Enter delivery charge manually';
-                              isReadonly = false;
-                            }
-                          }
-                        }
-                        
-                        setDeliveryFee(calculatedFee);
-                        setDeliveryFeeSource(feeSource);
-                        setIsDeliveryFeeReadonly(isReadonly);
-                        setShowDeliveryForm(true);
-                      }}>
-                        <Truck className="h-4 w-4 mr-2" />
-                        Ship Order
-                      </Button>
-                    ) : (
-                      <>
-                        <Button variant="outline" className="flex-1" onClick={() => {
-                          setShowDeliveryForm(false);
-                          setDeliveryBoyPhone('');
-                          setVehicleNumber('');
-                          setVehicleColor('');
-                          setEstimatedDeliveryTime('');
-                          setDeliveryFee('');
-                          setDeliveryFeeSource('');
-                          setIsDeliveryFeeReadonly(false);
-                        }}>
-                          Cancel
-                        </Button>
-                        <Button 
-                          className="flex-1 bg-blue-600 hover:bg-blue-700" 
-                          disabled={!deliveryBoyPhone || !vehicleNumber || !estimatedDeliveryTime || !deliveryFee}
-                          onClick={async () => {
-                            try {
-                              const { response } = await apiRequest(`vendor/orders/${selectedOrder.id}/status/`, {
-                                method: 'POST',
-                                body: JSON.stringify({
-                                  status: 'out_for_delivery',
-                                  delivery_boy_phone: deliveryBoyPhone,
-                                  vehicle_number: vehicleNumber,
-                                  vehicle_color: vehicleColor,
-                                  estimated_delivery_time: estimatedDeliveryTime,
-                                  delivery_fee: parseFloat(deliveryFee),
-                                  notes: 'Order shipped with delivery details'
-                                })
-                              });
-                              
-                              if (response.ok) {
-                                // Update local state immediately
-                                updateOrderStatus(selectedOrder.id, 'out_for_delivery');
-
-                                // STOP persistent alerts for this order
-                                const { simpleNotificationService } = await import('@/services/simpleNotificationService');
-                                simpleNotificationService.clearNotification(selectedOrder.id);
-
-                                // Refresh from server after a short delay
-                                setTimeout(() => fetchVendorOrders(), 1000);
-                                setShowDeliveryForm(false);
-                                setDeliveryBoyPhone('');
-                                setVehicleNumber('');
-                                setVehicleColor('');
-                                setEstimatedDeliveryTime('');
-                                setDeliveryFee('');
-                                setDeliveryFeeSource('');
-                                setIsDeliveryFeeReadonly(false);
-                                setSelectedOrder(null);
-
-                                // Send WebSocket notification (if available)
-                                try {
-                                  const ws = (window as any).websocket;
-                                  if (ws && ws.readyState === WebSocket.OPEN) {
-                                    ws.send(JSON.stringify({
-                                      type: 'order_update',
-                                      action: 'order_shipped',
-                                      order_id: selectedOrder.id,
-                                      timestamp: new Date().toISOString()
-                                    }));
-                                  }
-                                } catch (error) {
-                                  console.log('WebSocket not available for notification');
-                                }
-
-                                // Dispatch order status update event
-                                window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
-                                  detail: { orderId: selectedOrder.id, status: 'out_for_delivery', type: 'ship' }
-                                }));
-
-                                // Dispatch global notification
-                                window.dispatchEvent(new CustomEvent('newNotification', {
-                                  detail: {
-                                    type: 'order',
-                                    title: `Order #${selectedOrder.order_number} Shipped`,
-                                    message: 'Order has been shipped for delivery',
-                                    data: { orderId: selectedOrder.id, status: 'out_for_delivery' }
-                                  }
-                                }));
-                              }
-                            } catch (error) {
-                              console.error('Error shipping order:', error);
-                            }
-                          }}
-                        >
-                          Confirm Ship
-                        </Button>
-                      </>
-                    )}
+                <div className="bg-white border rounded-lg p-3">
+                  <h3 className="font-semibold text-sm mb-3">Payment Details</h3>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span>Subtotal:</span>
+                      <span>₹{parseFloat(selectedOrder.subtotal || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total:</span>
+                      <span>₹{parseFloat(selectedOrder.total_amount || 0).toFixed(2)}</span>
+                    </div>
                   </div>
-                )}
-
-
+                </div>
+                
+                <div className="bg-white border rounded-lg p-3">
+                  <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Order Timeline
+                  </h3>
+                  <div className="text-xs space-y-1">
+                    <p><span className="font-medium">Ordered:</span> {new Date(selectedOrder.created_at).toLocaleDateString()} at {new Date(selectedOrder.created_at).toLocaleTimeString()}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Status:</span>
+                      <Badge className={`${getStatusColor(selectedOrder.status)} text-xs`}>
+                        {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </SheetContent>
@@ -2172,42 +648,19 @@ const VendorOrders: React.FC = () => {
             <DialogHeader className="pb-4">
               <DialogTitle className="flex items-center gap-2">
                 <Eye className="h-5 w-5" />
-                Evidence Document Preview
+                Image Preview
               </DialogTitle>
             </DialogHeader>
             <div className="flex justify-center items-center bg-gray-50 rounded-lg p-4">
               <img 
                 src={previewImage} 
-                alt="Evidence Preview"
+                alt="Preview"
                 className="max-w-full max-h-[75vh] object-contain rounded shadow-lg"
                 onError={(e) => {
                   e.currentTarget.src = '/placeholder-image.svg';
                   e.currentTarget.alt = 'Image not found';
                 }}
               />
-            </div>
-            <div className="flex justify-center gap-2 pt-4">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => window.open(previewImage, '_blank')}
-              >
-                <Share2 className="h-4 w-4 mr-2" />
-                Open in New Tab
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = previewImage;
-                  link.download = 'evidence-document';
-                  link.click();
-                }}
-              >
-                <Package className="h-4 w-4 mr-2" />
-                Download
-              </Button>
             </div>
           </DialogContent>
         </Dialog>

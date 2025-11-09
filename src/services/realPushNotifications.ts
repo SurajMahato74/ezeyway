@@ -162,21 +162,33 @@ class RealPushNotifications {
 
   private async sendTokenToBackend(token: string) {
     try {
-      // Send FCM token to your backend
-      const response = await fetch('/api/vendor/fcm-token', {
+      console.log('🔥 SENDING FCM TOKEN TO BACKEND (WHATSAPP-STYLE):', token.substring(0, 20) + '...');
+
+      // Send FCM token to your backend - CRITICAL for background notifications
+      const response = await fetch('/api/accounts/register-fcm-token/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          fcmToken: token,
-          vendorId: localStorage.getItem('vendor_id') 
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`
+        },
+        body: JSON.stringify({
+          fcm_token: token,
+          platform: 'web',
+          device_type: 'pwa'
         })
       });
-      
+
       if (response.ok) {
-        console.log('✅ FCM token sent to backend');
+        console.log('✅ FCM TOKEN REGISTERED - WHATSAPP-STYLE BACKGROUND NOTIFICATIONS ENABLED!');
+        console.log('🚀 Now notifications will work even when browser is completely closed!');
+      } else {
+        console.error('❌ FCM TOKEN REGISTRATION FAILED:', response.status, response.statusText);
+        const errorData = await response.text();
+        console.error('❌ Error details:', errorData);
       }
     } catch (error) {
-      console.warn('Failed to send FCM token:', error);
+      console.error('❌ Failed to send FCM token to backend:', error);
+      console.error('💡 This means background notifications WONT work when browser is closed!');
     }
   }
 
@@ -396,6 +408,51 @@ class RealPushNotifications {
 
   getFCMToken(): string | null {
     return this.fcmToken;
+  }
+
+  // DEBUG METHOD: Check FCM token registration status
+  async checkFCMStatus() {
+    console.log('🔍 CHECKING FCM STATUS FOR WHATSAPP-STYLE NOTIFICATIONS...');
+
+    const token = this.getFCMToken();
+    if (token) {
+      console.log('✅ FCM Token exists:', token.substring(0, 20) + '...');
+      console.log('🚀 Background notifications SHOULD work when browser is closed');
+
+      // Test if we can send a test notification
+      try {
+        const response = await fetch('/api/accounts/test-fcm-notification/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`
+          },
+          body: JSON.stringify({
+            title: 'Test Notification',
+            body: 'Testing FCM background notifications',
+            test: true
+          })
+        });
+
+        if (response.ok) {
+          console.log('✅ FCM test notification sent - check if you receive it!');
+        } else {
+          console.warn('❌ FCM test failed:', response.status);
+        }
+      } catch (error) {
+        console.warn('❌ FCM test error:', error);
+      }
+
+    } else {
+      console.error('❌ NO FCM TOKEN - Background notifications WONT work!');
+      console.error('💡 User needs to grant notification permissions and refresh');
+    }
+
+    return {
+      hasToken: !!token,
+      token: token?.substring(0, 20) + '...',
+      platform: Capacitor.isNativePlatform() ? 'native' : 'web'
+    };
   }
 }
 

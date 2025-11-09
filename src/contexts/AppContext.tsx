@@ -196,6 +196,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadStoredData = async () => {
       try {
+        console.log('🔄 App initializing - checking for stored vendor session...');
+        
+        // Try auto-login for vendors (like WhatsApp - persistent vendor sessions)
+        const autoLoginSuccess = await authService.autoLogin();
+        console.log('🚀 Auto-login result:', autoLoginSuccess);
+        
+        if (autoLoginSuccess) {
+          // Vendor session restored successfully
+          const user = await authService.getUser();
+          console.log('✅ Vendor session restored:', user?.username, 'Type:', user?.user_type);
+          
+          if (user?.user_type === 'vendor') {
+          dispatch({ type: 'SET_USER', payload: { ...user, isLoggedIn: true } });
+          
+          // VENDOR PERSISTENT SESSION - Auto-redirect to vendor dashboard
+          // Only redirect if not already on vendor route
+          if (!window.location.pathname.startsWith('/vendor')) {
+            console.log('🔄 Auto-redirecting vendor to dashboard...');
+            // Use window.location to avoid React Router issues in this context
+            window.location.replace('/vendor');
+          }
+          
+          // Start FCM registration for vendor notifications
+          setTimeout(async () => {
+            try {
+              const { fcmService } = await import('@/services/fcmService');
+              await fcmService.initialize();
+              console.log('📱 Vendor FCM initialized for persistent notifications');
+            } catch (error) {
+              console.warn('FCM initialization failed:', error);
+            }
+          }, 1000);
+        }
+      } else {
+        // Load basic data for non-authenticated users
         const [cart, wishlist, user, isAuthenticated] = await Promise.all([
           authService.getCart(),
           authService.getWishlist(),
@@ -204,25 +239,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ]);
         
         if (isAuthenticated && user) {
-          // Check if session is still valid
-          const isValid = await authService.isSessionValid();
-          if (isValid) {
-            // Restore user to context
-            dispatch({ type: 'SET_USER', payload: { ...user, isLoggedIn: true } });
-          } else {
-            // Session expired, clear auth data
-            await authService.clearAuth();
-          }
+          dispatch({ type: 'SET_USER', payload: { ...user, isLoggedIn: true } });
         }
         
-        // Load cart and wishlist regardless of auth status
+        // Load cart and wishlist regardless
         dispatch({ type: 'SET_CART', payload: cart });
         dispatch({ type: 'SET_WISHLIST', payload: wishlist });
+      }
 
         // Force re-render
         dispatch({ type: 'SET_LOADING', payload: false });
+        console.log('✅ App initialization complete');
+        
       } catch (error) {
         console.error('Failed to load stored data:', error);
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
     

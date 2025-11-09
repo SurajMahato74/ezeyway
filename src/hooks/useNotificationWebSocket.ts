@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { simpleNotificationService } from '@/services/simpleNotificationService';
 import { authService } from '@/services/authService';
-import { getWsUrl } from '@/config/api';
+import { getWsUrl, getApiUrl } from '@/config/api';
 
 interface NotificationData {
   id: string;
@@ -27,7 +27,7 @@ export function useNotificationWebSocket() {
     simpleNotificationService.requestPermissions();
   }, []);
 
-  // WebSocket connection (disabled for ngrok compatibility)
+  // Enhanced WebSocket connection with better error handling
   const connectWebSocket = async () => {
     let token = await authService.getToken();
     
@@ -41,7 +41,7 @@ export function useNotificationWebSocket() {
       return;
     }
 
-    // Skip WebSocket connection when using ngrok
+    // Check for ngrok and use HTTP polling if detected
     const currentUrl = window.location.href;
     if (currentUrl.includes('ngrok') || currentUrl.includes('ngrok-free.app')) {
       console.log('Ngrok detected - using HTTP polling instead of WebSocket');
@@ -49,25 +49,46 @@ export function useNotificationWebSocket() {
       return;
     }
 
-    // Skip WebSocket for now - use HTTP polling for all connections
-    console.log('Using HTTP polling for notifications');
-    startHttpPolling();
-    return;
-
+    console.log('🚀 ENABLING WEBSOCKET FOR REAL-TIME ORDER UPDATES');
+    
     try {
       const wsUrl = `${getWsUrl('/ws/notifications/')}?token=${token}`;
       console.log('Attempting WebSocket connection to:', wsUrl);
-      wsRef.current = new WebSocket(wsUrl);
+      
+      // Create WebSocket with timeout
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      // Add connection timeout
+      const connectionTimeout = setTimeout(() => {
+        if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+          console.log('WebSocket connection timeout, closing...');
+          wsRef.current.close();
+          setIsConnected(false);
+        }
+      }, 10000); // 10 second timeout
 
       wsRef.current.onopen = () => {
-        console.log('Notification WebSocket connected');
+        clearTimeout(connectionTimeout);
+        console.log('✅ Notification WebSocket connected successfully');
         setIsConnected(true);
         reconnectAttempts.current = 0;
+        
+        // Send authentication message if needed
+        wsRef.current?.send(JSON.stringify({
+          type: 'authenticate',
+          token: token
+        }));
         
         // Send ping to keep connection alive
         const pingInterval = setInterval(() => {
           if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'ping' }));
+            try {
+              wsRef.current.send(JSON.stringify({ type: 'ping' }));
+            } catch (error) {
+              console.error('Error sending ping:', error);
+              clearInterval(pingInterval);
+            }
           } else {
             clearInterval(pingInterval);
           }
@@ -83,42 +104,66 @@ export function useNotificationWebSocket() {
         }
       };
 
-      wsRef.current.onclose = async (event) => {
-        console.log('Notification WebSocket disconnected:', event.code, event.reason);
+      wsRef.current.onclose = (event) => {
+        clearTimeout(connectionTimeout);
+        console.log('🔌 Notification WebSocket disconnected:', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean
+        });
         setIsConnected(false);
         
-        // Attempt to reconnect if not a normal closure and we have a token
-        const token = await authService.getToken();
-        if (token && event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectAttempts.current++;
-            console.log(`Attempting to reconnect... (${reconnectAttempts.current}/${maxReconnectAttempts})`);
-            connectWebSocket();
-          }, delay);
-        } else if (!token) {
-          console.warn('Cannot reconnect WebSocket: No authentication token');
-        } else if (reconnectAttempts.current >= maxReconnectAttempts) {
-          console.warn('Max WebSocket reconnection attempts reached');
+        // Handle different close codes
+        if (event.code === 1000) {
+          console.log('Normal WebSocket closure');
+          return;
         }
+        
+        if (event.code === 1006) {
+          console.error('WebSocket closed abnormally (1006) - likely backend not running or incorrect configuration');
+          // Don't retry immediately for abnormal closures
+          return;
+        }
+        
+        // Attempt to reconnect for other errors
+        const attemptReconnect = async () => {
+          const currentToken = await authService.getToken();
+          if (currentToken && reconnectAttempts.current < maxReconnectAttempts) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+            reconnectTimeoutRef.current = setTimeout(() => {
+              reconnectAttempts.current++;
+              console.log(`🔄 Attempting to reconnect... (${reconnectAttempts.current}/${maxReconnectAttempts})`);
+              connectWebSocket();
+            }, delay);
+          } else if (!currentToken) {
+            console.warn('❌ Cannot reconnect WebSocket: No authentication token');
+          } else if (reconnectAttempts.current >= maxReconnectAttempts) {
+            console.warn('⚠️ Max WebSocket reconnection attempts reached, switching to polling');
+            startHttpPolling();
+          }
+        };
+        
+        attemptReconnect();
       };
 
       wsRef.current.onerror = (error) => {
-        console.error('Notification WebSocket error:', error);
+        clearTimeout(connectionTimeout);
+        console.error('❌ Notification WebSocket error:', error);
+        setIsConnected(false);
       };
 
     } catch (error) {
-      console.error('Failed to create WebSocket connection:', error);
+      console.error('💥 Failed to create WebSocket connection:', error);
       setIsConnected(false);
     }
   };
 
-  // Handle WebSocket messages
+  // Handle WebSocket messages - ENHANCED FOR ORDER UPDATES
   const handleWebSocketMessage = (data: any) => {
-    console.log('Received notification:', data);
+    console.log('📨 WEBSOCKET MESSAGE RECEIVED:', data);
 
     if (data.type === 'connection_established') {
-      console.log('Notification service connected:', data.message);
+      console.log('✅ Notification service connected:', data.message);
       return;
     }
 
@@ -126,8 +171,42 @@ export function useNotificationWebSocket() {
       return; // Ignore pong responses
     }
 
+    // HANDLE ORDER STATUS UPDATES VIA WEBSOCKET
+    if (data.type === 'order_update' || data.type === 'order_status_change') {
+      console.log('🔄 ORDER STATUS UPDATE VIA WEBSOCKET:', data);
+
+      // Dispatch event to update order status in real-time
+      window.dispatchEvent(new CustomEvent('orderStatusUpdated', {
+        detail: {
+          orderId: data.order_id || data.orderId,
+          status: data.status || data.new_status,
+          type: data.action || 'websocket_update',
+          websocket: true
+        }
+      }));
+
+      // Dispatch WebSocket message event for components listening
+      window.dispatchEvent(new CustomEvent('websocket_message', {
+        detail: data
+      }));
+
+      return;
+    }
+
+    // HANDLE REFUND UPDATES VIA WEBSOCKET
+    if (data.type === 'refund_update') {
+      console.log('💰 REFUND UPDATE VIA WEBSOCKET:', data);
+
+      window.dispatchEvent(new CustomEvent('websocket_message', {
+        detail: data
+      }));
+
+      return;
+    }
+
+    // HANDLE REGULAR NOTIFICATIONS
     if (data.type === 'order_notification' || data.type === 'notification') {
-      const notification = data.notification;
+      const notification = data.notification || data;
       if (notification) {
         // Add to notifications list
         const newNotification: NotificationData = {
@@ -158,11 +237,47 @@ export function useNotificationWebSocket() {
     }
   };
 
-  // HTTP polling fallback for ngrok (disabled)
+  // Enhanced HTTP polling fallback
   const startHttpPolling = () => {
+    console.log('🔄 Starting HTTP polling fallback for notifications');
     setIsConnected(true); // Simulate connection for UI
-    console.log('Notification polling disabled');
-    // No polling interval to prevent excessive API calls
+    
+    // Simple HTTP polling to check for new notifications
+    const pollInterval = setInterval(async () => {
+      try {
+        const token = await authService.getToken();
+        if (!token) {
+          console.warn('No token for HTTP polling');
+          clearInterval(pollInterval);
+          return;
+        }
+
+        // Make a simple API call to check for notifications
+        const response = await fetch(`${getApiUrl('/notifications/')}`, {
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const notifications = await response.json();
+          // Process new notifications if any
+          if (notifications && notifications.length > 0) {
+            console.log('📨 HTTP Polling: New notifications found');
+            // You can dispatch events here for new notifications
+          }
+        }
+      } catch (error) {
+        console.warn('HTTP polling error:', error);
+      }
+    }, 30000); // Poll every 30 seconds
+
+    // Store interval for cleanup
+    if (reconnectTimeoutRef.current) {
+      clearInterval(reconnectTimeoutRef.current as any);
+    }
+    reconnectTimeoutRef.current = pollInterval as any;
   };
 
   // Connect on mount with delay to ensure token is available
@@ -176,11 +291,24 @@ export function useNotificationWebSocket() {
     initConnection();
 
     return () => {
-      if (reconnectTimeoutRef.current) {
-        clearInterval(reconnectTimeoutRef.current);
-      }
+      // Clean up WebSocket connection
       if (wsRef.current) {
-        wsRef.current.close(1000, 'Component unmounting');
+        try {
+          wsRef.current.close(1000, 'Component unmounting');
+        } catch (error) {
+          console.warn('Error closing WebSocket:', error);
+        }
+        wsRef.current = null;
+      }
+      
+      // Clean up reconnection timeout
+      if (reconnectTimeoutRef.current) {
+        try {
+          clearTimeout(reconnectTimeoutRef.current);
+        } catch (error) {
+          console.warn('Error clearing timeout:', error);
+        }
+        reconnectTimeoutRef.current = null;
       }
     };
   }, []);
@@ -202,6 +330,26 @@ export function useNotificationWebSocket() {
     setUnreadCount(0);
   };
 
+  // Send WebSocket message
+  const sendMessage = (message: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message));
+      console.log('📤 WebSocket message sent:', message);
+    } else {
+      console.warn('⚠️ WebSocket not connected, cannot send message');
+    }
+  };
+
+  // Listen for messages to send from other components
+  useEffect(() => {
+    const handleSendMessage = (event: CustomEvent) => {
+      sendMessage(event.detail);
+    };
+
+    window.addEventListener('websocket_send', handleSendMessage as EventListener);
+    return () => window.removeEventListener('websocket_send', handleSendMessage as EventListener);
+  }, []);
+
   // Clear notifications
   const clearNotifications = () => {
     setNotifications([]);
@@ -214,6 +362,7 @@ export function useNotificationWebSocket() {
     isConnected,
     markAsRead,
     markAllAsRead,
-    clearNotifications
+    clearNotifications,
+    sendMessage
   };
 }

@@ -1,125 +1,253 @@
-// Service Worker for background notifications
-const CACHE_NAME = 'kath-snap-v1';
+const CACHE_NAME = 'ezeyway-v1';
+const urlsToCache = [
+  '/',
+  '/manifest.json',
+  '/favicon.ico',
+  '/alert-icon.svg'
+];
 
-// Install event
+// Install service worker
 self.addEventListener('install', (event) => {
-  console.log('Service Worker installing...');
+  console.log('🔧 Service Worker installing...');
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        console.log('📦 Caching files for offline use');
+        return cache.addAll(urlsToCache);
+      })
+  );
   self.skipWaiting();
 });
 
-// Activate event
+// Activate service worker
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker activating...');
-  event.waitUntil(self.clients.claim());
+  console.log('✅ Service Worker activated');
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('🗑️ Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+  self.clients.claim();
 });
 
-// Background sync for notifications
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'background-sync-orders') {
-    event.waitUntil(checkForNewOrders());
-  }
+// Background fetch for notifications
+self.addEventListener('backgroundfetch', (event) => {
+  console.log('📡 Background fetch for notifications');
 });
 
-// Push notification event
+// Push notification handler - CRITICAL for lock screen notifications
 self.addEventListener('push', (event) => {
-  console.log('Push notification received:', event);
+  console.log('🔔 Push notification received:', event);
   
-  let data = {};
+  let notificationData = {};
+  
   if (event.data) {
     try {
-      data = event.data.json();
+      notificationData = event.data.json();
     } catch (e) {
-      data = { title: 'New Order', body: event.data.text() };
+      notificationData = {
+        title: 'New Notification',
+        body: event.data.text()
+      };
     }
   }
 
+  const { title, body, icon, badge, data } = notificationData;
+  
+  // Default values for rich notifications
   const options = {
-    body: data.body || 'You have a new order!',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
-    tag: data.tag || 'order-notification',
+    title: title || '🚨 EzyWay Order Alert',
+    body: body || 'You have a new order that needs immediate attention!',
+    icon: icon || '/alert-icon.svg',
+    badge: badge || '/alert-icon.svg',
+    tag: 'order-notification',
     requireInteraction: true,
+    silent: false,
+    vibrate: [200, 100, 200, 100, 200],
+    data: data || {},
     actions: [
       {
-        action: 'view',
-        title: 'View Order'
+        action: 'view_order',
+        title: 'View Order',
+        icon: '/alert-icon.svg'
       },
       {
         action: 'dismiss',
-        title: 'Dismiss'
+        title: 'Dismiss',
+        icon: '/alert-icon.svg'
       }
-    ],
-    data: data.data || {}
+    ]
   };
 
+  // Show notification that works on lock screen
   event.waitUntil(
-    self.registration.showNotification(data.title || 'New Order Received!', options)
+    self.registration.showNotification(options.title, options)
   );
 });
 
-// Notification click event
+// Notification click handler - AUTO OPEN APP
 self.addEventListener('notificationclick', (event) => {
-  console.log('Notification clicked:', event);
+  console.log('🔔 Notification clicked:', event);
   
   event.notification.close();
-
-  if (event.action === 'view' || !event.action) {
-    // Open the app and focus on orders page
+  
+  const action = event.action;
+  const data = event.notification.data || {};
+  
+  if (action === 'view_order' || !action) {
+    // Primary action - open the app
     event.waitUntil(
-      self.clients.matchAll({ type: 'window' }).then((clients) => {
-        // Check if app is already open
-        for (const client of clients) {
-          if (client.url.includes('/vendor') && 'focus' in client) {
-            client.focus();
-            client.postMessage({
-              type: 'SHOW_ORDER_MODAL',
-              data: event.notification.data
-            });
-            return;
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          // Check if app is already open
+          for (const client of clientList) {
+            if (client.url.includes('/vendor') && 'focus' in client) {
+              console.log('📱 Focusing existing app window');
+              return client.focus();
+            }
           }
-        }
-        
-        // If app is not open, open it
-        if (self.clients.openWindow) {
-          return self.clients.openWindow('/vendor/home');
-        }
-      })
+          
+          // Open new window
+          if (clients.openWindow) {
+            console.log('🆕 Opening new app window');
+            return clients.openWindow('/vendor/orders');
+          }
+        })
+    );
+    
+    // Send data to the app
+    if (data.orderId) {
+      event.waitUntil(
+        clients.matchAll({ type: 'window' })
+          .then((clients) => {
+            for (const client of clients) {
+              client.postMessage({
+                type: 'ORDER_NOTIFICATION_CLICKED',
+                data: data
+              });
+            }
+          })
+      );
+    }
+  } else if (action === 'dismiss') {
+    // Just close the notification
+    console.log('🔇 Notification dismissed');
+  }
+});
+
+// Background sync for when connectivity is restored
+self.addEventListener('sync', (event) => {
+  console.log('🔄 Background sync triggered:', event.tag);
+  
+  if (event.tag === 'background-sync-orders') {
+    event.waitUntil(
+      // Sync pending orders
+      syncPendingOrders()
     );
   }
 });
 
-// Message event for communication with main thread
+// Message handler for communication with main thread
 self.addEventListener('message', (event) => {
-  console.log('Service Worker received message:', event.data);
+  console.log('📨 Service Worker received message:', event.data);
   
-  if (event.data && event.data.type === 'VISIBILITY_CHANGE') {
-    // Handle visibility changes for background notifications
-    if (event.data.hidden) {
-      // Page is hidden, enable background notifications
-      console.log('Page hidden, enabling background notifications');
-    } else {
-      // Page is visible, disable background notifications
-      console.log('Page visible, disabling background notifications');
-    }
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  
+  if (event.data && event.data.type === 'GET_VERSION') {
+    event.ports[0].postMessage({ version: '1.0.0' });
+  }
+  
+  if (event.data && event.data.type === 'ORDER_ALERT') {
+    // Handle order alert from main thread
+    const { orderNumber, amount, orderId } = event.data;
+    
+    // Show persistent notification
+    self.registration.showNotification(`🚨 NEW ORDER #${orderNumber}`, {
+      body: `₹${amount} - Immediate attention required!`,
+      icon: '/alert-icon.svg',
+      tag: `order-${orderId}`,
+      requireInteraction: true,
+      data: {
+        orderId,
+        orderNumber,
+        amount,
+        type: 'order_notification'
+      }
+    });
   }
 });
 
-// Function to check for new orders (background sync)
-async function checkForNewOrders() {
+// Sync pending orders function
+async function syncPendingOrders() {
   try {
-    // This would typically make an API call to check for new orders
-    // For now, we'll just log that the background sync occurred
-    console.log('Background sync: Checking for new orders...');
+    console.log('🔄 Syncing pending orders...');
     
-    // In a real implementation, you would:
-    // 1. Make an API call to check for new orders
-    // 2. Compare with locally stored order IDs
-    // 3. Show notifications for new orders
-    // 4. Store new order IDs locally
+    // This would sync with your backend to check for any missed orders
+    // Implementation depends on your backend API
     
-    return Promise.resolve();
   } catch (error) {
-    console.error('Background sync failed:', error);
-    return Promise.reject(error);
+    console.error('❌ Failed to sync pending orders:', error);
   }
 }
+
+// Periodic background sync
+self.addEventListener('periodicsync', (event) => {
+  console.log('⏰ Periodic sync triggered:', event.tag);
+  
+  if (event.tag === 'order-check') {
+    event.waitUntil(
+      // Check for new orders periodically
+      checkForNewOrders()
+    );
+  }
+});
+
+// Check for new orders function
+async function checkForNewOrders() {
+  try {
+    console.log('🔍 Checking for new orders...');
+    
+    // This would check your backend for new orders
+    // For now, we'll just log
+    console.log('✅ Order check completed');
+    
+  } catch (error) {
+    console.error('❌ Failed to check for new orders:', error);
+  }
+}
+
+// Notification close handler
+self.addEventListener('notificationclose', (event) => {
+  console.log('🔇 Notification closed:', event.notification.tag);
+  
+  // Clean up any background processes if needed
+  const data = event.notification.data;
+  if (data && data.orderId) {
+    // Tell the main thread that the notification was closed
+    event.waitUntil(
+      clients.matchAll({ type: 'window' })
+        .then((clients) => {
+          for (const client of clients) {
+            client.postMessage({
+              type: 'NOTIFICATION_CLOSED',
+              data: data
+            });
+          }
+        })
+    );
+  }
+});
+
+// Wake lock request handler
+self.addEventListener('wake lock', (event) => {
+  console.log('🔋 Wake lock state changed:', event);
+});

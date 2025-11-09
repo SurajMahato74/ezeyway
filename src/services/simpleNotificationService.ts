@@ -260,12 +260,29 @@ class SimpleNotificationService {
         return;
       }
       
-      // Schedule HIGH PRIORITY notification with auto-opening capability
+      // ALARM MODE: Create high-priority notification channel first
+      try {
+        await LocalNotifications.createChannel({
+          id: 'order-alerts',
+          name: 'Order Alerts - ALARM MODE',
+          description: 'URGENT: High priority order notifications that work on lock screen',
+          sound: 'default',
+          importance: 5, // MAXIMUM IMPORTANCE for lock screen
+          visibility: 1, // Public visibility for lock screen
+          lights: true,
+          vibration: true
+        });
+        console.log('🚨 ALARM notification channel created with MAXIMUM priority');
+      } catch (channelError) {
+        console.warn('Could not create alarm channel:', channelError);
+      }
+      
+      // Schedule ALARM-STYLE notification with maximum priority
       await LocalNotifications.schedule({
         notifications: [
           {
-            title: '🔔 NEW ORDER - TAP TO OPEN APP',
-            body: `Order #${orderNumber} - ₹${amount}\n👆 TAP HERE TO OPEN`,
+            title: '🚨🚨 NEW ORDER - ALARM MODE! 🚨🚨',
+            body: `Order #${orderNumber} - ₹${amount}\n🔔 SOUND EVERY 2s | VIBRATION EVERY 3s\n👆 TAP TO ACCEPT/REJECT`,
             id: orderId,
             schedule: { at: new Date(Date.now() + 100) },
             sound: 'default',
@@ -274,20 +291,23 @@ class SimpleNotificationService {
             smallIcon: 'ic_stat_icon_config_sample',
             iconColor: '#FF0000',
             channelId: 'order-alerts',
-            summaryText: 'Tap to open app',
+            summaryText: 'ALARM MODE: Order needs immediate response',
             extra: {
               orderId: orderId.toString(),
               orderNumber,
               amount,
               autoOpen: true,
               action: 'openApp',
-              deepLink: 'vendor://order/' + orderId
+              deepLink: 'vendor://order/' + orderId,
+              alarmMode: true,
+              soundEvery: '2s',
+              vibrationEvery: '3s'
             }
           }
         ]
       });
       
-      console.log('📱 Local notification scheduled for order:', orderId);
+      console.log('🚨 ALARM-style local notification scheduled for order:', orderId);
     } catch (error) {
       console.warn('Local notifications not available:', error);
     }
@@ -318,33 +338,49 @@ class SimpleNotificationService {
     // Clear any existing alert for this order
     this.stopPersistentAlert(orderId);
     
-    // Start continuous vibration and sound every 5 seconds for mobile
-    const interval = setInterval(() => {
-      console.log('📳 Persistent alert for order:', orderNumber);
+    // ALARM MODE: Sound every 2 seconds, vibration every 3 seconds
+    const soundInterval = setInterval(() => {
+      console.log('🔊 ALARM SOUND for order:', orderNumber);
+      this.playOrderAlertSound(); // Play alarm sound
+    }, 2000); // Every 2 seconds - ALARM STYLE!
+    
+    const vibrationInterval = setInterval(() => {
+      console.log('📳 ALARM VIBRATION for order:', orderNumber);
       
-      // Continuous vibration pattern
+      // ALARM VIBRATION PATTERN: Long buzz, pause, long buzz
       if ('vibrate' in navigator) {
-        navigator.vibrate([1000, 300, 1000, 300, 1000]);
+        navigator.vibrate([2000, 500, 2000, 500, 2000]); // Longer vibrations for alarm effect
       }
       
-      // Play sound
-      this.playMobileSound();
-    }, 5000);
+      // Also use Capacitor Haptics if available
+      this.triggerAlarmHaptics();
+    }, 3000); // Every 3 seconds - ALARM STYLE!
     
-    this.persistentIntervals.set(orderId, interval);
+    // Store both intervals
+    this.persistentIntervals.set(orderId, soundInterval);
+    this.persistentIntervals.set(orderId + 1000000, vibrationInterval); // Offset to avoid conflict
     
-    // Auto-stop after 5 minutes to prevent infinite alerts
+    // Keep alarms running for 10 minutes (longer for alarm apps)
     setTimeout(() => {
       this.stopPersistentAlert(orderId);
-    }, 300000);
+    }, 600000);
   }
   
   stopPersistentAlert(orderId: number) {
-    const interval = this.persistentIntervals.get(orderId);
-    if (interval) {
-      clearInterval(interval);
+    // Stop sound interval
+    const soundInterval = this.persistentIntervals.get(orderId);
+    if (soundInterval) {
+      clearInterval(soundInterval);
       this.persistentIntervals.delete(orderId);
-      console.log('🛑 Stopped persistent alert for order:', orderId);
+      console.log('🛑 Stopped sound alert for order:', orderId);
+    }
+    
+    // Stop vibration interval
+    const vibrationInterval = this.persistentIntervals.get(orderId + 1000000);
+    if (vibrationInterval) {
+      clearInterval(vibrationInterval);
+      this.persistentIntervals.delete(orderId + 1000000);
+      console.log('🛑 Stopped vibration alert for order:', orderId);
     }
   }
   
@@ -373,21 +409,21 @@ class SimpleNotificationService {
         const permission = await LocalNotifications.requestPermissions();
         console.log('🔔 Notification permissions:', permission);
 
-        // Create notification channel for high priority
+        // Create ALARM notification channel for maximum priority (works on lock screen!)
         try {
           await LocalNotifications.createChannel({
             id: 'order-alerts',
-            name: 'Order Alerts',
-            description: 'High priority notifications for new orders',
+            name: '🚨 ORDER ALARMS - MAXIMUM PRIORITY',
+            description: 'ALARM MODE: Sound every 2s | Vibration every 3s | Works on lock screen',
             sound: 'default',
-            importance: 5, // Max importance
-            visibility: 1, // Public
+            importance: 5, // MAXIMUM importance for alarm behavior
+            visibility: 1, // Public visibility for lock screen
             lights: true,
             vibration: true
           });
-          console.log('📢 High priority notification channel created');
+          console.log('🚨 ALARM notification channel created with MAXIMUM priority for lock screen');
         } catch (channelError) {
-          console.warn('Could not create notification channel:', channelError);
+          console.warn('Could not create alarm notification channel:', channelError);
         }
 
         return permission.display === 'granted';
@@ -827,15 +863,43 @@ This will make notifications appear as floating popups over any screen!
   // FORCE ALARM-STYLE VIBRATION - Like mobile alarms
   private forceAlarmVibration() {
     if ('vibrate' in navigator) {
-      // Alarm vibration pattern: Long buzzes with pauses
-      const alarmPattern = [1000, 500, 1000, 500, 1000, 2000, 500, 500, 500, 500, 500];
+      // Alarm vibration pattern: Long buzzes with pauses (ALARM STYLE)
+      const alarmPattern = [2000, 500, 2000, 500, 2000, 2000, 500, 500, 500, 500, 500];
 
-      // Repeat the pattern 5 times over 30 seconds
-      for (let i = 0; i < 5; i++) {
-        setTimeout(() => {
-          navigator.vibrate(alarmPattern);
-          console.log('📳 Alarm vibration pattern triggered');
-        }, i * 6000); // Every 6 seconds
+      // Repeat the pattern continuously for 5 minutes
+      let vibrationCount = 0;
+      const vibrationInterval = setInterval(() => {
+        navigator.vibrate(alarmPattern);
+        console.log('📳 ALARM vibration pattern triggered:', vibrationCount + 1);
+        vibrationCount++;
+        
+        if (vibrationCount >= 50) { // 50 times over 5 minutes
+          clearInterval(vibrationInterval);
+        }
+      }, 10000); // Every 10 seconds like real alarms
+    }
+  }
+
+  // NEW: ALARM HAPTICS using Capacitor plugins
+  private async triggerAlarmHaptics() {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
+        
+        // Heavy impact haptics for alarm effect
+        await Haptics.impact({ style: ImpactStyle.Heavy });
+        
+        setTimeout(async () => {
+          await Haptics.impact({ style: ImpactStyle.Heavy });
+        }, 1000);
+        
+        setTimeout(async () => {
+          await Haptics.impact({ style: ImpactStyle.Heavy });
+        }, 2000);
+        
+        console.log('🔊🔊🔊 ALARM HAPTICS TRIGGERED');
+      } catch (error) {
+        console.warn('Haptics not available:', error);
       }
     }
   }

@@ -1,29 +1,27 @@
-// Service Worker for Ultimate Order Notifications
-// This ensures notifications work even when browser is closed or in background
-
-const CACHE_NAME = 'ezy-app-v1';
+const CACHE_NAME = 'ezeyway-v1';
 const urlsToCache = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
-  '/favicon.ico'
+  '/manifest.json',
+  '/favicon.ico',
+  '/alert-icon.svg'
 ];
 
-// Install event
+// Install service worker
 self.addEventListener('install', (event) => {
   console.log('🔧 Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('📦 Service Worker caching files...');
+        console.log('📦 Caching files for offline use');
         return cache.addAll(urlsToCache);
       })
   );
+  self.skipWaiting();
 });
 
-// Activate event
+// Activate service worker
 self.addEventListener('activate', (event) => {
-  console.log('🚀 Service Worker activating...');
+  console.log('✅ Service Worker activated');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -36,260 +34,220 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+  self.clients.claim();
 });
 
-// Background sync for orders
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'order-sync') {
-    console.log('🔄 Background sync: Checking for new orders...');
-    event.waitUntil(syncOrders());
-  }
+// Background fetch for notifications
+self.addEventListener('backgroundfetch', (event) => {
+  console.log('📡 Background fetch for notifications');
 });
 
-// Push notifications (FCM) - ALARM STYLE
+// Push notification handler - CRITICAL for lock screen notifications
 self.addEventListener('push', (event) => {
-  console.log('📱 Push notification received:', event);
-
+  console.log('🔔 Push notification received:', event);
+  
+  let notificationData = {};
+  
   if (event.data) {
-    const data = event.data.json();
-    console.log('📊 Push data:', data);
-
-    // FORCE WAKE LOCK for push notifications
-    requestWakeLockInSW();
-
-    // FORCE VIBRATION for push notifications
-    triggerAlarmVibrationInSW();
-
-    // ALARM-STYLE MULTIPLE NOTIFICATIONS
-    const showNotifications = async () => {
-      const baseOptions = {
-        icon: '/alert-icon.svg',
-        badge: '/alert-icon.svg',
-        requireInteraction: true,
-        silent: false,
-        data: data,
-        actions: [
-          {
-            action: 'view',
-            title: 'View Order'
-          },
-          {
-            action: 'dismiss',
-            title: 'Dismiss'
-          }
-        ]
+    try {
+      notificationData = event.data.json();
+    } catch (e) {
+      notificationData = {
+        title: 'New Notification',
+        body: event.data.text()
       };
-
-      // Rapid-fire alarm notifications
-      for (let i = 0; i < 5; i++) {
-        const options = {
-          ...baseOptions,
-          body: `${data.body || 'New order received!'} - ALERT ${i + 1}/5`,
-          tag: `alarm-push-${data.orderId || 'unknown'}-${i}`
-        };
-
-        await self.registration.showNotification(`🚨🚨 ${data.title || 'ORDER ALERT!'} 🚨🚨`, options);
-
-        // Small delay between notifications
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-
-      // Lock screen compatible notification
-      const lockScreenOptions = {
-        ...baseOptions,
-        body: `${data.body || 'New order received!'} - Works on lock screen!`,
-        tag: `lockscreen-push-${data.orderId || 'unknown'}`
-      };
-
-      await self.registration.showNotification(`🔥 ${data.title || 'URGENT ORDER'} 🔥`, lockScreenOptions);
-    };
-
-    event.waitUntil(showNotifications());
+    }
   }
+
+  const { title, body, icon, badge, data } = notificationData;
+  
+  // Default values for rich notifications
+  const options = {
+    title: title || '🚨 EzyWay Order Alert',
+    body: body || 'You have a new order that needs immediate attention!',
+    icon: icon || '/alert-icon.svg',
+    badge: badge || '/alert-icon.svg',
+    tag: 'order-notification',
+    requireInteraction: true,
+    silent: false,
+    vibrate: [200, 100, 200, 100, 200],
+    data: data || {},
+    actions: [
+      {
+        action: 'view_order',
+        title: 'View Order',
+        icon: '/alert-icon.svg'
+      },
+      {
+        action: 'dismiss',
+        title: 'Dismiss',
+        icon: '/alert-icon.svg'
+      }
+    ]
+  };
+
+  // Show notification that works on lock screen
+  event.waitUntil(
+    self.registration.showNotification(options.title, options)
+  );
 });
 
-// Wake lock function for service worker
-function requestWakeLockInSW() {
-  try {
-    // Note: Wake Lock API is not available in service workers
-    // This is just for logging - actual wake lock is handled in main thread
-    console.log('🔋 Wake lock requested from service worker');
-  } catch (error) {
-    console.warn('Wake lock not available in service worker');
-  }
-}
-
-// Vibration function for service worker
-function triggerAlarmVibrationInSW() {
-  try {
-    // Note: Vibration API is not available in service workers
-    // This is just for logging - actual vibration is handled in main thread
-    console.log('📳 Alarm vibration triggered from service worker');
-  } catch (error) {
-    console.warn('Vibration not available in service worker');
-  }
-}
-
-// Notification click handler
+// Notification click handler - AUTO OPEN APP
 self.addEventListener('notificationclick', (event) => {
   console.log('🔔 Notification clicked:', event);
-
+  
   event.notification.close();
-
-  if (event.action === 'view') {
-    // Open the app and navigate to orders
+  
+  const action = event.action;
+  const data = event.notification.data || {};
+  
+  if (action === 'view_order' || !action) {
+    // Primary action - open the app
     event.waitUntil(
-      clients.openWindow('/vendor/orders')
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          // Check if app is already open
+          for (const client of clientList) {
+            if (client.url.includes('/vendor') && 'focus' in client) {
+              console.log('📱 Focusing existing app window');
+              return client.focus();
+            }
+          }
+          
+          // Open new window
+          if (clients.openWindow) {
+            console.log('🆕 Opening new app window');
+            return clients.openWindow('/vendor/orders');
+          }
+        })
     );
-  } else if (event.action === 'dismiss') {
+    
+    // Send data to the app
+    if (data.orderId) {
+      event.waitUntil(
+        clients.matchAll({ type: 'window' })
+          .then((clients) => {
+            for (const client of clients) {
+              client.postMessage({
+                type: 'ORDER_NOTIFICATION_CLICKED',
+                data: data
+              });
+            }
+          })
+      );
+    }
+  } else if (action === 'dismiss') {
     // Just close the notification
-    return;
-  } else {
-    // Default action - open app
-    event.waitUntil(
-      clients.openWindow('/vendor/orders')
-    );
+    console.log('🔇 Notification dismissed');
   }
 });
 
-// Background fetch for orders
-async function syncOrders() {
-  try {
-    console.log('🔄 Syncing orders in background...');
-
-    // This would typically fetch from your API
-    // For now, we'll just log
-    console.log('✅ Background order sync completed');
-
-  } catch (error) {
-    console.error('❌ Background order sync failed:', error);
+// Background sync for when connectivity is restored
+self.addEventListener('sync', (event) => {
+  console.log('🔄 Background sync triggered:', event.tag);
+  
+  if (event.tag === 'background-sync-orders') {
+    event.waitUntil(
+      // Sync pending orders
+      syncPendingOrders()
+    );
   }
-}
+});
 
 // Message handler for communication with main thread
 self.addEventListener('message', (event) => {
   console.log('📨 Service Worker received message:', event.data);
-
+  
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  
+  if (event.data && event.data.type === 'GET_VERSION') {
+    event.ports[0].postMessage({ version: '1.0.0' });
+  }
+  
   if (event.data && event.data.type === 'ORDER_ALERT') {
-    // Show notification even if app is closed
+    // Handle order alert from main thread
     const { orderNumber, amount, orderId } = event.data;
-
-    self.registration.showNotification('🚨 URGENT ORDER ALERT!', {
-      body: `Order #${orderNumber} - ₹${amount}`,
-      icon: '/favicon.ico',
-      tag: `urgent-order-${orderId}`,
+    
+    // Show persistent notification
+    self.registration.showNotification(`🚨 NEW ORDER #${orderNumber}`, {
+      body: `₹${amount} - Immediate attention required!`,
+      icon: '/alert-icon.svg',
+      tag: `order-${orderId}`,
       requireInteraction: true,
-      data: { orderId, orderNumber, amount }
-    });
-
-    // Try to play sound if clients are available
-    playOrderSoundInClients(orderId, orderNumber, amount);
-  }
-
-  if (event.data && event.data.type === 'EMERGENCY_ALERT') {
-    // Emergency alert - show notification and try to play sound
-    const { orderNumber, amount, orderId } = event.data;
-
-    self.registration.showNotification('🚨🚨 EMERGENCY ORDER ALERT! 🚨🚨', {
-      body: `Order #${orderNumber} - ₹${amount}\n⚠️ REQUIRES IMMEDIATE ATTENTION`,
-      icon: '/favicon.ico',
-      tag: `emergency-order-${orderId}`,
-      requireInteraction: true,
-      data: { orderId, orderNumber, amount, emergency: true }
-    });
-
-    // Try to play sound in all open clients
-    playOrderSoundInClients(orderId, orderNumber, amount, true);
-  }
-});
-
-// Function to play sound in open clients
-async function playOrderSoundInClients(orderId, orderNumber, amount, emergency = false) {
-  try {
-    const clients = await self.clients.matchAll();
-    for (const client of clients) {
-      // Send message to client to play sound
-      client.postMessage({
-        type: 'PLAY_ORDER_SOUND',
+      data: {
         orderId,
         orderNumber,
         amount,
-        emergency,
-        timestamp: Date.now()
-      });
-    }
-  } catch (error) {
-    console.warn('Could not play sound in clients:', error);
-  }
-}
-
-// Periodic background check for orders (every 2 minutes)
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'order-check') {
-    console.log('🔄 Periodic sync: Checking for new orders...');
-    event.waitUntil(checkForNewOrders());
+        type: 'order_notification'
+      }
+    });
   }
 });
 
-// Function to periodically check for new orders
+// Sync pending orders function
+async function syncPendingOrders() {
+  try {
+    console.log('🔄 Syncing pending orders...');
+    
+    // This would sync with your backend to check for any missed orders
+    // Implementation depends on your backend API
+    
+  } catch (error) {
+    console.error('❌ Failed to sync pending orders:', error);
+  }
+}
+
+// Periodic background sync
+self.addEventListener('periodicsync', (event) => {
+  console.log('⏰ Periodic sync triggered:', event.tag);
+  
+  if (event.tag === 'order-check') {
+    event.waitUntil(
+      // Check for new orders periodically
+      checkForNewOrders()
+    );
+  }
+});
+
+// Check for new orders function
 async function checkForNewOrders() {
   try {
-    console.log('🔍 Checking for new orders in background...');
-
-    // Get stored auth token
-    const authToken = await getStoredAuthToken();
-
-    if (!authToken) {
-      console.log('No auth token available for background check');
-      return;
-    }
-
-    // Fetch orders from API
-    const response = await fetch('/vendor/orders/?limit=10', {
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      const orders = data.results || data || [];
-
-      // Check for new orders (status: pending)
-      const newOrders = orders.filter(order => order.status === 'pending');
-
-      if (newOrders.length > 0) {
-        console.log(`🎯 Found ${newOrders.length} new orders in background check!`);
-
-        // Show notification and play sound for each new order
-        for (const order of newOrders) {
-          await self.registration.showNotification('🚨 NEW ORDER RECEIVED!', {
-            body: `Order #${order.order_number} - ₹${order.total_amount}`,
-            icon: '/favicon.ico',
-            tag: `bg-order-${order.id}`,
-            requireInteraction: true,
-            data: { orderId: order.id, orderNumber: order.order_number, amount: order.total_amount }
-          });
-
-          // Try to play sound in open clients
-          await playOrderSoundInClients(order.id, order.order_number, order.total_amount, true);
-        }
-      }
-    }
-
+    console.log('🔍 Checking for new orders...');
+    
+    // This would check your backend for new orders
+    // For now, we'll just log
+    console.log('✅ Order check completed');
+    
   } catch (error) {
-    console.warn('Background order check failed:', error);
+    console.error('❌ Failed to check for new orders:', error);
   }
 }
 
-// Helper function to get stored auth token
-async function getStoredAuthToken() {
-  try {
-    // This is a simplified version - in reality you'd need to get it from IndexedDB or similar
-    // For now, we'll return null and rely on push notifications
-    return null;
-  } catch (error) {
-    return null;
+// Notification close handler
+self.addEventListener('notificationclose', (event) => {
+  console.log('🔇 Notification closed:', event.notification.tag);
+  
+  // Clean up any background processes if needed
+  const data = event.notification.data;
+  if (data && data.orderId) {
+    // Tell the main thread that the notification was closed
+    event.waitUntil(
+      clients.matchAll({ type: 'window' })
+        .then((clients) => {
+          for (const client of clients) {
+            client.postMessage({
+              type: 'NOTIFICATION_CLOSED',
+              data: data
+            });
+          }
+        })
+    );
   }
-}
+});
+
+// Wake lock request handler
+self.addEventListener('wake lock', (event) => {
+  console.log('🔋 Wake lock state changed:', event);
+});

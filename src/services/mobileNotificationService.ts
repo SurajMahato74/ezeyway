@@ -67,22 +67,42 @@ class MobileNotificationService {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
 
+        // ALARM MODE: Create high-priority notification channel first
+        try {
+          await LocalNotifications.createChannel({
+            id: 'order-alerts',
+            name: '🚨 ORDER ALARMS - ALARM MODE',
+            description: 'ALARM MODE: Sound every 2s | Vibration every 3s | Works on lock screen',
+            sound: 'default',
+            importance: 5, // MAXIMUM importance
+            visibility: 1, // Public for lock screen
+            lights: true,
+            vibration: true
+          });
+        } catch (channelError) {
+          console.warn('Could not create alarm channel:', channelError);
+        }
+
         await LocalNotifications.schedule({
           notifications: [{
-            title: '🔔 New Order Alert!',
-            body: `Order #${orderNumber} - ₹${amount}\nTap to open app and respond`,
+            title: '🚨🚨 NEW ORDER - ALARM MODE! 🚨🚨',
+            body: `Order #${orderNumber} - ₹${amount}\n🔔 Sound every 2s | Vibration every 3s\n👆 TAP TO ACCEPT/REJECT`,
             id: orderId,
             sound: 'default',
             smallIcon: 'ic_stat_icon_config_sample',
-            iconColor: '#FF6B35',
+            iconColor: '#FF0000',
             actionTypeId: 'OPEN_ORDER',
+            channelId: 'order-alerts',
             extra: {
               type: 'order',
               orderId,
               orderNumber,
               amount,
               autoOpen: true,
-              url: 'order-notification://open'
+              url: 'order-notification://open',
+              alarmMode: true,
+              soundEvery: '2s',
+              vibrationEvery: '3s'
             }
           }]
         });
@@ -104,13 +124,16 @@ class MobileNotificationService {
       try {
         const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
         
+        // ALARM VIBRATION PATTERN: Heavy impact, pause, heavy impact, pause, heavy impact
         await Haptics.impact({ style: ImpactStyle.Heavy });
         setTimeout(async () => {
-          await Haptics.impact({ style: ImpactStyle.Medium });
-        }, 300);
+          await Haptics.impact({ style: ImpactStyle.Heavy });
+        }, 1000);
         setTimeout(async () => {
           await Haptics.impact({ style: ImpactStyle.Heavy });
-        }, 600);
+        }, 2000);
+        
+        console.log('🔊🔊🔊 ALARM VIBRATION PATTERN TRIGGERED');
       } catch (error) {
         console.error('Haptics error:', error);
         this.fallbackVibration();
@@ -121,9 +144,11 @@ class MobileNotificationService {
   }
 
   private fallbackVibration() {
-    // Fallback to web vibration API
+    // Fallback to web vibration API - ALARM PATTERN
     if ('vibrate' in navigator) {
-      navigator.vibrate([300, 100, 300, 100, 500]);
+      // ALARM VIBRATION: Long buzz, pause, long buzz, pause, long buzz
+      navigator.vibrate([2000, 500, 2000, 500, 2000]); // Alarm-style long vibrations
+      console.log('📳 FALLBACK ALARM VIBRATION PATTERN');
     }
   }
 
