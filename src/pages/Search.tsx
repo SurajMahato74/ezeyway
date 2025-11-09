@@ -216,6 +216,7 @@ export default function Search() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [productReviews, setProductReviews] = useState<Record<number, { rating: number, total: number }>>({});
   const [fetchAttempted, setFetchAttempted] = useState(false);
+  const [lastRequestTime, setLastRequestTime] = useState(0);
   const { toast } = useToast();
   const { addToCart } = useCart();
 
@@ -295,11 +296,19 @@ export default function Search() {
 
   // Optimized fetch with separate product/vendor pagination
   const fetchData = useCallback(async (page = 1, query = "", type = 'both') => {
+    // Throttle requests to prevent rapid firing
+    const now = Date.now();
+    if (now - lastRequestTime < 500) { // Minimum 500ms between requests
+      console.log('Request throttled - too soon after previous request');
+      return;
+    }
+    setLastRequestTime(now);
+
     const isInitialLoad = page === 1;
     const timerLabel = `fetch-${type}-page-${page}`;
-    
+
     performanceMonitor.startTimer(timerLabel);
-    
+
     if (isInitialLoad) {
       setLoading(true);
     } else {
@@ -475,7 +484,7 @@ export default function Search() {
         performanceMonitor.logMemoryUsage();
       }
     }
-  }, [sortBy, selectedCategories, toast]);
+  }, [sortBy, selectedCategories, toast, lastRequestTime]);
 
   useEffect(() => {
     if (!fetchAttempted) {
@@ -654,16 +663,20 @@ export default function Search() {
 
   // Separate load more functions for products and vendors
   const loadMoreProducts = useCallback(() => {
-    if (!loadingMore && pagination.products.hasMore && !loading) {
+    if (!loadingMore && pagination.products.hasMore && !loading && pagination.products.page < 50) {
       console.log('Loading more products, current page:', pagination.products.page);
       fetchData(pagination.products.page + 1, searchQuery, 'products');
+    } else if (pagination.products.page >= 50) {
+      console.log('Reached maximum page limit for products');
     }
   }, [loadingMore, pagination.products.hasMore, pagination.products.page, searchQuery, loading]);
 
   const loadMoreVendors = useCallback(() => {
-    if (!loadingMore && pagination.vendors.hasMore && !loading) {
+    if (!loadingMore && pagination.vendors.hasMore && !loading && pagination.vendors.page < 50) {
       console.log('Loading more vendors, current page:', pagination.vendors.page);
       fetchData(pagination.vendors.page + 1, searchQuery, 'vendors');
+    } else if (pagination.vendors.page >= 50) {
+      console.log('Reached maximum page limit for vendors');
     }
   }, [loadingMore, pagination.vendors.hasMore, pagination.vendors.page, searchQuery, loading]);
 

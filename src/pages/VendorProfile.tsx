@@ -373,7 +373,10 @@ export default function VendorProfile() {
                             src={getImageUrl(primaryImage?.image_url)}
                             alt={product.name}
                             className="w-full h-full object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }}
+                            onError={(e) => {
+                              console.log(`Product image failed to load, using placeholder`);
+                              (e.target as HTMLImageElement).src = '/placeholder.svg';
+                            }}
                           />
                         </div>
                         <h3 className="font-medium text-sm mb-1 line-clamp-2">{product.name}</h3>
