@@ -450,10 +450,13 @@ export default function Search() {
         }
       });
       
-      // Preload images in background
+      // Preload images in background - only valid URLs
       if (imagesToPreload.length > 0) {
-        imagePreloader.preload(imagesToPreload.slice(0, 10)) // Preload first 10 images
-          .catch(err => console.warn('Image preload failed:', err));
+        const validImages = imagesToPreload.filter(img => img && img !== '/placeholder.svg' && !img.includes('placeholder'));
+        if (validImages.length > 0) {
+          imagePreloader.preload(validImages.slice(0, 10)) // Preload first 10 images
+            .catch(err => console.warn('Image preload failed:', err));
+        }
       }
     } catch (error) {
       console.error('Fetch error:', error);
@@ -521,16 +524,18 @@ export default function Search() {
   }, [searchQuery, setSearchParams]);
 
   useEffect(() => {
-    console.log('Search: Filters changed, refetching data');
-    setPagination({
-      products: { page: 1, hasMore: true, total: 0 },
-      vendors: { page: 1, hasMore: true, total: 0 }
-    });
-    fetchData(1, searchQuery);
-  }, [sortBy, selectedCategories]);
+    if (fetchAttempted) {
+      console.log('Search: Filters changed, refetching data');
+      setPagination({
+        products: { page: 1, hasMore: true, total: 0 },
+        vendors: { page: 1, hasMore: true, total: 0 }
+      });
+      fetchData(1, searchQuery);
+    }
+  }, [sortBy, selectedCategories, fetchAttempted]);
 
   useEffect(() => {
-    if (userLocation) {
+    if (userLocation && fetchAttempted) {
       console.log('Search: User location changed, refetching data');
       setPagination({
         products: { page: 1, hasMore: true, total: 0 },
@@ -538,7 +543,7 @@ export default function Search() {
       });
       fetchData(1, searchQuery);
     }
-  }, [userLocation]);
+  }, [userLocation, fetchAttempted]);
 
   // Memoized and optimized product processing
   const computeAggregateRating = (product) => {
@@ -649,27 +654,29 @@ export default function Search() {
 
   // Separate load more functions for products and vendors
   const loadMoreProducts = useCallback(() => {
-    if (!loadingMore && pagination.products.hasMore) {
+    if (!loadingMore && pagination.products.hasMore && !loading) {
+      console.log('Loading more products, current page:', pagination.products.page);
       fetchData(pagination.products.page + 1, searchQuery, 'products');
     }
-  }, [loadingMore, pagination.products.hasMore, pagination.products.page, searchQuery]);
+  }, [loadingMore, pagination.products.hasMore, pagination.products.page, searchQuery, loading]);
 
   const loadMoreVendors = useCallback(() => {
-    if (!loadingMore && pagination.vendors.hasMore) {
+    if (!loadingMore && pagination.vendors.hasMore && !loading) {
+      console.log('Loading more vendors, current page:', pagination.vendors.page);
       fetchData(pagination.vendors.page + 1, searchQuery, 'vendors');
     }
-  }, [loadingMore, pagination.vendors.hasMore, pagination.vendors.page, searchQuery]);
+  }, [loadingMore, pagination.vendors.hasMore, pagination.vendors.page, searchQuery, loading]);
 
   // Infinite scroll for products and vendors
   const { sentinelRef: productsSentinelRef } = useInfiniteScroll({
-    hasMore: pagination.products.hasMore,
+    hasMore: pagination.products.hasMore && !loadingMore,
     isLoading: loadingMore,
     onLoadMore: loadMoreProducts,
     threshold: 300
   });
 
   const { sentinelRef: vendorsSentinelRef } = useInfiniteScroll({
-    hasMore: pagination.vendors.hasMore,
+    hasMore: pagination.vendors.hasMore && !loadingMore,
     isLoading: loadingMore,
     onLoadMore: loadMoreVendors,
     threshold: 300
