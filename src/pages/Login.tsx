@@ -264,14 +264,6 @@ export default function Login() {
           // Proceed with normal login flow
           proceedAfterLogin();
         }
-      } else if (result.needs_privacy_agreement) {
-        // Handle privacy policy agreement for Facebook login
-        setPrivacyAgreementData({
-          userId: result.user_id,
-          userType: result.user_type,
-          hasVendorProfile: result.has_vendor_profile
-        });
-        setShowPrivacyAgreement(true);
       } else {
         setError(result.error || 'Facebook login failed');
       }
@@ -287,7 +279,7 @@ export default function Login() {
     setError("");
     try {
       const result = await googleAuthService.signIn();
-      
+
       if (result.success && result.user && result.token) {
         const userData = {
           ...result.user,
@@ -315,16 +307,13 @@ export default function Login() {
           // Proceed with normal login flow
           proceedAfterLogin();
         }
-      } else if (result.needs_privacy_agreement) {
-        // Handle privacy policy agreement for Google login
-        setPrivacyAgreementData({
-          userId: result.user_id,
-          userType: result.user_type,
-          hasVendorProfile: result.has_vendor_profile
-        });
-        setShowPrivacyAgreement(true);
       } else {
-        setError(result.error || 'Google login failed');
+        // Show user-friendly error message for mobile
+        if (result.error && (result.error.includes('Native Google Sign-In') || result.error.includes('Google Sign-In setup') || result.error.includes('temporarily unavailable'))) {
+          setError('Google login is temporarily unavailable on mobile. Please use email/password login.');
+        } else {
+          setError(result.error || 'Google login failed');
+        }
       }
     } catch (error) {
       setError('Google login failed. Please try again.');

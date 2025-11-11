@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { VendorPage } from "@/components/VendorLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,62 +56,93 @@ const VendorOrders: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // WebSocket event handlers for real-time updates only
+  // Debounce timer for notifications
+  const notificationDebounceRef = useRef(null);
+
+  // WebSocket order update handler
   useEffect(() => {
-    // Listen for order notifications to refresh orders
+    const handleWebSocketOrderUpdate = (event) => {
+      const data = event.detail;
+      if (data.type === 'order_update' || data.type === 'order_status_change' || data.type === 'refund_update') {
+        console.log('WebSocket order update:', data);
+        // Refresh orders immediately
+        fetchVendorOrders();
+      }
+    };
+
+    window.addEventListener('websocket_message', handleWebSocketOrderUpdate);
+    return () => window.removeEventListener('websocket_message', handleWebSocketOrderUpdate);
+  }, []);
+
+  // Auto-refresh orders every 30 seconds for real-time updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchVendorOrders();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Initial order loading - ONCE ONLY
+  useEffect(() => {
+    console.log('📦 Loading initial orders...');
+    fetchVendorOrders();
+
+    // Listen for order notifications to refresh orders (only when page is visible and on vendor orders page)
     const handleNewNotification = (event: CustomEvent) => {
       const notification = event.detail;
-      if (notification.type === 'order') {
-        console.log('🔔 New order notification received, refreshing...');
-        setTimeout(() => fetchVendorOrders(), 1000);
+      if (notification.type === 'order' && !document.hidden && window.location.pathname.includes('/vendor/orders')) {
+        // Clear existing debounce timer
+        if (notificationDebounceRef.current) {
+          clearTimeout(notificationDebounceRef.current);
+        }
+
+        // Debounce the refresh to prevent multiple rapid calls
+        notificationDebounceRef.current = setTimeout(() => {
+          if (!document.hidden && window.location.pathname.includes('/vendor/orders')) {
+            fetchVendorOrders();
+          }
+        }, 2000); // Increased to 2 seconds
       }
     };
 
     // Listen for real-time order status updates from customer
     const handleOrderStatusUpdate = (event: CustomEvent) => {
       const { orderId, status, type } = event.detail;
-      console.log('📊 Order status update received:', { orderId, status, type });
-      
-      // For review updates, refresh with delay to ensure API is updated
-      if (type === 'review') {
-        setTimeout(() => {
-          fetchVendorOrders();
-        }, 1000);
-      } else {
-        // For other updates, refresh immediately
-        setTimeout(() => {
-          fetchVendorOrders();
-        }, 500);
+      console.log('Order status update received:', { orderId, status, type });
+
+      // Only refresh if we're on the vendor orders page
+      if (window.location.pathname.includes('/vendor/orders')) {
+        // Immediately refresh orders to show updated status
+        fetchVendorOrders();
       }
     };
 
-    // WebSocket message handler
-    const handleWebSocketMessage = (event: CustomEvent) => {
-      const data = event.detail;
-      if (data.type === 'order_update' || data.type === 'order_status_change' || data.type === 'refund_update') {
-        console.log('🔄 WebSocket order update received:', data.type);
-        if (data.action && data.order_id) {
-          setTimeout(() => fetchVendorOrders(), 500);
-        }
+    // Handle visibility change to refresh orders when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden && window.location.pathname.includes('/vendor/orders')) {
+        // Refresh orders when page becomes visible after being hidden
+        fetchVendorOrders();
       }
     };
 
     window.addEventListener('newNotification', handleNewNotification as EventListener);
     window.addEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
-    window.addEventListener('websocket_message', handleWebSocketMessage as EventListener);
-    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       window.removeEventListener('newNotification', handleNewNotification as EventListener);
       window.removeEventListener('orderStatusUpdated', handleOrderStatusUpdate as EventListener);
-      window.removeEventListener('websocket_message', handleWebSocketMessage as EventListener);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+      // Clear debounce timer on cleanup
+      if (notificationDebounceRef.current) {
+        clearTimeout(notificationDebounceRef.current);
+      }
     };
-  }, []);
-  
-  // Initial order loading - ONCE ONLY
-  useEffect(() => {
-    console.log('📦 Loading initial orders...');
-    fetchVendorOrders();
-  }, []);
+  }, []); // Empty dependency array to prevent re-renders
 
   const fetchVendorOrders = async () => {
     try {

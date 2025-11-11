@@ -1,4 +1,6 @@
 import { apiRequest } from '@/utils/apiUtils';
+import { Capacitor } from '@capacitor/core';
+// import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 declare global {
   interface Window {
@@ -85,12 +87,53 @@ class GoogleAuthService {
 
   async signIn(): Promise<{ success: boolean; user?: any; token?: string; error?: string; needs_privacy_agreement?: boolean; user_id?: number; user_type?: string; has_vendor_profile?: boolean }> {
     try {
-      await this.initialize();
-      
-      // Use popup-only approach to avoid redirect URI issues
-      return this.showPopup();
+      // For mobile/native platforms, use the Capacitor Google Auth plugin
+      if (Capacitor.isNativePlatform()) {
+        return this.signInWithCapacitorPlugin();
+      } else {
+        await this.initialize();
+        // Use popup-only approach to avoid redirect URI issues
+        return this.showPopup();
+      }
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  }
+
+  private async signInWithCapacitorPlugin(): Promise<{ success: boolean; user?: any; token?: string; error?: string; needs_privacy_agreement?: boolean; user_id?: number; user_type?: string; has_vendor_profile?: boolean }> {
+    try {
+      // Import the plugin dynamically to avoid build errors if not installed
+      // @ts-ignore
+      const plugin = await import('@codetrix-studio/capacitor-google-auth');
+      const GoogleAuth = plugin.GoogleAuth;
+
+      // Initialize the plugin with Android client ID
+      await GoogleAuth.initialize({
+        clientId: '413898594267-83ds3hc1u9um55ps3b490eft15a2bcqq.apps.googleusercontent.com',
+        scopes: ['profile', 'email'],
+        grantOfflineAccess: true,
+      });
+
+      // Sign in
+      const result = await GoogleAuth.signIn();
+
+      // Extract user info and authenticate with backend
+      const userInfo = {
+        email: result.email,
+        name: result.name,
+        google_id: result.id,
+        picture: result.imageUrl,
+      };
+
+      // Authenticate with your backend
+      return this.authenticateWithBackend(userInfo);
+
+    } catch (error) {
+      console.error('Capacitor Google Auth error:', error);
+      return {
+        success: false,
+        error: 'Google Sign-In failed. Please try again or use email/password login.'
+      };
     }
   }
 
@@ -116,7 +159,7 @@ class GoogleAuthService {
           }
         },
       });
-      
+
       tokenClient.requestAccessToken();
     });
   }

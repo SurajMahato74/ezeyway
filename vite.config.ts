@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => ({
   build: {
     assetsDir: "assets", // Output assets to dist/assets
     rollupOptions: {
+      external: [
+        '@codetrix-studio/capacitor-google-auth'
+      ],
       output: {
         assetFileNames: "assets/[name].[ext]", // Ensure assets like leaflet.css and images are in dist/assets
       },

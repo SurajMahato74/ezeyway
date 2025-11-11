@@ -12,6 +12,7 @@ import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.community.fcm.FCMPlugin;
+import com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth;
 
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "MainActivity";
@@ -22,6 +23,9 @@ public class MainActivity extends BridgeActivity {
         
         // Register FCM plugin
         registerPlugin(FCMPlugin.class);
+
+        // Register Google Auth plugin
+        registerPlugin(GoogleAuth.class);
         
         // Create notification channel for orders
         createNotificationChannel();

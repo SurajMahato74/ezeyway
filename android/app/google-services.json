@@ -12,7 +12,19 @@
           "package_name": "com.ezeyway.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "413898594267-m6kiake3vs83slgvp3e3uk6kcchlssf5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ezeyway.app"
+          }
+        },
+        {
+          "client_id": "413898594267-83ds3hc1u9um55ps3b490eft15a2bcqq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDoi4Mmcv0a_zcfHrQClwEKCm3FK5wzNWY"

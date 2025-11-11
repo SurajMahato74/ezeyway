@@ -33,6 +33,11 @@ const config: CapacitorConfig = {
       presentationOptions: ['badge', 'sound', 'alert'],
       clearBadgeCount: true,
     },
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      clientId: '413898594267-83ds3hc1u9um55ps3b490eft15a2bcqq.apps.googleusercontent.com',
+      forceCodeForRefreshToken: true,
+    },
   },
 };
 
