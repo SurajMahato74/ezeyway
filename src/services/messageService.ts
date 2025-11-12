@@ -179,7 +179,111 @@ class MessageService {
     };
   }
 
-  // Call methods removed - call functionality disabled
+  // Call Methods
+  async initiateCall(data: {
+    recipient_id: number;
+    call_type: 'audio' | 'video';
+  }) {
+    try {
+      const { response, data: responseData } = await apiRequest('/messaging/calls/initiate/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return responseData;
+    } catch (error) {
+      console.error('Call initiation failed:', error);
+      throw error;
+    }
+  }
+
+  async answerCall(call_id: number) {
+    try {
+      const { response, data } = await apiRequest(`/messaging/calls/${call_id}/answer/`, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Call answer failed:', error);
+      throw error;
+    }
+  }
+
+  async endCall(call_id: number) {
+    try {
+      const { response, data } = await apiRequest(`/messaging/calls/${call_id}/end/`, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Call end failed:', error);
+      throw error;
+    }
+  }
+
+  async declineCall(call_id: number) {
+    try {
+      const { response, data } = await apiRequest(`/messaging/calls/${call_id}/decline/`, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Call decline failed:', error);
+      throw error;
+    }
+  }
+
+  async getIncomingCalls() {
+    try {
+      const { response, data } = await apiRequest('/messaging/calls/incoming/');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Failed to get incoming calls:', error);
+      return [];
+    }
+  }
+
+  async getCallHistory() {
+    try {
+      const { response, data } = await apiRequest('/messaging/calls/history/');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Failed to get call history:', error);
+      return [];
+    }
+  }
 }
 
 export const messageService = new MessageService();

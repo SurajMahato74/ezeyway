@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageSquare, Send, Paperclip, ArrowLeft, ArrowLeftIcon, RefreshCw } from "lucide-react";
+import { MessageSquare, Send, Paperclip, ArrowLeft, ArrowLeftIcon, RefreshCw, Phone, Video } from "lucide-react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { messageService, type Conversation, type Message } from '@/services/messageService';
 import { authService } from '@/services/authService';
@@ -11,6 +11,12 @@ import { apiRequest } from '@/utils/apiUtils';
 import { getImageUrl } from '@/utils/imageUtils';
 import { notificationService } from '@/services/notificationService';
 import { API_CONFIG } from '@/config/api';
+import CallInterface from '@/components/CallInterface';
+
+// Define an interface for the CallInterface component methods
+interface CallInterfaceRef {
+  initiateCall: (userId: number, callType: 'audio' | 'video') => void;
+}
 
 const Messages: React.FC = () => {
   const navigate = useNavigate();
@@ -41,6 +47,17 @@ const Messages: React.FC = () => {
   const [lastMessageCount, setLastMessageCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [showCallInterface, setShowCallInterface] = useState(false);
+  const [targetUserId, setTargetUserId] = useState<number | null>(null);
+  const [callInProgress, setCallInProgress] = useState(false);
+  const [callType, setCallType] = useState<'audio' | 'video'>('audio');
+  const [callStatus, setCallStatus] = useState<'connecting' | 'ringing' | 'answered' | 'ended'>('connecting');
+  const [callDuration, setCallDuration] = useState(0);
+  const callTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Call interface ref for direct access
+  const callInterfaceRef = useRef<any>(null);
   
   // Disable WebSocket for now to prevent connection errors
   const sendWSMessage = () => {};
@@ -90,6 +107,7 @@ const Messages: React.FC = () => {
       const token = await authService.getToken();
       if (!token) return;
       
+      setAuthToken(token);
       const { response, data } = await apiRequest('/profile/');
       
       if (response.ok && data) {
@@ -312,6 +330,130 @@ const Messages: React.FC = () => {
     }
   };
 
+  // Start call timer
+  const startCallTimer = () => {
+    callTimerRef.current = setInterval(() => {
+      setCallDuration(prev => prev + 1);
+    }, 1000);
+  };
+
+  // Stop call timer
+  const stopCallTimer = () => {
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+  };
+
+  // Format duration
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // End current call
+  const endCurrentCall = () => {
+    setCallInProgress(false);
+    setCallStatus('ended');
+    stopCallTimer();
+    setCallDuration(0);
+  };
+
+  // Call functions with direct integration
+  const initiateCall = async (userId: number, callType: 'audio' | 'video') => {
+    console.log('🎯 Initiating call to user:', userId, 'type:', callType);
+    
+    if (!authToken) {
+      console.error('❌ No auth token available for call');
+      alert('Please login to make calls');
+      return;
+    }
+
+    try {
+      setCallInProgress(true);
+      setCallType(callType);
+      setCallStatus('connecting');
+
+      // Use fetch API to initiate call - fix the path to include messaging/
+      const response = await fetch(`${API_CONFIG.BASE_URL}/messaging/calls/initiate/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${authToken}`,
+        },
+        body: JSON.stringify({
+          recipient_id: userId,
+          call_type: callType,
+        }),
+      });
+
+      if (response.ok) {
+        console.log('✅ Call initiated successfully');
+        const responseData = await response.json();
+        console.log('📞 Call response:', responseData);
+        
+        // Update status to ringing
+        setCallStatus('ringing');
+        
+        // Auto end call after 30 seconds if not answered (simulation)
+        setTimeout(() => {
+          if (callInProgress && callStatus === 'ringing') {
+            console.log('🔔 Call timed out');
+            endCurrentCall();
+            alert('Call was not answered');
+          }
+        }, 30000);
+        
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Call initiation failed:', errorData);
+        alert(`Failed to start call: ${errorData.error || 'Unknown error'}`);
+        endCurrentCall();
+      }
+    } catch (error) {
+      console.error('❌ Call initiation error:', error);
+      alert('Failed to start call. Please try again.');
+      endCurrentCall();
+    }
+  };
+
+  const handleAudioCall = async () => {
+    console.log('🔊 Audio call button clicked');
+    if (selectedConversation?.other_participant?.id) {
+      console.log('📞 Starting audio call to:', selectedConversation.other_participant.id);
+      setTargetUserId(selectedConversation.other_participant.id);
+      await initiateCall(selectedConversation.other_participant.id, 'audio');
+    } else {
+      console.error('❌ No user ID found for audio call');
+    }
+  };
+
+  const handleVideoCall = async () => {
+    console.log('📹 Video call button clicked');
+    if (selectedConversation?.other_participant?.id) {
+      console.log('📞 Starting video call to:', selectedConversation.other_participant.id);
+      setTargetUserId(selectedConversation.other_participant.id);
+      await initiateCall(selectedConversation.other_participant.id, 'video');
+    } else {
+      console.error('❌ No user ID found for video call');
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (callTimerRef.current) {
+        clearInterval(callTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleCallEnd = () => {
+    setShowCallInterface(false);
+    setTargetUserId(null);
+  };
+
   const handleConversationOpen = async (conversationId: number) => {
     try {
       // Wait for conversations to load first
@@ -379,14 +521,35 @@ const Messages: React.FC = () => {
             <h3 className="font-semibold text-sm">{selectedConversation.other_participant?.username}</h3>
             <p className="text-xs text-gray-500">Online</p>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => loadMessages(selectedConversation.id)}
-            className="p-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleAudioCall}
+              className="p-2"
+              title="Voice Call"
+            >
+              <Phone className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleVideoCall}
+              className="p-2"
+              title="Video Call"
+            >
+              <Video className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => loadMessages(selectedConversation.id)}
+              className="p-2"
+              title="Refresh"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
 
         </div>
 
@@ -483,7 +646,68 @@ const Messages: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-white flex flex-col">
+    <div className="h-screen bg-white flex flex-col relative">
+      {/* Call Interface Overlay */}
+      {callInProgress && (
+        <div className="fixed inset-0 bg-gray-900 flex flex-col z-50">
+          {/* Call Header */}
+          <div className="bg-gray-800 p-6 text-center text-white">
+            <div className="text-4xl mb-4">
+              {callType === 'video' ? '📹' : '📞'}
+            </div>
+            <h3 className="text-xl font-semibold mb-2">
+              {selectedConversation?.other_participant?.username || 'Unknown User'}
+            </h3>
+            <p className="text-gray-300">
+              {callStatus === 'connecting' && 'Connecting...'}
+              {callStatus === 'ringing' && 'Ringing...'}
+              {callStatus === 'answered' && 'Call in progress'}
+              {callStatus === 'ended' && 'Call ended'}
+            </p>
+            {callStatus === 'answered' && (
+              <p className="text-sm text-gray-400 mt-2">
+                {formatDuration(callDuration)}
+              </p>
+            )}
+          </div>
+
+          {/* Call Content */}
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center text-white">
+              <div className="w-48 h-48 bg-gray-700 rounded-full mx-auto mb-8 flex items-center justify-center">
+                <span className="text-8xl">
+                  {callType === 'video' ? '📹' : '📞'}
+                </span>
+              </div>
+              <div className="space-y-4">
+                <div className="text-lg">
+                  {selectedConversation?.other_participant?.username}
+                </div>
+                <div className="flex justify-center space-x-8">
+                  {/* Mute Button */}
+                  <button className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white hover:bg-gray-500">
+                    🎤
+                  </button>
+                  
+                  {/* Speaker Button */}
+                  <button className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white hover:bg-gray-500">
+                    🔊
+                  </button>
+                  
+                  {/* End Call Button */}
+                  <button
+                    onClick={endCurrentCall}
+                    className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600"
+                  >
+                    📞
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b p-4">
         <div className="flex items-center justify-between">
@@ -557,6 +781,15 @@ const Messages: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Call Interface */}
+      {authToken && currentUser && (
+        <CallInterface
+          authToken={authToken}
+          userId={currentUser.id}
+          onCallEnd={handleCallEnd}
+        />
+      )}
     </div>
   );
 };

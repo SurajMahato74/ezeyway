@@ -13,6 +13,7 @@ const isMobile = () => {
 // For server/production (uncomment this line):
 const API_BASE_URL = 'https://ezeyway.com/api';
 
+
 const getBaseUrl = () => {
   return API_BASE_URL;
 };
