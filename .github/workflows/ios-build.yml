@@ -1,0 +1,51 @@
+name: iOS Build (Capacitor + React)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: |
+          npm install
+
+      - name: Sync Capacitor
+        run: |
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+          cd ios && pod install --repo-update
+
+      - name: Build Xcode project
+        run: |
+          cd ios/App
+          xcodebuild -scheme App -configuration Release -archivePath App.xcarchive archive
+
+      - name: Export IPA
+        run: |
+          cd ios/App
+          xcodebuild -exportArchive \
+            -archivePath App.xcarchive \
+            -exportPath output \
+            -exportOptionsPlist exportOptions.plist
+
+      - name: Upload IPA as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ios-build
+          path: ios/App/output
