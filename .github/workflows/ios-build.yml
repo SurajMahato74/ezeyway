@@ -35,6 +35,8 @@ jobs:
           platform :ios, '14.0'
           use_frameworks!
           
+          project 'App.xcodeproj'
+          
           install! 'cocoapods', :disable_input_output_paths => true
           
           def capacitor_pods
