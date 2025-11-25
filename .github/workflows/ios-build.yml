@@ -26,19 +26,18 @@ jobs:
         run: |
           npm run build
 
-      - name: Sync Capacitor
+      - name: Remove existing iOS folder
         run: |
-          npx cap sync ios || true
+          rm -rf ios
 
-      - name: Install CocoaPods manually
+      - name: Add iOS platform
+        run: |
+          npx cap add ios
+
+      - name: Install CocoaPods
         run: |
           sudo gem install cocoapods
-          cd ios/App
-          if [ -f Podfile ]; then
-            pod install --repo-update
-          else
-            echo "Podfile not found, skipping pod install"
-          fi
+          cd ios/App && pod install --repo-update
 
       - name: Build Xcode project
         run: |
