@@ -22,18 +22,21 @@ jobs:
         run: |
           npm install --legacy-peer-deps
 
-      - name: Add iOS platform
-        run: |
-          npx cap add ios
-
       - name: Sync Capacitor
         run: |
           npx cap sync ios
 
+      - name: Create Podfile if missing
+        run: |
+          if [ ! -f ios/App/Podfile ]; then
+            cd ios/App
+            pod init
+          fi
+
       - name: Install CocoaPods
         run: |
           sudo gem install cocoapods
-          cd ios && pod install --repo-update
+          cd ios/App && pod install --repo-update
 
       - name: Build Xcode project
         run: |
