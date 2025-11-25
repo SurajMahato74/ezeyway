@@ -22,14 +22,43 @@ jobs:
         run: |
           npm install --legacy-peer-deps
 
-      - name: Copy Podfile
-        run: |
-          mkdir -p ios/App
-          cp ios/App/Podfile ios/App/Podfile.backup 2>/dev/null || true
-
       - name: Sync Capacitor
         run: |
           npx cap copy ios
+
+      - name: Create Podfile
+        run: |
+          mkdir -p ios/App
+          cat > ios/App/Podfile << 'EOF'
+          require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+          
+          platform :ios, '14.0'
+          use_frameworks!
+          
+          install! 'cocoapods', :disable_input_output_paths => true
+          
+          def capacitor_pods
+            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCommunityFcm', :path => '../../node_modules/@capacitor-community/fcm'
+            pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
+            pod 'CapacitorCamera', :path => '../../node_modules/@capacitor/camera'
+            pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
+            pod 'CapacitorGeolocation', :path => '../../node_modules/@capacitor/geolocation'
+            pod 'CapacitorHaptics', :path => '../../node_modules/@capacitor/haptics'
+            pod 'CapacitorLocalNotifications', :path => '../../node_modules/@capacitor/local-notifications'
+            pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
+            pod 'CapacitorPushNotifications', :path => '../../node_modules/@capacitor/push-notifications'
+          end
+          
+          target 'App' do
+            capacitor_pods
+          end
+          
+          post_install do |installer|
+            assertDeploymentTarget(installer)
+          end
+          EOF
 
       - name: Install CocoaPods
         run: |
