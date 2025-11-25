@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageSquare, Send, Paperclip, FileText, MoreVertical, ArrowLeft } from "lucide-react";
+import { MessageSquare, Send, Paperclip, FileText, MoreVertical, ArrowLeft, Phone, Video } from "lucide-react";
 import { messageService, type Conversation, type Message } from '@/services/messageService';
 import { apiRequest } from '@/utils/apiUtils';
 import { getImageUrl } from '@/utils/imageUtils';
+import CallInterface from '@/components/CallInterface';
 
 const Message: React.FC = () => {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -22,6 +23,9 @@ const Message: React.FC = () => {
   const [lastMessageCount, setLastMessageCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [showCallInterface, setShowCallInterface] = useState(false);
+  const [targetUserId, setTargetUserId] = useState<number | null>(null);
   
   // Disable WebSocket for now
   const sendWSMessage = () => {};
@@ -46,6 +50,7 @@ const Message: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
+      setAuthToken(token);
       const { response, data } = await apiRequest('/profile/');
       
       if (response.ok && data) {
@@ -54,6 +59,29 @@ const Message: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch current user:', error);
     }
+  };
+
+  // Call functions
+  const initiateCall = (userId: number, callType: 'audio' | 'video') => {
+    setTargetUserId(userId);
+    setShowCallInterface(true);
+  };
+
+  const handleAudioCall = () => {
+    if (selectedConversation?.other_participant?.id) {
+      initiateCall(selectedConversation.other_participant.id, 'audio');
+    }
+  };
+
+  const handleVideoCall = () => {
+    if (selectedConversation?.other_participant?.id) {
+      initiateCall(selectedConversation.other_participant.id, 'video');
+    }
+  };
+
+  const handleCallEnd = () => {
+    setShowCallInterface(false);
+    setTargetUserId(null);
   };
 
   useEffect(() => {
@@ -222,8 +250,6 @@ const Message: React.FC = () => {
     }
   };
 
-
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -267,9 +293,29 @@ const Message: React.FC = () => {
             <h3 className="font-semibold text-sm">{selectedConversation.other_participant?.username}</h3>
             <p className="text-xs text-gray-500">Online</p>
           </div>
-          <Button variant="ghost" size="sm">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleAudioCall}
+              className="p-2"
+              title="Voice Call"
+            >
+              <Phone className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleVideoCall}
+              className="p-2"
+              title="Video Call"
+            >
+              <Video className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="sm">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -360,6 +406,15 @@ const Message: React.FC = () => {
             className="hidden"
           />
         </div>
+
+        {/* Call Interface */}
+        {authToken && currentUser && (
+          <CallInterface
+            authToken={authToken}
+            userId={currentUser.id}
+            onCallEnd={handleCallEnd}
+          />
+        )}
       </div>
     );
   }
