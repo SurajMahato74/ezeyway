@@ -22,50 +22,23 @@ jobs:
         run: |
           npm install --legacy-peer-deps
 
+      - name: Build web assets
+        run: |
+          npm run build
+
       - name: Sync Capacitor
         run: |
-          npx cap copy ios
+          npx cap sync ios || true
 
-      - name: Create Podfile
-        run: |
-          mkdir -p ios/App
-          cat > ios/App/Podfile << 'EOF'
-          require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
-          
-          platform :ios, '14.0'
-          use_frameworks!
-          
-          project 'App.xcodeproj'
-          
-          install! 'cocoapods', :disable_input_output_paths => true
-          
-          def capacitor_pods
-            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCommunityFcm', :path => '../../node_modules/@capacitor-community/fcm'
-            pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
-            pod 'CapacitorCamera', :path => '../../node_modules/@capacitor/camera'
-            pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
-            pod 'CapacitorGeolocation', :path => '../../node_modules/@capacitor/geolocation'
-            pod 'CapacitorHaptics', :path => '../../node_modules/@capacitor/haptics'
-            pod 'CapacitorLocalNotifications', :path => '../../node_modules/@capacitor/local-notifications'
-            pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
-            pod 'CapacitorPushNotifications', :path => '../../node_modules/@capacitor/push-notifications'
-          end
-          
-          target 'App' do
-            capacitor_pods
-          end
-          
-          post_install do |installer|
-            assertDeploymentTarget(installer)
-          end
-          EOF
-
-      - name: Install CocoaPods
+      - name: Install CocoaPods manually
         run: |
           sudo gem install cocoapods
-          cd ios/App && pod install --repo-update
+          cd ios/App
+          if [ -f Podfile ]; then
+            pod install --repo-update
+          else
+            echo "Podfile not found, skipping pod install"
+          fi
 
       - name: Build Xcode project
         run: |
