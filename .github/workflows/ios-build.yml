@@ -39,27 +39,25 @@ jobs:
           sudo gem install cocoapods
           cd ios/App && pod install --repo-update
 
-      - name: Build Xcode project
+      - name: Build for iOS Simulator
         run: |
           cd ios/App
-          xcodebuild -scheme App -configuration Release -archivePath App.xcarchive archive \
+          xcodebuild -scheme App -configuration Release -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Export IPA
+      - name: Create App Bundle
         run: |
           cd ios/App
-          xcodebuild -exportArchive \
-            -archivePath App.xcarchive \
-            -exportPath output \
-            -exportOptionsPlist exportOptions.plist \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+          mkdir -p output
+          cp -r build/Release-iphonesimulator/App.app output/
+          echo "iOS Simulator build completed successfully" > output/build_info.txt
 
-      - name: Upload IPA as Artifact
+      - name: Upload iOS Build as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build
+          name: ios-simulator-build
           path: ios/App/output
