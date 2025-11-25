@@ -22,9 +22,14 @@ jobs:
         run: |
           npm install --legacy-peer-deps
 
-      - name: Sync Capacitor (skip pod install)
+      - name: Copy Podfile
         run: |
-          npx cap sync ios --no-pod-install
+          mkdir -p ios/App
+          cp ios/App/Podfile ios/App/Podfile.backup 2>/dev/null || true
+
+      - name: Sync Capacitor
+        run: |
+          npx cap copy ios
 
       - name: Install CocoaPods
         run: |
